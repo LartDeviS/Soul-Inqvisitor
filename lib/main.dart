@@ -2,7 +2,6 @@ import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
-import 'package:flame/palette.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -76,7 +75,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     enemiesAlive = 0;
     enemiesToSpawn = 5 + (currentLevel * 2) + (currentFloor * 3);
 
-    // Джойстик
     final knobPaint = Paint()..color = const Color(0xFF8B0000);
     final bgPaint = Paint()..color = const Color(0xFF2F2F2F).withOpacity(0.7);
 
@@ -86,30 +84,20 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       margin: const EdgeInsets.only(left: 25, bottom: 30),
     );
 
-    // Кнопка атаки
     shootButton = HudButtonComponent(
-      button: CircleComponent(radius: buttonSize, paint: Paint()..color = const Color(0xFF8B0000).withOpacity(0.8)),
+      button: CircleComponent(radius: buttonSize, paint: Paint()..color = const Color(0xFF8B0000).withOpacity(0.85)),
       buttonDown: CircleComponent(radius: buttonSize, paint: Paint()..color = const Color(0xFF8B0000)),
       margin: const EdgeInsets.only(right: 30, bottom: 40),
-      onPressed: () {
-        if (isPlaying) player.isAttacking = true;
-      },
-      onReleased: () {
-        if (isPlaying) player.isAttacking = false;
-      },
-      onCancelled: () {
-        if (isPlaying) player.isAttacking = false;
-      },
+      onPressed: () { if (isPlaying) player.isAttacking = true; },
+      onReleased: () { if (isPlaying) player.isAttacking = false; },
+      onCancelled: () { if (isPlaying) player.isAttacking = false; },
     );
 
-    // Кнопка смены оружия
     switchWeaponButton = HudButtonComponent(
       button: CircleComponent(radius: 28, paint: Paint()..color = Colors.grey[800]!),
       buttonDown: CircleComponent(radius: 28, paint: Paint()..color = Colors.grey),
       margin: const EdgeInsets.only(right: 30, bottom: 130),
-      onPressed: () {
-        if (isPlaying) player.switchWeapon();
-      },
+      onPressed: () { if (isPlaying) player.switchWeapon(); },
     );
 
     player = Player(joystick);
@@ -122,7 +110,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void _spawnWave() {
-    final spawnPeriod = max(0.35, 1.6 - (currentFloor * 0.15) - (currentLevel * 0.08));
+    final spawnPeriod = max(0.35, 1.55 - (currentFloor * 0.15) - (currentLevel * 0.08));
 
     add(SpawnComponent(
       factory: (_) {
@@ -130,17 +118,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         enemiesSpawned++;
         enemiesAlive++;
 
-        // Типы врагов зависят от этажа
         EnemyType type;
         final roll = Random().nextDouble();
         if (currentFloor == 1) {
-          type = roll < 0.6 ? EnemyType.melee : EnemyType.shooter;
-        } else if (currentFloor == 2) {
-          type = roll < 0.4 ? EnemyType.melee : (roll < 0.75 ? EnemyType.shooter : EnemyType.shielded);
+          type = roll < 0.55 ? EnemyType.melee : EnemyType.shooter;
+        } else if (currentFloor <= 3) {
+          type = roll < 0.35 ? EnemyType.melee : (roll < 0.7 ? EnemyType.shooter : EnemyType.shielded);
         } else {
-          type = roll < 0.3 ? EnemyType.melee : (roll < 0.65 ? EnemyType.shooter : EnemyType.shielded);
+          type = roll < 0.3 ? EnemyType.melee : (roll < 0.6 ? EnemyType.shooter : EnemyType.shielded);
         }
-
         return Enemy(floor: currentFloor, type: type);
       },
       period: spawnPeriod,
@@ -210,7 +196,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 }
 
-// ==================== МЕНЮ (оставляем как было) ====================
+// ====================== МЕНЮ ======================
 class MainMenu extends StatelessWidget {
   final InquisitorGame game;
   const MainMenu(this.game, {super.key});
@@ -223,11 +209,9 @@ class MainMenu extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'Soul of the Inquisitor',
-              style: TextStyle(color: Colors.redAccent, fontSize: 32, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
+            const Text('Soul of the Inquisitor',
+                style: TextStyle(color: Colors.redAccent, fontSize: 32, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center),
             const SizedBox(height: 12),
             const Text('From the Inquisitor\'s perspective', style: TextStyle(color: Colors.white70, fontSize: 15)),
             const SizedBox(height: 60),
@@ -270,18 +254,12 @@ class _SettingsMenuState extends State<SettingsMenu> {
               const Text('Settings', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
               const SizedBox(height: 40),
               Text('Joystick size: ${widget.game.joystickSize.toInt()}', style: const TextStyle(color: Colors.white, fontSize: 18)),
-              Slider(
-                value: widget.game.joystickSize,
-                min: 50, max: 120, divisions: 14, activeColor: Colors.blue,
-                onChanged: (v) => setState(() => widget.game.joystickSize = v),
-              ),
+              Slider(value: widget.game.joystickSize, min: 50, max: 120, divisions: 14, activeColor: Colors.blue,
+                  onChanged: (v) => setState(() => widget.game.joystickSize = v)),
               const SizedBox(height: 30),
               Text('Button size: ${widget.game.buttonSize.toInt()}', style: const TextStyle(color: Colors.white, fontSize: 18)),
-              Slider(
-                value: widget.game.buttonSize,
-                min: 25, max: 70, divisions: 9, activeColor: Colors.red,
-                onChanged: (v) => setState(() => widget.game.buttonSize = v),
-              ),
+              Slider(value: widget.game.buttonSize, min: 25, max: 70, divisions: 9, activeColor: Colors.red,
+                  onChanged: (v) => setState(() => widget.game.buttonSize = v)),
               const Spacer(),
               Center(
                 child: ElevatedButton(
@@ -337,7 +315,8 @@ class GameOverMenu extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('THE INQUISITOR HAS FALLEN', style: TextStyle(color: Colors.redAccent, fontSize: 26, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+            const Text('THE INQUISITOR HAS FALLEN',
+                style: TextStyle(color: Colors.redAccent, fontSize: 26, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
             const SizedBox(height: 16),
             Text('Score: ${game.score}', style: const TextStyle(color: Colors.white, fontSize: 24)),
             Text('Floor ${game.currentFloor}  •  Level ${game.currentLevel}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
@@ -360,8 +339,8 @@ class GameOverMenu extends StatelessWidget {
   }
 }
 
-// ==================== ИГРОК ====================
-class Player extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+// ====================== ИНКВИЗИТОР (человекоподобный) ======================
+class Player extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final JoystickComponent joystick;
   double speed = 210;
   int health = 6;
@@ -369,17 +348,12 @@ class Player extends CircleComponent with HasGameReference<InquisitorGame>, Coll
   double attackTimer = 0;
   WeaponType weapon = WeaponType.bolter;
 
-  // Цвета Инквизитора: чёрный / серый / красный
-  final Paint bodyPaint = Paint()..color = const Color(0xFF1A1A1A); // почти чёрный
-  final Paint accentPaint = Paint()..color = const Color(0xFF8B0000); // тёмно-красный
-
-  Player(this.joystick) : super(radius: 22, anchor: Anchor.center);
+  Player(this.joystick) : super(size: Vector2(52, 58), anchor: Anchor.center);
 
   @override
   Future<void> onLoad() async {
     position = game.size / 2;
-    paint = bodyPaint;
-    add(CircleHitbox());
+    add(CircleHitbox(radius: 22));
   }
 
   void switchWeapon() {
@@ -396,8 +370,8 @@ class Player extends CircleComponent with HasGameReference<InquisitorGame>, Coll
       angle = joystick.delta.screenAngle();
     }
 
-    position.x = position.x.clamp(radius, game.size.x - radius);
-    position.y = position.y.clamp(radius, game.size.y - radius);
+    position.x = position.x.clamp(26, game.size.x - 26);
+    position.y = position.y.clamp(29, game.size.y - 29);
 
     if (isAttacking) {
       attackTimer += dt;
@@ -414,11 +388,47 @@ class Player extends CircleComponent with HasGameReference<InquisitorGame>, Coll
     final attackDir = dir == Vector2.zero() ? Vector2(0, -1) : dir;
 
     if (weapon == WeaponType.bolter) {
-      game.world.add(Bullet(position: position.clone(), direction: attackDir, isPlayer: true));
+      game.world.add(Bullet(position: position.clone(), direction: attackDir));
     } else {
-      // Меч — ближняя атака
-      game.world.add(MeleeAttack(position: position + attackDir * 30, direction: attackDir));
+      game.world.add(MeleeAttack(position: position + attackDir * 34, direction: attackDir));
     }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final cx = size.x / 2;
+    final cy = size.y / 2;
+
+    // Плащ / тень (красный)
+    final cape = Paint()..color = const Color(0xFF6B0000).withOpacity(0.7);
+    final capePath = Path()
+      ..moveTo(cx - 18, cy + 4)
+      ..quadraticBezierTo(cx - 28, cy + 22, cx - 8, cy + 28)
+      ..lineTo(cx + 8, cy + 28)
+      ..quadraticBezierTo(cx + 28, cy + 22, cx + 18, cy + 4)
+      ..close();
+    canvas.drawPath(capePath, cape);
+
+    // Торс (тёмно-серый / чёрный)
+    final body = Paint()..color = const Color(0xFF1A1A1A);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6), width: 28, height: 26), const Radius.circular(6)), body);
+
+    // Плечи
+    final shoulder = Paint()..color = const Color(0xFF2A2A2A);
+    canvas.drawCircle(Offset(cx - 14, cy + 2), 7, shoulder);
+    canvas.drawCircle(Offset(cx + 14, cy + 2), 7, shoulder);
+
+    // Голова / шлем
+    final head = Paint()..color = const Color(0xFF111111);
+    canvas.drawCircle(Offset(cx, cy - 12), 11, head);
+
+    // Красный визор / акцент
+    final visor = Paint()..color = const Color(0xFFB22222);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 13), width: 14, height: 5), const Radius.circular(2)), visor);
+
+    // Красный символ на груди
+    final symbol = Paint()..color = const Color(0xFF8B0000);
+    canvas.drawCircle(Offset(cx, cy + 4), 4, symbol);
   }
 
   @override
@@ -426,17 +436,10 @@ class Player extends CircleComponent with HasGameReference<InquisitorGame>, Coll
     super.onCollision(intersectionPoints, other);
     if (!game.isPlaying) return;
 
-    if (other is Enemy) {
+    if (other is Enemy || other is EnemyBullet) {
       health--;
       other.removeFromParent();
-      game.onEnemyKilled();
-      if (health <= 0) {
-        health = 0;
-        game.showGameOver();
-      }
-    } else if (other is EnemyBullet) {
-      health--;
-      other.removeFromParent();
+      if (other is Enemy) game.onEnemyKilled();
       if (health <= 0) {
         health = 0;
         game.showGameOver();
@@ -445,13 +448,120 @@ class Player extends CircleComponent with HasGameReference<InquisitorGame>, Coll
   }
 }
 
-// ==================== ПУЛЯ ИГРОКА (Болтер) ====================
+// ====================== ВРАГИ (человекоподобные) ======================
+class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final int floor;
+  final EnemyType type;
+  late final double speed;
+  double shootTimer = 0;
+  final double shootInterval = 1.85;
+
+  Enemy({required this.floor, required this.type}) : super(size: Vector2(46, 52), anchor: Anchor.center);
+
+  @override
+  Future<void> onLoad() async {
+    switch (type) {
+      case EnemyType.shooter:
+        speed = 50 + floor * 7.0;
+        break;
+      case EnemyType.melee:
+        speed = 85 + floor * 11.0;
+        break;
+      case EnemyType.shielded:
+        speed = 40 + floor * 5.5;
+        size = Vector2(52, 56);
+        break;
+    }
+
+    final side = Random().nextInt(4);
+    switch (side) {
+      case 0: position = Vector2(Random().nextDouble() * game.size.x, -40); break;
+      case 1: position = Vector2(Random().nextDouble() * game.size.x, game.size.y + 40); break;
+      case 2: position = Vector2(-40, Random().nextDouble() * game.size.y); break;
+      case 3: position = Vector2(game.size.x + 40, Random().nextDouble() * game.size.y); break;
+    }
+
+    add(CircleHitbox(radius: type == EnemyType.shielded ? 24 : 19));
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!game.isPlaying) return;
+
+    final toPlayer = (game.player.position - position).normalized();
+    position.add(toPlayer * speed * dt);
+    angle = toPlayer.screenAngle();
+
+    if (type == EnemyType.shooter) {
+      shootTimer += dt;
+      if (shootTimer >= shootInterval) {
+        shootTimer = 0;
+        game.world.add(EnemyBullet(position: position.clone(), direction: toPlayer));
+      }
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final cx = size.x / 2;
+    final cy = size.y / 2;
+
+    // Общий тёмно-серый торс
+    final body = Paint()..color = const Color(0xFF2A2A2A);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 5), width: 24, height: 24), const Radius.circular(5)), body);
+
+    // Плечи
+    final shoulder = Paint()..color = const Color(0xFF3A3A3A);
+    canvas.drawCircle(Offset(cx - 12, cy + 1), 6.5, shoulder);
+    canvas.drawCircle(Offset(cx + 12, cy + 1), 6.5, shoulder);
+
+    // Голова
+    final head = Paint()..color = const Color(0xFF1F1F1F);
+    canvas.drawCircle(Offset(cx, cy - 13), 10, head);
+
+    switch (type) {
+      case EnemyType.shooter:
+        // Зелёные акценты
+        final accent = Paint()..color = const Color(0xFF2E8B57);
+        canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
+        canvas.drawCircle(Offset(cx + 9, cy + 2), 3.5, accent);
+        // Ствол
+        final gun = Paint()..color = const Color(0xFF111111)..strokeWidth = 4..strokeCap = StrokeCap.round;
+        canvas.drawLine(Offset(cx + 6, cy - 2), Offset(cx + 18, cy - 8), gun);
+        break;
+
+      case EnemyType.melee:
+        // Жёлтые акценты
+        final accent = Paint()..color = const Color(0xFFDAA520);
+        canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
+        canvas.drawCircle(Offset(cx - 9, cy + 3), 3.5, accent);
+        // Клинок
+        final blade = Paint()..color = const Color(0xFFC9A227)..strokeWidth = 3.5..strokeCap = StrokeCap.round;
+        canvas.drawLine(Offset(cx + 8, cy - 4), Offset(cx + 19, cy - 16), blade);
+        break;
+
+      case EnemyType.shielded:
+        // Синие акценты
+        final accent = Paint()..color = const Color(0xFF1E90FF);
+        canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
+        // Щит
+        final shield = Paint()
+          ..color = const Color(0xFF4169E1).withOpacity(0.75)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 5;
+        canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy + 2), radius: 23), -1.1, 2.2, false, shield);
+        break;
+    }
+  }
+}
+
+// ====================== ПУЛИ И АТАКИ ======================
 class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
-  final bool isPlayer;
-  final double speed = 480;
+  final double speed = 490;
 
-  Bullet({required super.position, required this.direction, this.isPlayer = true})
+  Bullet({required super.position, required this.direction})
       : super(radius: 6, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFFFD700));
 
   @override
@@ -474,7 +584,6 @@ class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, Coll
     super.onCollision(intersectionPoints, other);
     if (other is Enemy) {
       if (other.type == EnemyType.shielded) {
-        // Пули не работают по щитовикам
         removeFromParent();
         return;
       }
@@ -485,13 +594,12 @@ class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, Coll
   }
 }
 
-// ==================== БЛИЖНЯЯ АТАКА (Меч) ====================
 class MeleeAttack extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
-  double life = 0.18;
+  double life = 0.17;
 
   MeleeAttack({required super.position, required this.direction})
-      : super(radius: 28, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFAAAAAA).withOpacity(0.7));
+      : super(radius: 30, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFAAAAAA).withOpacity(0.55));
 
   @override
   Future<void> onLoad() async {
@@ -515,75 +623,12 @@ class MeleeAttack extends CircleComponent with HasGameReference<InquisitorGame>,
   }
 }
 
-// ==================== ВРАГ ====================
-class Enemy extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final int floor;
-  final EnemyType type;
-  late final double speed;
-  double shootTimer = 0;
-  final double shootInterval = 1.8;
-
-  Enemy({required this.floor, required this.type}) : super(radius: 17, anchor: Anchor.center);
-
-  @override
-  Future<void> onLoad() async {
-    // Цвета по типу
-    switch (type) {
-      case EnemyType.shooter:
-        paint = Paint()..color = const Color(0xFF1A3A1A); // тёмно-зелёный
-        speed = 55 + floor * 8.0;
-        break;
-      case EnemyType.melee:
-        paint = Paint()..color = const Color(0xFF3A3A1A); // тёмно-жёлтый/оливковый
-        speed = 90 + floor * 12.0;
-        break;
-      case EnemyType.shielded:
-        paint = Paint()..color = const Color(0xFF1A1A3A); // тёмно-синий
-        speed = 45 + floor * 6.0;
-        radius = 20;
-        break;
-    }
-
-    final side = Random().nextInt(4);
-    switch (side) {
-      case 0: position = Vector2(Random().nextDouble() * game.size.x, -30); break;
-      case 1: position = Vector2(Random().nextDouble() * game.size.x, game.size.y + 30); break;
-      case 2: position = Vector2(-30, Random().nextDouble() * game.size.y); break;
-      case 3: position = Vector2(game.size.x + 30, Random().nextDouble() * game.size.y); break;
-    }
-
-    add(CircleHitbox());
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (!game.isPlaying) return;
-
-    final toPlayer = (game.player.position - position).normalized();
-    position.add(toPlayer * speed * dt);
-
-    // Стрелки только у стрелков
-    if (type == EnemyType.shooter) {
-      shootTimer += dt;
-      if (shootTimer >= shootInterval) {
-        shootTimer = 0;
-        game.world.add(EnemyBullet(
-          position: position.clone(),
-          direction: toPlayer,
-        ));
-      }
-    }
-  }
-}
-
-// ==================== СТРЕЛА ВРАГА (медленная) ====================
 class EnemyBullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
-  final double speed = 160; // медленная, можно увернуться
+  final double speed = 150;
 
   EnemyBullet({required super.position, required this.direction})
-      : super(radius: 8, anchor: Anchor.center, paint: Paint()..color = const Color(0xFF88FF88));
+      : super(radius: 7, anchor: Anchor.center, paint: Paint()..color = const Color(0xFF7CFC00));
 
   @override
   Future<void> onLoad() async {
