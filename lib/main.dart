@@ -42,21 +42,30 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int enemiesToSpawn = 0;
   int enemiesSpawned = 0;
 
+  bool portalSpawned = false;
+
   double joystickSize = 75;
   double buttonSize = 40;
+
+  // Размер игровой зоны
+  final double mapWidth = 900;
+  final double mapHeight = 1600;
 
   final TextPaint hudPaint = TextPaint(
     style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
   );
 
   @override
-  Future<void> onLoad() async {}
+  Future<void> onLoad() async {
+    camera.viewfinder.visibleGameSize = Vector2(mapWidth, mapHeight);
+  }
 
   void startGame() {
     isPlaying = true;
     score = 0;
     currentFloor = 1;
     currentLevel = 1;
+    portalSpawned = false;
     _clearEverything();
     _startLevel();
     overlays.remove('mainMenu');
@@ -75,8 +84,19 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void _startLevel() {
     enemiesSpawned = 0;
     enemiesAlive = 0;
+    portalSpawned = false;
     enemiesToSpawn = 5 + (currentLevel * 2) + (currentFloor * 3);
 
+    // === ПОЛ ===
+    world.add(Floor(size: Vector2(mapWidth, mapHeight)));
+
+    // === СТЕНЫ (коричневые) ===
+    _createWalls();
+
+    // === ПРЕГРАДЫ (разрушаемые мечом) ===
+    _createObstacles();
+
+    // Джойстик и кнопки
     final knobPaint = Paint()..color = const Color(0xFF8B0000);
     final bgPaint = Paint()..color = const Color(0xFF2F2F2F).withOpacity(0.7);
 
@@ -108,16 +128,49 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     camera.viewport.add(shootButton);
     camera.viewport.add(switchWeaponButton);
 
+    // Камера следует за игроком
+    camera.follow(player);
+
     _spawnWave();
   }
 
+  void _createWalls() {
+    const thickness = 40.0;
+    final brown = const Color(0xFF5D4037);
+
+    // Внешние стены
+    world.add(Wall(position: Vector2(0, 0), size: Vector2(mapWidth, thickness), color: brown)); // верх
+    world.add(Wall(position: Vector2(0, mapHeight - thickness), size: Vector2(mapWidth, thickness), color: brown)); // низ
+    world.add(Wall(position: Vector2(0, 0), size: Vector2(thickness, mapHeight), color: brown)); // лево
+    world.add(Wall(position: Vector2(mapWidth - thickness, 0), size: Vector2(thickness, mapHeight), color: brown)); // право
+
+    // Несколько внутренних стен
+    world.add(Wall(position: Vector2(200, 300), size: Vector2(180, 30), color: brown));
+    world.add(Wall(position: Vector2(500, 700), size: Vector2(30, 220), color: brown));
+    world.add(Wall(position: Vector2(250, 1100), size: Vector2(250, 30), color: brown));
+  }
+
+  void _createObstacles() {
+    final positions = [
+      Vector2(150, 500),
+      Vector2(700, 400),
+      Vector2(400, 900),
+      Vector2(600, 1300),
+      Vector2(180, 1400),
+    ];
+
+    for (final pos in positions) {
+      world.add(Obstacle(position: pos));
+    }
+  }
+
   void _spawnWave() {
-    final spawnPeriod = max(0.35, 1.55 - (currentFloor * 0.15) - (currentLevel * 0.08));
+    final spawnPeriod = max(0.4, 1.6 - (currentFloor * 0.15) - (currentLevel * 0.08));
 
     add(SpawnComponent(
       factory: (index) {
         if (enemiesSpawned >= enemiesToSpawn) {
-          return PositionComponent(); // пустышка, чтобы не ломать тип
+          return PositionComponent();
         }
         enemiesSpawned++;
         enemiesAlive++;
@@ -141,12 +194,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void onEnemyKilled() {
     enemiesAlive = max(0, enemiesAlive - 1);
     score += 10 + (currentFloor * 5);
-    if (enemiesAlive <= 0 && enemiesSpawned >= enemiesToSpawn) {
-      _levelCompleted();
+
+    if (enemiesAlive <= 0 && enemiesSpawned >= enemiesToSpawn && !portalSpawned) {
+      portalSpawned = true;
+      // Портал появляется в центре
+      world.add(Portal(position: Vector2(mapWidth / 2, mapHeight / 2)));
     }
   }
 
-  void _levelCompleted() {
+  void goToNextLevel() {
     isPlaying = false;
     if (currentLevel >= 5) {
       if (currentFloor >= 5) {
@@ -200,7 +256,100 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 }
 
-// ====================== МЕНЮ ======================
+// ====================== ПОЛ ======================
+class Floor extends PositionComponent {
+  Floor({required Vector2 size}) : super(size: size, position: Vector2.zero());
+
+  @override
+  void render(Canvas canvas) {
+    final paint = Paint()..color = const Color(0xFFBDBDBD); // светло-серый пол
+    canvas.drawRect(size.toRect(), paint);
+
+    // Лёгкая сетка для ощущения пространства
+    final gridPaint = Paint()
+      ..color = const Color(0xFF9E9E9E)
+      ..strokeWidth = 1;
+    for (double x = 0; x < size.x; x += 60) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.y), gridPaint);
+    }
+    for (double y = 0; y < size.y; y += 60) {
+      canvas.drawLine(Offset(0, y), Offset(size.x, y), gridPaint);
+    }
+  }
+}
+
+// ====================== СТЕНЫ ======================
+class Wall extends PositionComponent with CollisionCallbacks {
+  final Color color;
+
+  Wall({required Vector2 position, required Vector2 size, required this.color})
+      : super(position: position, size: size);
+
+  @override
+  Future<void> onLoad() async {
+    add(RectangleHitbox());
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final paint = Paint()..color = color;
+    canvas.drawRect(size.toRect(), paint);
+
+    // Тёмная обводка
+    final border = Paint()
+      ..color = const Color(0xFF3E2723)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    canvas.drawRect(size.toRect(), border);
+  }
+}
+
+// ====================== ПРЕГРАДЫ (ломаются мечом) ======================
+class Obstacle extends PositionComponent with CollisionCallbacks {
+  Obstacle({required Vector2 position})
+      : super(position: position, size: Vector2(50, 50), anchor: Anchor.center);
+
+  @override
+  Future<void> onLoad() async {
+    add(RectangleHitbox());
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final paint = Paint()..color = const Color(0xFF795548); // коричневая преграда
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(size.toRect(), const Radius.circular(6)),
+      paint,
+    );
+  }
+}
+
+// ====================== ПОРТАЛ ======================
+class Portal extends PositionComponent with CollisionCallbacks {
+  Portal({required Vector2 position})
+      : super(position: position, size: Vector2(70, 70), anchor: Anchor.center);
+
+  @override
+  Future<void> onLoad() async {
+    add(CircleHitbox());
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final center = size / 2;
+    // Розовый портал
+    final paint = Paint()..color = const Color(0xFFE91E63).withOpacity(0.8);
+    canvas.drawCircle(center.toOffset(), 32, paint);
+
+    final inner = Paint()..color = const Color(0xFFF48FB1);
+    canvas.drawCircle(center.toOffset(), 18, inner);
+
+    final core = Paint()..color = Colors.white.withOpacity(0.7);
+    canvas.drawCircle(center.toOffset(), 8, core);
+  }
+}
+
+// ====================== МЕНЮ (без изменений) ======================
 class MainMenu extends StatelessWidget {
   final InquisitorGame game;
   const MainMenu(this.game, {super.key});
@@ -343,7 +492,7 @@ class GameOverMenu extends StatelessWidget {
   }
 }
 
-// ====================== ИНКВИЗИТОР ======================
+// ====================== ИГРОК ======================
 class Player extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final JoystickComponent joystick;
   double speed = 210;
@@ -356,8 +505,8 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
 
   @override
   Future<void> onLoad() async {
-    position = game.size / 2;
-    add(CircleHitbox(radius: 22));
+    position = Vector2(game.mapWidth / 2, game.mapHeight / 2);
+    add(CircleHitbox(radius: 20));
   }
 
   void switchWeapon() {
@@ -370,12 +519,11 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     if (!game.isPlaying) return;
 
     if (joystick.direction != JoystickDirection.idle) {
-      position.add(joystick.relativeDelta * speed * dt);
+      final nextPos = position + joystick.relativeDelta * speed * dt;
+      // Простое ограничение, чтобы не уходить далеко (стены сами блокируют)
+      position = nextPos;
       angle = joystick.delta.screenAngle();
     }
-
-    position.x = position.x.clamp(26, game.size.x - 26);
-    position.y = position.y.clamp(29, game.size.y - 29);
 
     if (isAttacking) {
       attackTimer += dt;
@@ -403,7 +551,6 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     final cx = size.x / 2;
     final cy = size.y / 2;
 
-    // Плащ
     final cape = Paint()..color = const Color(0xFF6B0000).withOpacity(0.7);
     final capePath = Path()
       ..moveTo(cx - 18, cy + 4)
@@ -413,24 +560,19 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       ..close();
     canvas.drawPath(capePath, cape);
 
-    // Торс
     final body = Paint()..color = const Color(0xFF1A1A1A);
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6), width: 28, height: 26), const Radius.circular(6)), body);
 
-    // Плечи
     final shoulder = Paint()..color = const Color(0xFF2A2A2A);
     canvas.drawCircle(Offset(cx - 14, cy + 2), 7, shoulder);
     canvas.drawCircle(Offset(cx + 14, cy + 2), 7, shoulder);
 
-    // Голова
     final head = Paint()..color = const Color(0xFF111111);
     canvas.drawCircle(Offset(cx, cy - 12), 11, head);
 
-    // Визор
     final visor = Paint()..color = const Color(0xFFB22222);
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 13), width: 14, height: 5), const Radius.circular(2)), visor);
 
-    // Символ
     final symbol = Paint()..color = const Color(0xFF8B0000);
     canvas.drawCircle(Offset(cx, cy + 4), 4, symbol);
   }
@@ -439,6 +581,12 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (!game.isPlaying) return;
+
+    if (other is Wall || other is Obstacle) {
+      // Отталкивание от стен и преград
+      final overlap = intersectionPoints.first - position;
+      position -= overlap.normalized() * 3;
+    }
 
     if (other is Enemy || other is EnemyBullet) {
       health--;
@@ -449,6 +597,11 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
         game.showGameOver();
       }
     }
+
+    if (other is Portal && weapon == WeaponType.sword) {
+      // Удар мечом по порталу
+      game.goToNextLevel();
+    }
   }
 }
 
@@ -458,7 +611,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   final EnemyType type;
   late final double speed;
   double shootTimer = 0;
-  final double shootInterval = 1.85;
+  final double shootInterval = 1.9;
 
   Enemy({required this.floor, required this.type}) : super(size: Vector2(46, 52), anchor: Anchor.center);
 
@@ -466,26 +619,24 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   Future<void> onLoad() async {
     switch (type) {
       case EnemyType.shooter:
-        speed = 50 + floor * 7.0;
+        speed = 48 + floor * 6.5;
         break;
       case EnemyType.melee:
-        speed = 85 + floor * 11.0;
+        speed = 80 + floor * 10.0;
         break;
       case EnemyType.shielded:
-        speed = 40 + floor * 5.5;
+        speed = 38 + floor * 5.0;
         size = Vector2(52, 56);
         break;
     }
 
-    final side = Random().nextInt(4);
-    switch (side) {
-      case 0: position = Vector2(Random().nextDouble() * game.size.x, -40); break;
-      case 1: position = Vector2(Random().nextDouble() * game.size.x, game.size.y + 40); break;
-      case 2: position = Vector2(-40, Random().nextDouble() * game.size.y); break;
-      case 3: position = Vector2(game.size.x + 40, Random().nextDouble() * game.size.y); break;
-    }
+    // Спавн внутри карты, не в стенах
+    position = Vector2(
+      80 + Random().nextDouble() * (game.mapWidth - 160),
+      80 + Random().nextDouble() * (game.mapHeight - 160),
+    );
 
-    add(CircleHitbox(radius: type == EnemyType.shielded ? 24 : 19));
+    add(CircleHitbox(radius: type == EnemyType.shielded ? 22 : 18));
   }
 
   @override
@@ -493,6 +644,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     super.update(dt);
     if (!game.isPlaying) return;
 
+    // Цель — игрок
     final toPlayer = (game.player.position - position).normalized();
     position.add(toPlayer * speed * dt);
     angle = toPlayer.screenAngle();
@@ -503,6 +655,15 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         shootTimer = 0;
         game.world.add(EnemyBullet(position: position.clone(), direction: toPlayer));
       }
+    }
+  }
+
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Wall || other is Obstacle) {
+      final overlap = intersectionPoints.first - position;
+      position -= overlap.normalized() * 4;
     }
   }
 
@@ -547,7 +708,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   }
 }
 
-// ====================== ПУЛИ ======================
+// ====================== АТАКИ ======================
 class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
   final double speed = 490;
@@ -565,7 +726,7 @@ class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, Coll
     super.update(dt);
     if (!game.isPlaying) return;
     position.add(direction * speed * dt);
-    if (position.x < -40 || position.x > game.size.x + 40 || position.y < -40 || position.y > game.size.y + 40) {
+    if (position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) {
       removeFromParent();
     }
   }
@@ -573,6 +734,9 @@ class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, Coll
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
+    if (other is Wall || other is Obstacle) {
+      removeFromParent();
+    }
     if (other is Enemy) {
       if (other.type == EnemyType.shielded) {
         removeFromParent();
@@ -587,10 +751,10 @@ class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, Coll
 
 class MeleeAttack extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
-  double life = 0.17;
+  double life = 0.18;
 
   MeleeAttack({required super.position, required this.direction})
-      : super(radius: 30, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFAAAAAA).withOpacity(0.55));
+      : super(radius: 32, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFAAAAAA).withOpacity(0.5));
 
   @override
   Future<void> onLoad() async {
@@ -611,12 +775,18 @@ class MeleeAttack extends CircleComponent with HasGameReference<InquisitorGame>,
       other.removeFromParent();
       game.onEnemyKilled();
     }
+    if (other is Obstacle) {
+      other.removeFromParent(); // ломаем преграду
+    }
+    if (other is Portal) {
+      game.goToNextLevel();
+    }
   }
 }
 
 class EnemyBullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
-  final double speed = 150;
+  final double speed = 145;
 
   EnemyBullet({required super.position, required this.direction})
       : super(radius: 7, anchor: Anchor.center, paint: Paint()..color = const Color(0xFF7CFC00));
@@ -631,7 +801,15 @@ class EnemyBullet extends CircleComponent with HasGameReference<InquisitorGame>,
     super.update(dt);
     if (!game.isPlaying) return;
     position.add(direction * speed * dt);
-    if (position.x < -50 || position.x > game.size.x + 50 || position.y < -50 || position.y > game.size.y + 50) {
+    if (position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) {
+      removeFromParent();
+    }
+  }
+
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Wall || other is Obstacle) {
       removeFromParent();
     }
   }
