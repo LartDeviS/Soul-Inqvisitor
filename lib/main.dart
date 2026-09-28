@@ -15,6 +15,7 @@ void main() {
           'mainMenu': (context, game) => MainMenu(game as InquisitorGame),
           'settings': (context, game) => SettingsMenu(game as InquisitorGame),
           'gameOver': (context, game) => GameOverMenu(game as InquisitorGame),
+          'levelComplete': (context, game) => LevelCompleteMenu(game as InquisitorGame),
         },
         initialActiveOverlays: const ['mainMenu'],
       ),
@@ -30,6 +31,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int score = 0;
   bool isPlaying = false;
 
+  // Система уровней
+  int currentFloor = 1;   // 1–5
+  int currentLevel = 1;   // 1–5
+  int enemiesAlive = 0;
+  int enemiesToSpawn = 0;
+  int enemiesSpawned = 0;
+
   // Настройки размеров
   double joystickSize = 75;
   double buttonSize = 40;
@@ -37,7 +45,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   final TextPaint hudPaint = TextPaint(
     style: const TextStyle(
       color: Colors.white,
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: FontWeight.bold,
     ),
   );
@@ -48,8 +56,19 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void startGame() {
     isPlaying = true;
     score = 0;
+    currentFloor = 1;
+    currentLevel = 1;
 
-    // Очищаем всё
+    _clearEverything();
+    _startLevel();
+
+    overlays.remove('mainMenu');
+    overlays.remove('settings');
+    overlays.remove('gameOver');
+    overlays.remove('levelComplete');
+  }
+
+  void _clearEverything() {
     world.removeAll(world.children.toList());
     camera.viewport.children
         .whereType<JoystickComponent>()
@@ -59,9 +78,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         .whereType<HudButtonComponent>()
         .toList()
         .forEach((c) => c.removeFromParent());
-
-    // Убираем старые SpawnComponent
     children.whereType<SpawnComponent>().toList().forEach((c) => c.removeFromParent());
+  }
+
+  void _startLevel() {
+    enemiesSpawned = 0;
+    enemiesAlive = 0;
+
+    // Количество врагов растёт с уровнем и этажом
+    enemiesToSpawn = 4 + (currentLevel * 2) + (currentFloor * 3);
 
     // Джойстик
     final knobPaint = BasicPalette.blue.withAlpha(200).paint();
@@ -94,18 +119,62 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     camera.viewport.add(joystick);
     camera.viewport.add(shootButton);
 
-    // Спавн врагов
+    // Спавн врагов с небольшой задержкой
+    _spawnWave();
+  }
+
+  void _spawnWave() {
+    // Спавним врагов постепенно
+    final spawnPeriod = max(0.4, 1.8 - (currentFloor * 0.2) - (currentLevel * 0.1));
+
     add(
       SpawnComponent(
-        factory: (_) => Enemy(),
-        period: 1.6,
+        factory: (_) {
+          if (enemiesSpawned >= enemiesToSpawn) return null;
+          enemiesSpawned++;
+          enemiesAlive++;
+          return Enemy(floor: currentFloor);
+        },
+        period: spawnPeriod,
         selfPositioning: true,
       ),
     );
+  }
 
-    overlays.remove('mainMenu');
-    overlays.remove('settings');
-    overlays.remove('gameOver');
+  void onEnemyKilled() {
+    enemiesAlive--;
+    score += 10 + (currentFloor * 5);
+
+    if (enemiesAlive <= 0 && enemiesSpawned >= enemiesToSpawn) {
+      // Уровень пройден
+      _levelCompleted();
+    }
+  }
+
+  void _levelCompleted() {
+    isPlaying = false;
+
+    if (currentLevel >= 5) {
+      // Этаж пройден
+      if (currentFloor >= 5) {
+        // Игра полностью пройдена
+        overlays.add('gameOver'); // Можно сделать отдельный экран победы позже
+        return;
+      }
+      currentFloor++;
+      currentLevel = 1;
+    } else {
+      currentLevel++;
+    }
+
+    overlays.add('levelComplete');
+  }
+
+  void nextLevel() {
+    overlays.remove('levelComplete');
+    _clearEverything();
+    isPlaying = true;
+    _startLevel();
   }
 
   void openSettings() {
@@ -115,19 +184,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void backToMenu() {
     isPlaying = false;
-    world.removeAll(world.children.toList());
-    children.whereType<SpawnComponent>().toList().forEach((c) => c.removeFromParent());
-    camera.viewport.children
-        .whereType<JoystickComponent>()
-        .toList()
-        .forEach((c) => c.removeFromParent());
-    camera.viewport.children
-        .whereType<HudButtonComponent>()
-        .toList()
-        .forEach((c) => c.removeFromParent());
-
+    _clearEverything();
     overlays.remove('settings');
     overlays.remove('gameOver');
+    overlays.remove('levelComplete');
     overlays.add('mainMenu');
   }
 
@@ -140,8 +200,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void render(Canvas canvas) {
     super.render(canvas);
     if (isPlaying) {
-      hudPaint.render(canvas, 'Очки: $score', Vector2(16, 16));
-      hudPaint.render(canvas, 'Жизни: ${player.health}', Vector2(16, 48));
+      hudPaint.render(canvas, 'Этаж $currentFloor  |  Уровень $currentLevel', Vector2(16, 16));
+      hudPaint.render(canvas, 'Очки: $score', Vector2(16, 44));
+      hudPaint.render(canvas, 'Жизни: ${player.health}', Vector2(16, 72));
+      hudPaint.render(canvas, 'Враги: $enemiesAlive', Vector2(16, 100));
     }
   }
 }
@@ -160,18 +222,19 @@ class MainMenu extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
-              'INQUISITOR 40K',
+              'Soul of the Inquisitor',
               style: TextStyle(
                 color: Colors.redAccent,
-                fontSize: 36,
+                fontSize: 32,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 2,
+                letterSpacing: 1.5,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
             const Text(
-              'От лица Инквизитора',
-              style: TextStyle(color: Colors.white70, fontSize: 16),
+              'From the Inquisitor\'s perspective',
+              style: TextStyle(color: Colors.white70, fontSize: 15),
             ),
             const SizedBox(height: 60),
             ElevatedButton(
@@ -180,7 +243,7 @@ class MainMenu extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16),
               ),
               onPressed: () => game.startGame(),
-              child: const Text('ИГРАТЬ', style: TextStyle(fontSize: 22, color: Colors.white)),
+              child: const Text('PLAY', style: TextStyle(fontSize: 22, color: Colors.white)),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
@@ -189,7 +252,7 @@ class MainMenu extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
               ),
               onPressed: () => game.openSettings(),
-              child: const Text('Настройки', style: TextStyle(fontSize: 18, color: Colors.white)),
+              child: const Text('Settings', style: TextStyle(fontSize: 18, color: Colors.white)),
             ),
           ],
         ),
@@ -219,12 +282,12 @@ class _SettingsMenuState extends State<SettingsMenu> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Настройки',
+                'Settings',
                 style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 40),
               Text(
-                'Размер джойстика: ${widget.game.joystickSize.toInt()}',
+                'Joystick size: ${widget.game.joystickSize.toInt()}',
                 style: const TextStyle(color: Colors.white, fontSize: 18),
               ),
               Slider(
@@ -241,7 +304,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
               ),
               const SizedBox(height: 30),
               Text(
-                'Размер кнопки стрельбы: ${widget.game.buttonSize.toInt()}',
+                'Shoot button size: ${widget.game.buttonSize.toInt()}',
                 style: const TextStyle(color: Colors.white, fontSize: 18),
               ),
               Slider(
@@ -264,12 +327,61 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
                   ),
                   onPressed: () => widget.game.backToMenu(),
-                  child: const Text('Назад', style: TextStyle(fontSize: 18, color: Colors.white)),
+                  child: const Text('Back', style: TextStyle(fontSize: 18, color: Colors.white)),
                 ),
               ),
               const SizedBox(height: 20),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== LEVEL COMPLETE ====================
+class LevelCompleteMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const LevelCompleteMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final isNewFloor = game.currentLevel == 1 && game.currentFloor > 1;
+
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.85),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              isNewFloor ? 'FLOOR ${game.currentFloor} CLEARED' : 'LEVEL CLEARED',
+              style: const TextStyle(
+                color: Colors.greenAccent,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Floor ${game.currentFloor}  •  Level ${game.currentLevel}',
+              style: const TextStyle(color: Colors.white70, fontSize: 18),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Score: ${game.score}',
+              style: const TextStyle(color: Colors.white, fontSize: 22),
+            ),
+            const SizedBox(height: 50),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[700],
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+              ),
+              onPressed: () => game.nextLevel(),
+              child: const Text('NEXT LEVEL', style: TextStyle(fontSize: 20, color: Colors.white)),
+            ),
+          ],
         ),
       ),
     );
@@ -290,17 +402,22 @@ class GameOverMenu extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
-              'ИНКИЗИТОР ПАЛ',
+              'THE INQUISITOR HAS FALLEN',
               style: TextStyle(
                 color: Colors.redAccent,
-                fontSize: 32,
+                fontSize: 26,
                 fontWeight: FontWeight.bold,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             Text(
-              'Очки: ${game.score}',
+              'Score: ${game.score}',
               style: const TextStyle(color: Colors.white, fontSize: 24),
+            ),
+            Text(
+              'Floor ${game.currentFloor}  •  Level ${game.currentLevel}',
+              style: const TextStyle(color: Colors.white70, fontSize: 16),
             ),
             const SizedBox(height: 50),
             ElevatedButton(
@@ -309,7 +426,7 @@ class GameOverMenu extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
               ),
               onPressed: () => game.startGame(),
-              child: const Text('Заново', style: TextStyle(fontSize: 20, color: Colors.white)),
+              child: const Text('TRY AGAIN', style: TextStyle(fontSize: 20, color: Colors.white)),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
@@ -318,7 +435,7 @@ class GameOverMenu extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
               ),
               onPressed: () => game.backToMenu(),
-              child: const Text('В меню', style: TextStyle(fontSize: 18, color: Colors.white)),
+              child: const Text('Main Menu', style: TextStyle(fontSize: 18, color: Colors.white)),
             ),
           ],
         ),
@@ -353,7 +470,6 @@ class Player extends CircleComponent
   @override
   void update(double dt) {
     super.update(dt);
-
     if (!game.isPlaying) return;
 
     if (joystick.direction != JoystickDirection.idle) {
@@ -384,6 +500,7 @@ class Player extends CircleComponent
     if (other is Enemy && game.isPlaying) {
       health--;
       other.removeFromParent();
+      game.onEnemyKilled(); // чтобы счётчик уменьшился
       if (health <= 0) {
         health = 0;
         game.showGameOver();
@@ -430,7 +547,7 @@ class Bullet extends CircleComponent
     super.onCollision(intersectionPoints, other);
     if (other is Enemy) {
       other.removeFromParent();
-      game.score += 10;
+      game.onEnemyKilled();
       removeFromParent();
     }
   }
@@ -439,18 +556,42 @@ class Bullet extends CircleComponent
 // ==================== ВРАГ ====================
 class Enemy extends CircleComponent
     with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final int floor;
   late final double speed;
+  late final Color color;
 
-  Enemy()
+  Enemy({required this.floor})
       : super(
-          radius: 18,
-          paint: BasicPalette.red.paint(),
+          radius: 16 + floor.toDouble(),
           anchor: Anchor.center,
         );
 
   @override
   Future<void> onLoad() async {
-    speed = 70 + Random().nextDouble() * 50;
+    // Разные цвета и скорость по этажам
+    switch (floor) {
+      case 1:
+        color = Colors.red;
+        speed = 70 + Random().nextDouble() * 30;
+        break;
+      case 2:
+        color = Colors.orange;
+        speed = 85 + Random().nextDouble() * 35;
+        break;
+      case 3:
+        color = Colors.purple;
+        speed = 100 + Random().nextDouble() * 40;
+        break;
+      case 4:
+        color = Colors.green;
+        speed = 115 + Random().nextDouble() * 45;
+        break;
+      default:
+        color = Colors.white;
+        speed = 130 + Random().nextDouble() * 50;
+    }
+
+    paint = Paint()..color = color;
 
     final side = Random().nextInt(4);
     switch (side) {
