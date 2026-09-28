@@ -6,14 +6,32 @@ import 'package:flame/palette.dart';
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(GameWidget(game: InquisitorGame()));
+  runApp(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: GameWidget(
+        game: InquisitorGame(),
+        overlayBuilderMap: {
+          'mainMenu': (context, game) => MainMenu(game as InquisitorGame),
+          'settings': (context, game) => SettingsMenu(game as InquisitorGame),
+        },
+        initialActiveOverlays: const ['mainMenu'],
+      ),
+    ),
+  );
 }
 
 class InquisitorGame extends FlameGame with HasCollisionDetection {
-  late final Player player;
-  late final JoystickComponent joystick;
-  late final HudButtonComponent shootButton;
+  late Player player;
+  late JoystickComponent joystick;
+  late HudButtonComponent shootButton;
+
   int score = 0;
+  bool isPlaying = false;
+
+  // Настройки размеров
+  double joystickSize = 75; // радиус фона джойстика
+  double buttonSize = 40;   // радиус кнопки стрельбы
 
   final TextPaint hudPaint = TextPaint(
     style: const TextStyle(
@@ -25,24 +43,42 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   @override
   Future<void> onLoad() async {
-    // Джойстик слева
+    // Игра пока не запущена
+  }
+
+  void startGame() {
+    isPlaying = true;
+    score = 0;
+
+    // Очищаем старые компоненты
+    world.removeAll(world.children);
+    camera.viewport.removeAll(camera.viewport.children.whereType<JoystickComponent>());
+    camera.viewport.removeAll(camera.viewport.children.whereType<HudButtonComponent>());
+
+    // Джойстик
     final knobPaint = BasicPalette.blue.withAlpha(200).paint();
     final bgPaint = BasicPalette.blue.withAlpha(80).paint();
 
     joystick = JoystickComponent(
-      knob: CircleComponent(radius: 28, paint: knobPaint),
-      background: CircleComponent(radius: 75, paint: bgPaint),
+      knob: CircleComponent(radius: joystickSize * 0.37, paint: knobPaint),
+      background: CircleComponent(radius: joystickSize, paint: bgPaint),
       margin: const EdgeInsets.only(left: 25, bottom: 30),
     );
 
-    // Кнопка стрельбы справа
+    // Кнопка стрельбы
     shootButton = HudButtonComponent(
-      button: CircleComponent(radius: 40, paint: BasicPalette.red.withAlpha(180).paint()),
-      buttonDown: CircleComponent(radius: 40, paint: BasicPalette.red.paint()),
+      button: CircleComponent(radius: buttonSize, paint: BasicPalette.red.withAlpha(180).paint()),
+      buttonDown: CircleComponent(radius: buttonSize, paint: BasicPalette.red.paint()),
       margin: const EdgeInsets.only(right: 30, bottom: 40),
-      onPressed: () => player.isShooting = true,
-      onReleased: () => player.isShooting = false,
-      onCancelled: () => player.isShooting = false,
+      onPressed: () {
+        if (isPlaying) player.isShooting = true;
+      },
+      onReleased: () {
+        if (isPlaying) player.isShooting = false;
+      },
+      onCancelled: () {
+        if (isPlaying) player.isShooting = false;
+      },
     );
 
     player = Player(joystick);
@@ -58,13 +94,164 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         selfPositioning: true,
       ),
     );
+
+    overlays.remove('mainMenu');
+    overlays.remove('settings');
+  }
+
+  void openSettings() {
+    overlays.remove('mainMenu');
+    overlays.add('settings');
+  }
+
+  void backToMenu() {
+    overlays.remove('settings');
+    overlays.add('mainMenu');
   }
 
   @override
   void render(Canvas canvas) {
     super.render(canvas);
-    hudPaint.render(canvas, 'Очки: $score', Vector2(16, 16));
-    hudPaint.render(canvas, 'Жизни: ${player.health}', Vector2(16, 48));
+    if (isPlaying) {
+      hudPaint.render(canvas, 'Очки: $score', Vector2(16, 16));
+      hudPaint.render(canvas, 'Жизни: ${player.health}', Vector2(16, 48));
+    }
+  }
+}
+
+// ==================== ГЛАВНОЕ МЕНЮ ====================
+class MainMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const MainMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.85),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'INQUISITOR 40K',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontSize: 36,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'От лица Инквизитора',
+              style: TextStyle(color: Colors.white70, fontSize: 16),
+            ),
+            const SizedBox(height: 60),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[800],
+                padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16),
+              ),
+              onPressed: () => game.startGame(),
+              child: const Text('ИГРАТЬ', style: TextStyle(fontSize: 22, color: Colors.white)),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[800],
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+              ),
+              onPressed: () => game.openSettings(),
+              child: const Text('Настройки', style: TextStyle(fontSize: 18, color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== НАСТРОЙКИ ====================
+class SettingsMenu extends StatefulWidget {
+  final InquisitorGame game;
+  const SettingsMenu(this.game, {super.key});
+
+  @override
+  State<SettingsMenu> createState() => _SettingsMenuState();
+}
+
+class _SettingsMenuState extends State<SettingsMenu> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.9),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Настройки',
+                style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 40),
+
+              // Размер джойстика
+              Text(
+                'Размер джойстика: ${widget.game.joystickSize.toInt()}',
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+              ),
+              Slider(
+                value: widget.game.joystickSize,
+                min: 50,
+                max: 120,
+                divisions: 14,
+                activeColor: Colors.blue,
+                onChanged: (value) {
+                  setState(() {
+                    widget.game.joystickSize = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 30),
+
+              // Размер кнопки
+              Text(
+                'Размер кнопки стрельбы: ${widget.game.buttonSize.toInt()}',
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+              ),
+              Slider(
+                value: widget.game.buttonSize,
+                min: 25,
+                max: 70,
+                divisions: 9,
+                activeColor: Colors.red,
+                onChanged: (value) {
+                  setState(() {
+                    widget.game.buttonSize = value;
+                  });
+                },
+              ),
+
+              const Spacer(),
+
+              Center(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[700],
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                  ),
+                  onPressed: () => widget.game.backToMenu(),
+                  child: const Text('Назад', style: TextStyle(fontSize: 18, color: Colors.white)),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -95,17 +282,14 @@ class Player extends CircleComponent
   void update(double dt) {
     super.update(dt);
 
-    // Движение
     if (joystick.direction != JoystickDirection.idle) {
       position.add(joystick.relativeDelta * speed * dt);
       angle = joystick.delta.screenAngle();
     }
 
-    // Границы экрана
     position.x = position.x.clamp(radius, game.size.x - radius);
     position.y = position.y.clamp(radius, game.size.y - radius);
 
-    // Стрельба по кнопке
     if (isShooting) {
       shootTimer += dt;
       if (shootTimer >= shootInterval) {
@@ -128,7 +312,6 @@ class Player extends CircleComponent
       other.removeFromParent();
       if (health <= 0) {
         health = 0;
-        // Пока просто останавливаем жизнь
       }
     }
   }
@@ -192,7 +375,6 @@ class Enemy extends CircleComponent
   Future<void> onLoad() async {
     speed = 70 + Random().nextDouble() * 50;
 
-    // Спавн строго с краёв
     final side = Random().nextInt(4);
     switch (side) {
       case 0:
