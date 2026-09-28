@@ -1,7 +1,9 @@
 import 'dart:math';
+import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
+import 'package:flame/input.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -113,8 +115,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final spawnPeriod = max(0.35, 1.55 - (currentFloor * 0.15) - (currentLevel * 0.08));
 
     add(SpawnComponent(
-      factory: (_) {
-        if (enemiesSpawned >= enemiesToSpawn) return null;
+      factory: (index) {
+        if (enemiesSpawned >= enemiesToSpawn) {
+          return PositionComponent(); // пустышка, чтобы не ломать тип
+        }
         enemiesSpawned++;
         enemiesAlive++;
 
@@ -135,7 +139,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void onEnemyKilled() {
-    enemiesAlive--;
+    enemiesAlive = max(0, enemiesAlive - 1);
     score += 10 + (currentFloor * 5);
     if (enemiesAlive <= 0 && enemiesSpawned >= enemiesToSpawn) {
       _levelCompleted();
@@ -339,7 +343,7 @@ class GameOverMenu extends StatelessWidget {
   }
 }
 
-// ====================== ИНКВИЗИТОР (человекоподобный) ======================
+// ====================== ИНКВИЗИТОР ======================
 class Player extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final JoystickComponent joystick;
   double speed = 210;
@@ -399,7 +403,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     final cx = size.x / 2;
     final cy = size.y / 2;
 
-    // Плащ / тень (красный)
+    // Плащ
     final cape = Paint()..color = const Color(0xFF6B0000).withOpacity(0.7);
     final capePath = Path()
       ..moveTo(cx - 18, cy + 4)
@@ -409,7 +413,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       ..close();
     canvas.drawPath(capePath, cape);
 
-    // Торс (тёмно-серый / чёрный)
+    // Торс
     final body = Paint()..color = const Color(0xFF1A1A1A);
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6), width: 28, height: 26), const Radius.circular(6)), body);
 
@@ -418,15 +422,15 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     canvas.drawCircle(Offset(cx - 14, cy + 2), 7, shoulder);
     canvas.drawCircle(Offset(cx + 14, cy + 2), 7, shoulder);
 
-    // Голова / шлем
+    // Голова
     final head = Paint()..color = const Color(0xFF111111);
     canvas.drawCircle(Offset(cx, cy - 12), 11, head);
 
-    // Красный визор / акцент
+    // Визор
     final visor = Paint()..color = const Color(0xFFB22222);
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 13), width: 14, height: 5), const Radius.circular(2)), visor);
 
-    // Красный символ на груди
+    // Символ
     final symbol = Paint()..color = const Color(0xFF8B0000);
     canvas.drawCircle(Offset(cx, cy + 4), 4, symbol);
   }
@@ -448,7 +452,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   }
 }
 
-// ====================== ВРАГИ (человекоподобные) ======================
+// ====================== ВРАГИ ======================
 class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final int floor;
   final EnemyType type;
@@ -507,45 +511,32 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     final cx = size.x / 2;
     final cy = size.y / 2;
 
-    // Общий тёмно-серый торс
     final body = Paint()..color = const Color(0xFF2A2A2A);
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 5), width: 24, height: 24), const Radius.circular(5)), body);
 
-    // Плечи
     final shoulder = Paint()..color = const Color(0xFF3A3A3A);
     canvas.drawCircle(Offset(cx - 12, cy + 1), 6.5, shoulder);
     canvas.drawCircle(Offset(cx + 12, cy + 1), 6.5, shoulder);
 
-    // Голова
     final head = Paint()..color = const Color(0xFF1F1F1F);
     canvas.drawCircle(Offset(cx, cy - 13), 10, head);
 
     switch (type) {
       case EnemyType.shooter:
-        // Зелёные акценты
         final accent = Paint()..color = const Color(0xFF2E8B57);
         canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
-        canvas.drawCircle(Offset(cx + 9, cy + 2), 3.5, accent);
-        // Ствол
         final gun = Paint()..color = const Color(0xFF111111)..strokeWidth = 4..strokeCap = StrokeCap.round;
         canvas.drawLine(Offset(cx + 6, cy - 2), Offset(cx + 18, cy - 8), gun);
         break;
-
       case EnemyType.melee:
-        // Жёлтые акценты
         final accent = Paint()..color = const Color(0xFFDAA520);
         canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
-        canvas.drawCircle(Offset(cx - 9, cy + 3), 3.5, accent);
-        // Клинок
         final blade = Paint()..color = const Color(0xFFC9A227)..strokeWidth = 3.5..strokeCap = StrokeCap.round;
         canvas.drawLine(Offset(cx + 8, cy - 4), Offset(cx + 19, cy - 16), blade);
         break;
-
       case EnemyType.shielded:
-        // Синие акценты
         final accent = Paint()..color = const Color(0xFF1E90FF);
         canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
-        // Щит
         final shield = Paint()
           ..color = const Color(0xFF4169E1).withOpacity(0.75)
           ..style = PaintingStyle.stroke
@@ -556,7 +547,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   }
 }
 
-// ====================== ПУЛИ И АТАКИ ======================
+// ====================== ПУЛИ ======================
 class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
   final double speed = 490;
