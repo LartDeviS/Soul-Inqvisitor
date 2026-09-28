@@ -43,11 +43,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int enemiesSpawned = 0;
 
   bool portalSpawned = false;
+  bool isBossLevel = false;
 
   double joystickSize = 75;
   double buttonSize = 40;
 
-  // Размер игровой зоны
   final double mapWidth = 900;
   final double mapHeight = 1600;
 
@@ -66,6 +66,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     currentFloor = 1;
     currentLevel = 1;
     portalSpawned = false;
+    isBossLevel = false;
     _clearEverything();
     _startLevel();
     overlays.remove('mainMenu');
@@ -85,18 +86,18 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     enemiesSpawned = 0;
     enemiesAlive = 0;
     portalSpawned = false;
-    enemiesToSpawn = 5 + (currentLevel * 2) + (currentFloor * 3);
+    isBossLevel = (currentLevel == 5);
 
-    // === ПОЛ ===
+    // Пол
     world.add(Floor(size: Vector2(mapWidth, mapHeight)));
 
-    // === СТЕНЫ (коричневые) ===
+    // Стены
     _createWalls();
 
-    // === ПРЕГРАДЫ (разрушаемые мечом) ===
+    // Преграды
     _createObstacles();
 
-    // Джойстик и кнопки
+    // Управление
     final knobPaint = Paint()..color = const Color(0xFF8B0000);
     final bgPaint = Paint()..color = const Color(0xFF2F2F2F).withOpacity(0.7);
 
@@ -127,24 +128,29 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     camera.viewport.add(joystick);
     camera.viewport.add(shootButton);
     camera.viewport.add(switchWeaponButton);
-
-    // Камера следует за игроком
     camera.follow(player);
 
-    _spawnWave();
+    if (isBossLevel) {
+      // Босс вместо обычных врагов
+      enemiesToSpawn = 1;
+      enemiesAlive = 1;
+      enemiesSpawned = 1;
+      world.add(Boss(floor: currentFloor, position: Vector2(mapWidth / 2, mapHeight / 2 - 200)));
+    } else {
+      enemiesToSpawn = 5 + (currentLevel * 2) + (currentFloor * 3);
+      _spawnWave();
+    }
   }
 
   void _createWalls() {
     const thickness = 40.0;
     final brown = const Color(0xFF5D4037);
 
-    // Внешние стены
-    world.add(Wall(position: Vector2(0, 0), size: Vector2(mapWidth, thickness), color: brown)); // верх
-    world.add(Wall(position: Vector2(0, mapHeight - thickness), size: Vector2(mapWidth, thickness), color: brown)); // низ
-    world.add(Wall(position: Vector2(0, 0), size: Vector2(thickness, mapHeight), color: brown)); // лево
-    world.add(Wall(position: Vector2(mapWidth - thickness, 0), size: Vector2(thickness, mapHeight), color: brown)); // право
+    world.add(Wall(position: Vector2(0, 0), size: Vector2(mapWidth, thickness), color: brown));
+    world.add(Wall(position: Vector2(0, mapHeight - thickness), size: Vector2(mapWidth, thickness), color: brown));
+    world.add(Wall(position: Vector2(0, 0), size: Vector2(thickness, mapHeight), color: brown));
+    world.add(Wall(position: Vector2(mapWidth - thickness, 0), size: Vector2(thickness, mapHeight), color: brown));
 
-    // Несколько внутренних стен
     world.add(Wall(position: Vector2(200, 300), size: Vector2(180, 30), color: brown));
     world.add(Wall(position: Vector2(500, 700), size: Vector2(30, 220), color: brown));
     world.add(Wall(position: Vector2(250, 1100), size: Vector2(250, 30), color: brown));
@@ -158,7 +164,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       Vector2(600, 1300),
       Vector2(180, 1400),
     ];
-
     for (final pos in positions) {
       world.add(Obstacle(position: pos));
     }
@@ -169,9 +174,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
     add(SpawnComponent(
       factory: (index) {
-        if (enemiesSpawned >= enemiesToSpawn) {
-          return PositionComponent();
-        }
+        if (enemiesSpawned >= enemiesToSpawn) return PositionComponent();
         enemiesSpawned++;
         enemiesAlive++;
 
@@ -193,11 +196,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void onEnemyKilled() {
     enemiesAlive = max(0, enemiesAlive - 1);
-    score += 10 + (currentFloor * 5);
+    score += isBossLevel ? 150 + (currentFloor * 50) : 10 + (currentFloor * 5);
 
-    if (enemiesAlive <= 0 && enemiesSpawned >= enemiesToSpawn && !portalSpawned) {
+    if (enemiesAlive <= 0 && !portalSpawned) {
       portalSpawned = true;
-      // Портал появляется в центре
       world.add(Portal(position: Vector2(mapWidth / 2, mapHeight / 2)));
     }
   }
@@ -250,25 +252,168 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       hudPaint.render(canvas, 'Floor $currentFloor  |  Level $currentLevel', Vector2(16, 16));
       hudPaint.render(canvas, 'Score: $score', Vector2(16, 42));
       hudPaint.render(canvas, 'HP: ${player.health}', Vector2(16, 68));
-      hudPaint.render(canvas, 'Enemies: $enemiesAlive', Vector2(16, 94));
+      hudPaint.render(canvas, isBossLevel ? 'BOSS FIGHT' : 'Enemies: $enemiesAlive', Vector2(16, 94));
       hudPaint.render(canvas, 'Weapon: ${player.weapon == WeaponType.bolter ? "BOLTER" : "SWORD"}', Vector2(16, 120));
     }
   }
 }
 
-// ====================== ПОЛ ======================
+// ====================== БОСС ======================
+class Boss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final int floor;
+  late int maxHp;
+  late int currentHp;
+  double attackTimer = 0;
+  final double attackInterval = 2.2;
+  double moveTimer = 0;
+
+  Boss({required this.floor, required Vector2 position})
+      : super(position: position, size: Vector2(90, 100), anchor: Anchor.center);
+
+  @override
+  Future<void> onLoad() async {
+    maxHp = 80 + (floor * 40);
+    currentHp = maxHp;
+    add(CircleHitbox(radius: 40));
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!game.isPlaying) return;
+
+    // Медленное преследование
+    final toPlayer = (game.player.position - position).normalized();
+    position.add(toPlayer * (35 + floor * 5.0) * dt);
+    angle = toPlayer.screenAngle();
+
+    // Массовая атака
+    attackTimer += dt;
+    if (attackTimer >= attackInterval) {
+      attackTimer = 0;
+      _massAttack();
+    }
+  }
+
+  void _massAttack() {
+    // 8 направлений
+    for (int i = 0; i < 8; i++) {
+      final angle = (i / 8) * 2 * pi;
+      final dir = Vector2(cos(angle), sin(angle));
+      game.world.add(BossProjectile(
+        position: position.clone(),
+        direction: dir,
+      ));
+    }
+  }
+
+  void takeDamage(int amount) {
+    currentHp -= amount;
+    if (currentHp <= 0) {
+      currentHp = 0;
+      removeFromParent();
+      game.onEnemyKilled();
+    }
+  }
+
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Wall || other is Obstacle) {
+      final overlap = intersectionPoints.first - position;
+      position -= overlap.normalized() * 5;
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final cx = size.x / 2;
+    final cy = size.y / 2;
+
+    // Большой тёмный корпус
+    final body = Paint()..color = const Color(0xFF1A1A1A);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 8), width: 60, height: 55), const Radius.circular(10)),
+      body,
+    );
+
+    // Плечи
+    final shoulder = Paint()..color = const Color(0xFF333333);
+    canvas.drawCircle(Offset(cx - 28, cy + 2), 14, shoulder);
+    canvas.drawCircle(Offset(cx + 28, cy + 2), 14, shoulder);
+
+    // Голова
+    final head = Paint()..color = const Color(0xFF0D0D0D);
+    canvas.drawCircle(Offset(cx, cy - 22), 18, head);
+
+    // Красные глаза
+    final eye = Paint()..color = const Color(0xFFFF1744);
+    canvas.drawCircle(Offset(cx - 7, cy - 24), 4, eye);
+    canvas.drawCircle(Offset(cx + 7, cy - 24), 4, eye);
+
+    // === ПОЛОСКА HP ===
+    final barWidth = 80.0;
+    final barHeight = 10.0;
+    final hpPercent = currentHp / maxHp;
+
+    // Фон полоски
+    final bgBar = Paint()..color = Colors.black.withOpacity(0.7);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx - barWidth / 2, -25, barWidth, barHeight), const Radius.circular(4)),
+      bgBar,
+    );
+
+    // HP
+    final hpBar = Paint()..color = hpPercent > 0.3 ? const Color(0xFFE53935) : const Color(0xFFFF1744);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx - barWidth / 2, -25, barWidth * hpPercent, barHeight), const Radius.circular(4)),
+      hpBar,
+    );
+  }
+}
+
+// Снаряд босса
+class BossProjectile extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final Vector2 direction;
+  final double speed = 180;
+
+  BossProjectile({required super.position, required this.direction})
+      : super(radius: 10, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFFF1744));
+
+  @override
+  Future<void> onLoad() async {
+    add(CircleHitbox());
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!game.isPlaying) return;
+    position.add(direction * speed * dt);
+    if (position.x < -50 || position.x > game.mapWidth + 50 || position.y < -50 || position.y > game.mapHeight + 50) {
+      removeFromParent();
+    }
+  }
+
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Wall || other is Obstacle) {
+      removeFromParent();
+    }
+  }
+}
+
+// ====================== ОСТАЛЬНЫЕ КЛАССЫ (пол, стены, преграды, портал, меню, игрок, враги, пули) ======================
+
 class Floor extends PositionComponent {
   Floor({required Vector2 size}) : super(size: size, position: Vector2.zero());
 
   @override
   void render(Canvas canvas) {
-    final paint = Paint()..color = const Color(0xFFBDBDBD); // светло-серый пол
+    final paint = Paint()..color = const Color(0xFFBDBDBD);
     canvas.drawRect(size.toRect(), paint);
-
-    // Лёгкая сетка для ощущения пространства
-    final gridPaint = Paint()
-      ..color = const Color(0xFF9E9E9E)
-      ..strokeWidth = 1;
+    final gridPaint = Paint()..color = const Color(0xFF9E9E9E)..strokeWidth = 1;
     for (double x = 0; x < size.x; x += 60) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.y), gridPaint);
     }
@@ -278,12 +423,9 @@ class Floor extends PositionComponent {
   }
 }
 
-// ====================== СТЕНЫ ======================
 class Wall extends PositionComponent with CollisionCallbacks {
   final Color color;
-
-  Wall({required Vector2 position, required Vector2 size, required this.color})
-      : super(position: position, size: size);
+  Wall({required Vector2 position, required Vector2 size, required this.color}) : super(position: position, size: size);
 
   @override
   Future<void> onLoad() async {
@@ -294,20 +436,13 @@ class Wall extends PositionComponent with CollisionCallbacks {
   void render(Canvas canvas) {
     final paint = Paint()..color = color;
     canvas.drawRect(size.toRect(), paint);
-
-    // Тёмная обводка
-    final border = Paint()
-      ..color = const Color(0xFF3E2723)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
+    final border = Paint()..color = const Color(0xFF3E2723)..style = PaintingStyle.stroke..strokeWidth = 3;
     canvas.drawRect(size.toRect(), border);
   }
 }
 
-// ====================== ПРЕГРАДЫ (ломаются мечом) ======================
 class Obstacle extends PositionComponent with CollisionCallbacks {
-  Obstacle({required Vector2 position})
-      : super(position: position, size: Vector2(50, 50), anchor: Anchor.center);
+  Obstacle({required Vector2 position}) : super(position: position, size: Vector2(50, 50), anchor: Anchor.center);
 
   @override
   Future<void> onLoad() async {
@@ -316,18 +451,13 @@ class Obstacle extends PositionComponent with CollisionCallbacks {
 
   @override
   void render(Canvas canvas) {
-    final paint = Paint()..color = const Color(0xFF795548); // коричневая преграда
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(size.toRect(), const Radius.circular(6)),
-      paint,
-    );
+    final paint = Paint()..color = const Color(0xFF795548);
+    canvas.drawRRect(RRect.fromRectAndRadius(size.toRect(), const Radius.circular(6)), paint);
   }
 }
 
-// ====================== ПОРТАЛ ======================
 class Portal extends PositionComponent with CollisionCallbacks {
-  Portal({required Vector2 position})
-      : super(position: position, size: Vector2(70, 70), anchor: Anchor.center);
+  Portal({required Vector2 position}) : super(position: position, size: Vector2(70, 70), anchor: Anchor.center);
 
   @override
   Future<void> onLoad() async {
@@ -337,23 +467,18 @@ class Portal extends PositionComponent with CollisionCallbacks {
   @override
   void render(Canvas canvas) {
     final center = size / 2;
-    // Розовый портал
     final paint = Paint()..color = const Color(0xFFE91E63).withOpacity(0.8);
     canvas.drawCircle(center.toOffset(), 32, paint);
-
     final inner = Paint()..color = const Color(0xFFF48FB1);
     canvas.drawCircle(center.toOffset(), 18, inner);
-
     final core = Paint()..color = Colors.white.withOpacity(0.7);
     canvas.drawCircle(center.toOffset(), 8, core);
   }
 }
 
-// ====================== МЕНЮ (без изменений) ======================
 class MainMenu extends StatelessWidget {
   final InquisitorGame game;
   const MainMenu(this.game, {super.key});
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -362,9 +487,7 @@ class MainMenu extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Soul of the Inquisitor',
-                style: TextStyle(color: Colors.redAccent, fontSize: 32, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center),
+            const Text('Soul of the Inquisitor', style: TextStyle(color: Colors.redAccent, fontSize: 32, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
             const SizedBox(height: 12),
             const Text('From the Inquisitor\'s perspective', style: TextStyle(color: Colors.white70, fontSize: 15)),
             const SizedBox(height: 60),
@@ -407,12 +530,10 @@ class _SettingsMenuState extends State<SettingsMenu> {
               const Text('Settings', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
               const SizedBox(height: 40),
               Text('Joystick size: ${widget.game.joystickSize.toInt()}', style: const TextStyle(color: Colors.white, fontSize: 18)),
-              Slider(value: widget.game.joystickSize, min: 50, max: 120, divisions: 14, activeColor: Colors.blue,
-                  onChanged: (v) => setState(() => widget.game.joystickSize = v)),
+              Slider(value: widget.game.joystickSize, min: 50, max: 120, divisions: 14, activeColor: Colors.blue, onChanged: (v) => setState(() => widget.game.joystickSize = v)),
               const SizedBox(height: 30),
               Text('Button size: ${widget.game.buttonSize.toInt()}', style: const TextStyle(color: Colors.white, fontSize: 18)),
-              Slider(value: widget.game.buttonSize, min: 25, max: 70, divisions: 9, activeColor: Colors.red,
-                  onChanged: (v) => setState(() => widget.game.buttonSize = v)),
+              Slider(value: widget.game.buttonSize, min: 25, max: 70, divisions: 9, activeColor: Colors.red, onChanged: (v) => setState(() => widget.game.buttonSize = v)),
               const Spacer(),
               Center(
                 child: ElevatedButton(
@@ -468,8 +589,7 @@ class GameOverMenu extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('THE INQUISITOR HAS FALLEN',
-                style: TextStyle(color: Colors.redAccent, fontSize: 26, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+            const Text('THE INQUISITOR HAS FALLEN', style: TextStyle(color: Colors.redAccent, fontSize: 26, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
             const SizedBox(height: 16),
             Text('Score: ${game.score}', style: const TextStyle(color: Colors.white, fontSize: 24)),
             Text('Floor ${game.currentFloor}  •  Level ${game.currentLevel}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
@@ -492,7 +612,6 @@ class GameOverMenu extends StatelessWidget {
   }
 }
 
-// ====================== ИГРОК ======================
 class Player extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final JoystickComponent joystick;
   double speed = 210;
@@ -501,316 +620,4 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   double attackTimer = 0;
   WeaponType weapon = WeaponType.bolter;
 
-  Player(this.joystick) : super(size: Vector2(52, 58), anchor: Anchor.center);
-
-  @override
-  Future<void> onLoad() async {
-    position = Vector2(game.mapWidth / 2, game.mapHeight / 2);
-    add(CircleHitbox(radius: 20));
-  }
-
-  void switchWeapon() {
-    weapon = weapon == WeaponType.bolter ? WeaponType.sword : WeaponType.bolter;
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (!game.isPlaying) return;
-
-    if (joystick.direction != JoystickDirection.idle) {
-      final nextPos = position + joystick.relativeDelta * speed * dt;
-      // Простое ограничение, чтобы не уходить далеко (стены сами блокируют)
-      position = nextPos;
-      angle = joystick.delta.screenAngle();
-    }
-
-    if (isAttacking) {
-      attackTimer += dt;
-      final interval = weapon == WeaponType.bolter ? 0.32 : 0.45;
-      if (attackTimer >= interval) {
-        attackTimer = 0;
-        _doAttack();
-      }
-    }
-  }
-
-  void _doAttack() {
-    final dir = joystick.relativeDelta.normalized();
-    final attackDir = dir == Vector2.zero() ? Vector2(0, -1) : dir;
-
-    if (weapon == WeaponType.bolter) {
-      game.world.add(Bullet(position: position.clone(), direction: attackDir));
-    } else {
-      game.world.add(MeleeAttack(position: position + attackDir * 34, direction: attackDir));
-    }
-  }
-
-  @override
-  void render(Canvas canvas) {
-    final cx = size.x / 2;
-    final cy = size.y / 2;
-
-    final cape = Paint()..color = const Color(0xFF6B0000).withOpacity(0.7);
-    final capePath = Path()
-      ..moveTo(cx - 18, cy + 4)
-      ..quadraticBezierTo(cx - 28, cy + 22, cx - 8, cy + 28)
-      ..lineTo(cx + 8, cy + 28)
-      ..quadraticBezierTo(cx + 28, cy + 22, cx + 18, cy + 4)
-      ..close();
-    canvas.drawPath(capePath, cape);
-
-    final body = Paint()..color = const Color(0xFF1A1A1A);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6), width: 28, height: 26), const Radius.circular(6)), body);
-
-    final shoulder = Paint()..color = const Color(0xFF2A2A2A);
-    canvas.drawCircle(Offset(cx - 14, cy + 2), 7, shoulder);
-    canvas.drawCircle(Offset(cx + 14, cy + 2), 7, shoulder);
-
-    final head = Paint()..color = const Color(0xFF111111);
-    canvas.drawCircle(Offset(cx, cy - 12), 11, head);
-
-    final visor = Paint()..color = const Color(0xFFB22222);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 13), width: 14, height: 5), const Radius.circular(2)), visor);
-
-    final symbol = Paint()..color = const Color(0xFF8B0000);
-    canvas.drawCircle(Offset(cx, cy + 4), 4, symbol);
-  }
-
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (!game.isPlaying) return;
-
-    if (other is Wall || other is Obstacle) {
-      // Отталкивание от стен и преград
-      final overlap = intersectionPoints.first - position;
-      position -= overlap.normalized() * 3;
-    }
-
-    if (other is Enemy || other is EnemyBullet) {
-      health--;
-      other.removeFromParent();
-      if (other is Enemy) game.onEnemyKilled();
-      if (health <= 0) {
-        health = 0;
-        game.showGameOver();
-      }
-    }
-
-    if (other is Portal && weapon == WeaponType.sword) {
-      // Удар мечом по порталу
-      game.goToNextLevel();
-    }
-  }
-}
-
-// ====================== ВРАГИ ======================
-class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final int floor;
-  final EnemyType type;
-  late final double speed;
-  double shootTimer = 0;
-  final double shootInterval = 1.9;
-
-  Enemy({required this.floor, required this.type}) : super(size: Vector2(46, 52), anchor: Anchor.center);
-
-  @override
-  Future<void> onLoad() async {
-    switch (type) {
-      case EnemyType.shooter:
-        speed = 48 + floor * 6.5;
-        break;
-      case EnemyType.melee:
-        speed = 80 + floor * 10.0;
-        break;
-      case EnemyType.shielded:
-        speed = 38 + floor * 5.0;
-        size = Vector2(52, 56);
-        break;
-    }
-
-    // Спавн внутри карты, не в стенах
-    position = Vector2(
-      80 + Random().nextDouble() * (game.mapWidth - 160),
-      80 + Random().nextDouble() * (game.mapHeight - 160),
-    );
-
-    add(CircleHitbox(radius: type == EnemyType.shielded ? 22 : 18));
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (!game.isPlaying) return;
-
-    // Цель — игрок
-    final toPlayer = (game.player.position - position).normalized();
-    position.add(toPlayer * speed * dt);
-    angle = toPlayer.screenAngle();
-
-    if (type == EnemyType.shooter) {
-      shootTimer += dt;
-      if (shootTimer >= shootInterval) {
-        shootTimer = 0;
-        game.world.add(EnemyBullet(position: position.clone(), direction: toPlayer));
-      }
-    }
-  }
-
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle) {
-      final overlap = intersectionPoints.first - position;
-      position -= overlap.normalized() * 4;
-    }
-  }
-
-  @override
-  void render(Canvas canvas) {
-    final cx = size.x / 2;
-    final cy = size.y / 2;
-
-    final body = Paint()..color = const Color(0xFF2A2A2A);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 5), width: 24, height: 24), const Radius.circular(5)), body);
-
-    final shoulder = Paint()..color = const Color(0xFF3A3A3A);
-    canvas.drawCircle(Offset(cx - 12, cy + 1), 6.5, shoulder);
-    canvas.drawCircle(Offset(cx + 12, cy + 1), 6.5, shoulder);
-
-    final head = Paint()..color = const Color(0xFF1F1F1F);
-    canvas.drawCircle(Offset(cx, cy - 13), 10, head);
-
-    switch (type) {
-      case EnemyType.shooter:
-        final accent = Paint()..color = const Color(0xFF2E8B57);
-        canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
-        final gun = Paint()..color = const Color(0xFF111111)..strokeWidth = 4..strokeCap = StrokeCap.round;
-        canvas.drawLine(Offset(cx + 6, cy - 2), Offset(cx + 18, cy - 8), gun);
-        break;
-      case EnemyType.melee:
-        final accent = Paint()..color = const Color(0xFFDAA520);
-        canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
-        final blade = Paint()..color = const Color(0xFFC9A227)..strokeWidth = 3.5..strokeCap = StrokeCap.round;
-        canvas.drawLine(Offset(cx + 8, cy - 4), Offset(cx + 19, cy - 16), blade);
-        break;
-      case EnemyType.shielded:
-        final accent = Paint()..color = const Color(0xFF1E90FF);
-        canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
-        final shield = Paint()
-          ..color = const Color(0xFF4169E1).withOpacity(0.75)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 5;
-        canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy + 2), radius: 23), -1.1, 2.2, false, shield);
-        break;
-    }
-  }
-}
-
-// ====================== АТАКИ ======================
-class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 direction;
-  final double speed = 490;
-
-  Bullet({required super.position, required this.direction})
-      : super(radius: 6, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFFFD700));
-
-  @override
-  Future<void> onLoad() async {
-    add(CircleHitbox());
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (!game.isPlaying) return;
-    position.add(direction * speed * dt);
-    if (position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) {
-      removeFromParent();
-    }
-  }
-
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle) {
-      removeFromParent();
-    }
-    if (other is Enemy) {
-      if (other.type == EnemyType.shielded) {
-        removeFromParent();
-        return;
-      }
-      other.removeFromParent();
-      game.onEnemyKilled();
-      removeFromParent();
-    }
-  }
-}
-
-class MeleeAttack extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 direction;
-  double life = 0.18;
-
-  MeleeAttack({required super.position, required this.direction})
-      : super(radius: 32, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFAAAAAA).withOpacity(0.5));
-
-  @override
-  Future<void> onLoad() async {
-    add(CircleHitbox());
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    life -= dt;
-    if (life <= 0) removeFromParent();
-  }
-
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Enemy) {
-      other.removeFromParent();
-      game.onEnemyKilled();
-    }
-    if (other is Obstacle) {
-      other.removeFromParent(); // ломаем преграду
-    }
-    if (other is Portal) {
-      game.goToNextLevel();
-    }
-  }
-}
-
-class EnemyBullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 direction;
-  final double speed = 145;
-
-  EnemyBullet({required super.position, required this.direction})
-      : super(radius: 7, anchor: Anchor.center, paint: Paint()..color = const Color(0xFF7CFC00));
-
-  @override
-  Future<void> onLoad() async {
-    add(CircleHitbox());
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (!game.isPlaying) return;
-    position.add(direction * speed * dt);
-    if (position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) {
-      removeFromParent();
-    }
-  }
-
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle) {
-      removeFromParent();
-    }
-  }
-}
+  Player(this.joystick) : super(size: 
