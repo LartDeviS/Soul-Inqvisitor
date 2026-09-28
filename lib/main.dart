@@ -14,6 +14,7 @@ void main() {
         overlayBuilderMap: {
           'mainMenu': (context, game) => MainMenu(game as InquisitorGame),
           'settings': (context, game) => SettingsMenu(game as InquisitorGame),
+          'gameOver': (context, game) => GameOverMenu(game as InquisitorGame),
         },
         initialActiveOverlays: const ['mainMenu'],
       ),
@@ -30,8 +31,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool isPlaying = false;
 
   // Настройки размеров
-  double joystickSize = 75; // радиус фона джойстика
-  double buttonSize = 40;   // радиус кнопки стрельбы
+  double joystickSize = 75;
+  double buttonSize = 40;
 
   final TextPaint hudPaint = TextPaint(
     style: const TextStyle(
@@ -42,18 +43,25 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   );
 
   @override
-  Future<void> onLoad() async {
-    // Игра пока не запущена
-  }
+  Future<void> onLoad() async {}
 
   void startGame() {
     isPlaying = true;
     score = 0;
 
-    // Очищаем старые компоненты
-    world.removeAll(world.children);
-    camera.viewport.removeAll(camera.viewport.children.whereType<JoystickComponent>());
-    camera.viewport.removeAll(camera.viewport.children.whereType<HudButtonComponent>());
+    // Очищаем всё
+    world.removeAll(world.children.toList());
+    camera.viewport.children
+        .whereType<JoystickComponent>()
+        .toList()
+        .forEach((c) => c.removeFromParent());
+    camera.viewport.children
+        .whereType<HudButtonComponent>()
+        .toList()
+        .forEach((c) => c.removeFromParent());
+
+    // Убираем старые SpawnComponent
+    children.whereType<SpawnComponent>().toList().forEach((c) => c.removeFromParent());
 
     // Джойстик
     final knobPaint = BasicPalette.blue.withAlpha(200).paint();
@@ -97,6 +105,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
     overlays.remove('mainMenu');
     overlays.remove('settings');
+    overlays.remove('gameOver');
   }
 
   void openSettings() {
@@ -105,8 +114,26 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void backToMenu() {
+    isPlaying = false;
+    world.removeAll(world.children.toList());
+    children.whereType<SpawnComponent>().toList().forEach((c) => c.removeFromParent());
+    camera.viewport.children
+        .whereType<JoystickComponent>()
+        .toList()
+        .forEach((c) => c.removeFromParent());
+    camera.viewport.children
+        .whereType<HudButtonComponent>()
+        .toList()
+        .forEach((c) => c.removeFromParent());
+
     overlays.remove('settings');
+    overlays.remove('gameOver');
     overlays.add('mainMenu');
+  }
+
+  void showGameOver() {
+    isPlaying = false;
+    overlays.add('gameOver');
   }
 
   @override
@@ -196,8 +223,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
                 style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 40),
-
-              // Размер джойстика
               Text(
                 'Размер джойстика: ${widget.game.joystickSize.toInt()}',
                 style: const TextStyle(color: Colors.white, fontSize: 18),
@@ -215,8 +240,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
                 },
               ),
               const SizedBox(height: 30),
-
-              // Размер кнопки
               Text(
                 'Размер кнопки стрельбы: ${widget.game.buttonSize.toInt()}',
                 style: const TextStyle(color: Colors.white, fontSize: 18),
@@ -233,9 +256,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                   });
                 },
               ),
-
               const Spacer(),
-
               Center(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -249,6 +270,57 @@ class _SettingsMenuState extends State<SettingsMenu> {
               const SizedBox(height: 20),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== GAME OVER ====================
+class GameOverMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const GameOverMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.85),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'ИНКИЗИТОР ПАЛ',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Очки: ${game.score}',
+              style: const TextStyle(color: Colors.white, fontSize: 24),
+            ),
+            const SizedBox(height: 50),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[800],
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+              ),
+              onPressed: () => game.startGame(),
+              child: const Text('Заново', style: TextStyle(fontSize: 20, color: Colors.white)),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[800],
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+              ),
+              onPressed: () => game.backToMenu(),
+              child: const Text('В меню', style: TextStyle(fontSize: 18, color: Colors.white)),
+            ),
+          ],
         ),
       ),
     );
@@ -282,6 +354,8 @@ class Player extends CircleComponent
   void update(double dt) {
     super.update(dt);
 
+    if (!game.isPlaying) return;
+
     if (joystick.direction != JoystickDirection.idle) {
       position.add(joystick.relativeDelta * speed * dt);
       angle = joystick.delta.screenAngle();
@@ -307,11 +381,12 @@ class Player extends CircleComponent
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Enemy) {
+    if (other is Enemy && game.isPlaying) {
       health--;
       other.removeFromParent();
       if (health <= 0) {
         health = 0;
+        game.showGameOver();
       }
     }
   }
@@ -338,6 +413,8 @@ class Bullet extends CircleComponent
   @override
   void update(double dt) {
     super.update(dt);
+    if (!game.isPlaying) return;
+
     position.add(direction * speed * dt);
 
     if (position.x < -30 ||
@@ -397,6 +474,8 @@ class Enemy extends CircleComponent
   @override
   void update(double dt) {
     super.update(dt);
+    if (!game.isPlaying) return;
+
     final direction = (game.player.position - position).normalized();
     position.add(direction * speed * dt);
   }
