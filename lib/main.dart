@@ -620,4 +620,321 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   double attackTimer = 0;
   WeaponType weapon = WeaponType.bolter;
 
-  Player(this.joystick) : super(size: 
+  Player(this.joystick) : super(size: Vector2(52, 58), anchor: Anchor.center);
+
+  @override
+  Future<void> onLoad() async {
+    position = Vector2(game.mapWidth / 2, game.mapHeight / 2 + 300);
+    add(CircleHitbox(radius: 20));
+  }
+
+  void switchWeapon() {
+    weapon = weapon == WeaponType.bolter ? WeaponType.sword : WeaponType.bolter;
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!game.isPlaying) return;
+
+    if (joystick.direction != JoystickDirection.idle) {
+      position.add(joystick.relativeDelta * speed * dt);
+      angle = joystick.delta.screenAngle();
+    }
+
+    if (isAttacking) {
+      attackTimer += dt;
+      final interval = weapon == WeaponType.bolter ? 0.32 : 0.45;
+      if (attackTimer >= interval) {
+        attackTimer = 0;
+        _doAttack();
+      }
+    }
+  }
+
+  void _doAttack() {
+    final dir = joystick.relativeDelta.normalized();
+    final attackDir = dir == Vector2.zero() ? Vector2(0, -1) : dir;
+
+    if (weapon == WeaponType.bolter) {
+      game.world.add(Bullet(position: position.clone(), direction: attackDir));
+    } else {
+      game.world.add(MeleeAttack(position: position + attackDir * 34, direction: attackDir));
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final cx = size.x / 2;
+    final cy = size.y / 2;
+
+    final cape = Paint()..color = const Color(0xFF6B0000).withOpacity(0.7);
+    final capePath = Path()
+      ..moveTo(cx - 18, cy + 4)
+      ..quadraticBezierTo(cx - 28, cy + 22, cx - 8, cy + 28)
+      ..lineTo(cx + 8, cy + 28)
+      ..quadraticBezierTo(cx + 28, cy + 22, cx + 18, cy + 4)
+      ..close();
+    canvas.drawPath(capePath, cape);
+
+    final body = Paint()..color = const Color(0xFF1A1A1A);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6), width: 28, height: 26), const Radius.circular(6)), body);
+
+    final shoulder = Paint()..color = const Color(0xFF2A2A2A);
+    canvas.drawCircle(Offset(cx - 14, cy + 2), 7, shoulder);
+    canvas.drawCircle(Offset(cx + 14, cy + 2), 7, shoulder);
+
+    final head = Paint()..color = const Color(0xFF111111);
+    canvas.drawCircle(Offset(cx, cy - 12), 11, head);
+
+    final visor = Paint()..color = const Color(0xFFB22222);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 13), width: 14, height: 5), const Radius.circular(2)), visor);
+
+    final symbol = Paint()..color = const Color(0xFF8B0000);
+    canvas.drawCircle(Offset(cx, cy + 4), 4, symbol);
+  }
+
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (!game.isPlaying) return;
+
+    if (other is Wall || other is Obstacle) {
+      final overlap = intersectionPoints.first - position;
+      position -= overlap.normalized() * 3;
+    }
+
+    if (other is Enemy || other is EnemyBullet || other is BossProjectile) {
+      health--;
+      other.removeFromParent();
+      if (other is Enemy) game.onEnemyKilled();
+      if (health <= 0) {
+        health = 0;
+        game.showGameOver();
+      }
+    }
+
+    if (other is Boss) {
+      // столкновение с боссом наносит урон
+      health--;
+      if (health <= 0) {
+        health = 0;
+        game.showGameOver();
+      }
+    }
+
+    if (other is Portal && weapon == WeaponType.sword) {
+      game.goToNextLevel();
+    }
+  }
+}
+
+class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final int floor;
+  final EnemyType type;
+  late final double speed;
+  double shootTimer = 0;
+  final double shootInterval = 1.9;
+
+  Enemy({required this.floor, required this.type}) : super(size: Vector2(46, 52), anchor: Anchor.center);
+
+  @override
+  Future<void> onLoad() async {
+    switch (type) {
+      case EnemyType.shooter:
+        speed = 48 + floor * 6.5;
+        break;
+      case EnemyType.melee:
+        speed = 80 + floor * 10.0;
+        break;
+      case EnemyType.shielded:
+        speed = 38 + floor * 5.0;
+        size = Vector2(52, 56);
+        break;
+    }
+
+    position = Vector2(
+      80 + Random().nextDouble() * (game.mapWidth - 160),
+      80 + Random().nextDouble() * (game.mapHeight - 160),
+    );
+
+    add(CircleHitbox(radius: type == EnemyType.shielded ? 22 : 18));
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!game.isPlaying) return;
+
+    final toPlayer = (game.player.position - position).normalized();
+    position.add(toPlayer * speed * dt);
+    angle = toPlayer.screenAngle();
+
+    if (type == EnemyType.shooter) {
+      shootTimer += dt;
+      if (shootTimer >= shootInterval) {
+        shootTimer = 0;
+        game.world.add(EnemyBullet(position: position.clone(), direction: toPlayer));
+      }
+    }
+  }
+
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Wall || other is Obstacle) {
+      final overlap = intersectionPoints.first - position;
+      position -= overlap.normalized() * 4;
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final cx = size.x / 2;
+    final cy = size.y / 2;
+
+    final body = Paint()..color = const Color(0xFF2A2A2A);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 5), width: 24, height: 24), const Radius.circular(5)), body);
+
+    final shoulder = Paint()..color = const Color(0xFF3A3A3A);
+    canvas.drawCircle(Offset(cx - 12, cy + 1), 6.5, shoulder);
+    canvas.drawCircle(Offset(cx + 12, cy + 1), 6.5, shoulder);
+
+    final head = Paint()..color = const Color(0xFF1F1F1F);
+    canvas.drawCircle(Offset(cx, cy - 13), 10, head);
+
+    switch (type) {
+      case EnemyType.shooter:
+        final accent = Paint()..color = const Color(0xFF2E8B57);
+        canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
+        final gun = Paint()..color = const Color(0xFF111111)..strokeWidth = 4..strokeCap = StrokeCap.round;
+        canvas.drawLine(Offset(cx + 6, cy - 2), Offset(cx + 18, cy - 8), gun);
+        break;
+      case EnemyType.melee:
+        final accent = Paint()..color = const Color(0xFFDAA520);
+        canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
+        final blade = Paint()..color = const Color(0xFFC9A227)..strokeWidth = 3.5..strokeCap = StrokeCap.round;
+        canvas.drawLine(Offset(cx + 8, cy - 4), Offset(cx + 19, cy - 16), blade);
+        break;
+      case EnemyType.shielded:
+        final accent = Paint()..color = const Color(0xFF1E90FF);
+        canvas.drawCircle(Offset(cx, cy - 14), 4, accent);
+        final shield = Paint()..color = const Color(0xFF4169E1).withOpacity(0.75)..style = PaintingStyle.stroke..strokeWidth = 5;
+        canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy + 2), radius: 23), -1.1, 2.2, false, shield);
+        break;
+    }
+  }
+}
+
+class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final Vector2 direction;
+  final double speed = 490;
+
+  Bullet({required super.position, required this.direction})
+      : super(radius: 6, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFFFD700));
+
+  @override
+  Future<void> onLoad() async {
+    add(CircleHitbox());
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!game.isPlaying) return;
+    position.add(direction * speed * dt);
+    if (position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) {
+      removeFromParent();
+    }
+  }
+
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Wall || other is Obstacle) {
+      removeFromParent();
+    }
+    if (other is Enemy) {
+      if (other.type == EnemyType.shielded) {
+        removeFromParent();
+        return;
+      }
+      other.removeFromParent();
+      game.onEnemyKilled();
+      removeFromParent();
+    }
+    if (other is Boss) {
+      other.takeDamage(8);
+      removeFromParent();
+    }
+  }
+}
+
+class MeleeAttack extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final Vector2 direction;
+  double life = 0.18;
+
+  MeleeAttack({required super.position, required this.direction})
+      : super(radius: 32, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFAAAAAA).withOpacity(0.5));
+
+  @override
+  Future<void> onLoad() async {
+    add(CircleHitbox());
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    life -= dt;
+    if (life <= 0) removeFromParent();
+  }
+
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Enemy) {
+      other.removeFromParent();
+      game.onEnemyKilled();
+    }
+    if (other is Obstacle) {
+      other.removeFromParent();
+    }
+    if (other is Boss) {
+      other.takeDamage(15); // меч сильнее бьёт босса
+    }
+    if (other is Portal) {
+      game.goToNextLevel();
+    }
+  }
+}
+
+class EnemyBullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final Vector2 direction;
+  final double speed = 145;
+
+  EnemyBullet({required super.position, required this.direction})
+      : super(radius: 7, anchor: Anchor.center, paint: Paint()..color = const Color(0xFF7CFC00));
+
+  @override
+  Future<void> onLoad() async {
+    add(CircleHitbox());
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!game.isPlaying) return;
+    position.add(direction * speed * dt);
+    if (position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) {
+      removeFromParent();
+    }
+  }
+
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Wall || other is Obstacle) {
+      removeFromParent();
+    }
+  }
+}
