@@ -12,60 +12,75 @@ void main() {
 class InquisitorGame extends FlameGame with HasCollisionDetection {
   late final Player player;
   late final JoystickComponent joystick;
+  late final HudButtonComponent shootButton;
   int score = 0;
-  final TextPaint scorePaint = TextPaint(
-    style: const TextStyle(color: Colors.white, fontSize: 24),
+
+  final TextPaint hudPaint = TextPaint(
+    style: const TextStyle(
+      color: Colors.white,
+      fontSize: 22,
+      fontWeight: FontWeight.bold,
+    ),
   );
 
   @override
   Future<void> onLoad() async {
-    // Тёмный фон в стиле 40k
-    camera.viewfinder.visibleGameSize = size;
-
-    // Джойстик
+    // Джойстик слева
     final knobPaint = BasicPalette.blue.withAlpha(200).paint();
-    final backgroundPaint = BasicPalette.blue.withAlpha(100).paint();
+    final bgPaint = BasicPalette.blue.withAlpha(80).paint();
 
     joystick = JoystickComponent(
-      knob: CircleComponent(radius: 25, paint: knobPaint),
-      background: CircleComponent(radius: 70, paint: backgroundPaint),
-      margin: const EdgeInsets.only(left: 30, bottom: 30),
+      knob: CircleComponent(radius: 28, paint: knobPaint),
+      background: CircleComponent(radius: 75, paint: bgPaint),
+      margin: const EdgeInsets.only(left: 25, bottom: 30),
     );
 
-    // Инквизитор
+    // Кнопка стрельбы справа
+    shootButton = HudButtonComponent(
+      button: CircleComponent(radius: 40, paint: BasicPalette.red.withAlpha(180).paint()),
+      buttonDown: CircleComponent(radius: 40, paint: BasicPalette.red.paint()),
+      margin: const EdgeInsets.only(right: 30, bottom: 40),
+      onPressed: () => player.isShooting = true,
+      onReleased: () => player.isShooting = false,
+      onCancelled: () => player.isShooting = false,
+    );
+
     player = Player(joystick);
     world.add(player);
     camera.viewport.add(joystick);
+    camera.viewport.add(shootButton);
 
-    // Спавн врагов каждые 2 секунды
-    add(SpawnComponent(
-      factory: (index) => Enemy(),
-      period: 2.0,
-      area: Rectangle.fromLTWH(0, 0, size.x, size.y),
-    ));
+    // Спавн врагов
+    add(
+      SpawnComponent(
+        factory: (_) => Enemy(),
+        period: 1.6,
+        selfPositioning: true,
+      ),
+    );
   }
 
   @override
   void render(Canvas canvas) {
     super.render(canvas);
-    // Очки
-    scorePaint.render(canvas, 'Очки: $score', Vector2(20, 20));
-    // Жизни
-    scorePaint.render(canvas, 'Жизни: ${player.health}', Vector2(20, 50));
+    hudPaint.render(canvas, 'Очки: $score', Vector2(16, 16));
+    hudPaint.render(canvas, 'Жизни: ${player.health}', Vector2(16, 48));
   }
 }
 
 // ==================== ИНКВИЗИТОР ====================
-class Player extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+class Player extends CircleComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final JoystickComponent joystick;
-  double speed = 200;
+  double speed = 220;
   int health = 5;
+  bool isShooting = false;
   double shootTimer = 0;
-  final double shootInterval = 0.4; // стреляет каждые 0.4 секунды
+  final double shootInterval = 0.28;
 
   Player(this.joystick)
       : super(
-          radius: 20,
+          radius: 22,
           paint: BasicPalette.blue.paint(),
           anchor: Anchor.center,
         );
@@ -80,25 +95,26 @@ class Player extends CircleComponent with HasGameReference<InquisitorGame>, Coll
   void update(double dt) {
     super.update(dt);
 
-    // Движение джойстиком
+    // Движение
     if (joystick.direction != JoystickDirection.idle) {
       position.add(joystick.relativeDelta * speed * dt);
       angle = joystick.delta.screenAngle();
     }
 
-    // Держим внутри экрана
+    // Границы экрана
     position.x = position.x.clamp(radius, game.size.x - radius);
     position.y = position.y.clamp(radius, game.size.y - radius);
 
-    // Автоматическая стрельба
-    shootTimer += dt;
-    if (shootTimer >= shootInterval && joystick.direction != JoystickDirection.idle) {
-      shootTimer = 0;
-      final direction = joystick.relativeDelta.normalized();
-      if (direction != Vector2.zero()) {
+    // Стрельба по кнопке
+    if (isShooting) {
+      shootTimer += dt;
+      if (shootTimer >= shootInterval) {
+        shootTimer = 0;
+        final dir = joystick.relativeDelta.normalized();
+        final shootDir = dir == Vector2.zero() ? Vector2(0, -1) : dir;
         game.world.add(Bullet(
           position: position.clone(),
-          direction: direction,
+          direction: shootDir,
         ));
       }
     }
@@ -111,23 +127,23 @@ class Player extends CircleComponent with HasGameReference<InquisitorGame>, Coll
       health--;
       other.removeFromParent();
       if (health <= 0) {
-        // Пока просто останавливаем
         health = 0;
+        // Пока просто останавливаем жизнь
       }
     }
   }
 }
 
 // ==================== ПУЛЯ ====================
-class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+class Bullet extends CircleComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
-  final double speed = 400;
+  final double speed = 450;
 
-  Bullet({required Vector2 position, required this.direction})
+  Bullet({required super.position, required this.direction})
       : super(
-          radius: 6,
+          radius: 7,
           paint: BasicPalette.yellow.paint(),
-          position: position,
           anchor: Anchor.center,
         );
 
@@ -141,11 +157,10 @@ class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, Coll
     super.update(dt);
     position.add(direction * speed * dt);
 
-    // Удаляем, если вышла за экран
-    if (position.x < -20 ||
-        position.x > game.size.x + 20 ||
-        position.y < -20 ||
-        position.y > game.size.y + 20) {
+    if (position.x < -30 ||
+        position.x > game.size.x + 30 ||
+        position.y < -30 ||
+        position.y > game.size.y + 30) {
       removeFromParent();
     }
   }
@@ -161,9 +176,10 @@ class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, Coll
   }
 }
 
-// ==================== ВРАГ (еретик) ====================
-class Enemy extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final double speed = 80 + Random().nextDouble() * 40;
+// ==================== ВРАГ ====================
+class Enemy extends CircleComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  late final double speed;
 
   Enemy()
       : super(
@@ -174,31 +190,32 @@ class Enemy extends CircleComponent with HasGameReference<InquisitorGame>, Colli
 
   @override
   Future<void> onLoad() async {
-    // Спавним с краёв экрана
+    speed = 70 + Random().nextDouble() * 50;
+
+    // Спавн строго с краёв
     final side = Random().nextInt(4);
     switch (side) {
-      case 0: // сверху
-        position = Vector2(Random().nextDouble() * game.size.x, -20);
+      case 0:
+        position = Vector2(Random().nextDouble() * game.size.x, -25);
         break;
-      case 1: // снизу
-        position = Vector2(Random().nextDouble() * game.size.x, game.size.y + 20);
+      case 1:
+        position = Vector2(Random().nextDouble() * game.size.x, game.size.y + 25);
         break;
-      case 2: // слева
-        position = Vector2(-20, Random().nextDouble() * game.size.y);
+      case 2:
+        position = Vector2(-25, Random().nextDouble() * game.size.y);
         break;
-      case 3: // справа
-        position = Vector2(game.size.x + 20, Random().nextDouble() * game.size.y);
+      case 3:
+        position = Vector2(game.size.x + 25, Random().nextDouble() * game.size.y);
         break;
     }
+
     add(CircleHitbox());
   }
 
   @override
   void update(double dt) {
     super.update(dt);
-    // Бежит к Инквизитору
-    final player = game.player;
-    final direction = (player.position - position).normalized();
+    final direction = (game.player.position - position).normalized();
     position.add(direction * speed * dt);
   }
 }
