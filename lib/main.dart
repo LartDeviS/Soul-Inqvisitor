@@ -52,6 +52,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool portalSpawned = false;
   bool isBossLevel = false;
 
+  // Таймер ручного спавна
+  double spawnTimer = 0;
+  double spawnInterval = 1.2;
+
   int bolterDamage = 8;
   int swordDamage = 15;
   int maxHealth = 6;
@@ -90,9 +94,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void addScore(int value) {
     highScores.add(value);
     highScores.sort((a, b) => b.compareTo(a));
-    if (highScores.length > 10) {
-      highScores = highScores.take(10).toList();
-    }
+    if (highScores.length > 10) highScores = highScores.take(10).toList();
   }
 
   void startGame() {
@@ -126,7 +128,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     world.removeAll(world.children.toList());
     camera.viewport.children.whereType<JoystickComponent>().toList().forEach((c) => c.removeFromParent());
     camera.viewport.children.whereType<HudButtonComponent>().toList().forEach((c) => c.removeFromParent());
-    children.whereType<SpawnComponent>().toList().forEach((c) => c.removeFromParent());
   }
 
   void _startLevel() {
@@ -134,6 +135,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     enemiesAlive = 0;
     portalSpawned = false;
     isBossLevel = (currentLevel == 5);
+    spawnTimer = 0;
+    spawnInterval = max(0.55, 1.35 - (currentFloor * 0.1) - (currentLevel * 0.06));
 
     world.add(Floor(size: Vector2(mapWidth, mapHeight))..priority = 0);
     _createWalls();
@@ -219,7 +222,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       world.add(Boss(floor: currentFloor, position: Vector2(mapWidth / 2, mapHeight / 2 - 180))..priority = 25);
     } else {
       enemiesToSpawn = 6 + (currentLevel * 2) + (currentFloor * 3);
-      _spawnWave();
     }
   }
 
@@ -242,37 +244,50 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
   }
 
-  void _spawnWave() {
-    final spawnPeriod = max(0.5, 1.4 - (currentFloor * 0.1) - (currentLevel * 0.06));
-    add(SpawnComponent(
-      factory: (index) {
-        if (enemiesSpawned >= enemiesToSpawn) return PositionComponent();
-        enemiesSpawned++;
-        enemiesAlive++;
-        final spawnPos = enemySpawnPoints[Random().nextInt(enemySpawnPoints.length)];
-        EnemyType type;
-        final roll = Random().nextDouble();
-        if (currentFloor == 1) {
-          type = roll < 0.55 ? EnemyType.melee : EnemyType.shooter;
-        } else if (currentFloor <= 3) {
-          type = roll < 0.35 ? EnemyType.melee : (roll < 0.7 ? EnemyType.shooter : EnemyType.shielded);
-        } else {
-          type = roll < 0.3 ? EnemyType.melee : (roll < 0.6 ? EnemyType.shooter : EnemyType.shielded);
-        }
-        final enemy = Enemy(floor: currentFloor, type: type);
-        enemy.position = spawnPos.clone();
-        enemy.priority = 20;
-        return enemy;
-      },
-      period: spawnPeriod,
-      selfPositioning: true,
-    ));
+  void _spawnOneEnemy() {
+    if (enemiesSpawned >= enemiesToSpawn) return;
+
+    enemiesSpawned++;
+    enemiesAlive++;
+
+    final spawnPos = enemySpawnPoints[Random().nextInt(enemySpawnPoints.length)];
+
+    EnemyType type;
+    final roll = Random().nextDouble();
+    if (currentFloor == 1) {
+      type = roll < 0.55 ? EnemyType.melee : EnemyType.shooter;
+    } else if (currentFloor <= 3) {
+      type = roll < 0.35 ? EnemyType.melee : (roll < 0.7 ? EnemyType.shooter : EnemyType.shielded);
+    } else {
+      type = roll < 0.3 ? EnemyType.melee : (roll < 0.6 ? EnemyType.shooter : EnemyType.shielded);
+    }
+
+    final enemy = Enemy(floor: currentFloor, type: type);
+    enemy.position = spawnPos.clone();
+    enemy.priority = 30;
+    world.add(enemy);
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+
+    if (!isPlaying || isPaused || isBossLevel) return;
+
+    if (enemiesSpawned < enemiesToSpawn) {
+      spawnTimer += dt;
+      if (spawnTimer >= spawnInterval) {
+        spawnTimer = 0;
+        _spawnOneEnemy();
+      }
+    }
   }
 
   void onEnemyKilled() {
     enemiesAlive = max(0, enemiesAlive - 1);
     score += isBossLevel ? 180 + (currentFloor * 60) : 12 + (currentFloor * 6);
-    if (enemiesAlive <= 0 && !portalSpawned) {
+
+    if (enemiesAlive <= 0 && enemiesSpawned >= enemiesToSpawn && !portalSpawned) {
       portalSpawned = true;
       world.add(Portal(position: Vector2(mapWidth / 2, mapHeight / 2))..priority = 9);
     }
@@ -450,13 +465,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
     super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
     for (int i = 0; i < 65; i++) {
-      symbols.add(_MatrixSymbol(
-        x: _rnd.nextDouble(),
-        y: _rnd.nextDouble(),
-        speed: 0.25 + _rnd.nextDouble() * 1.3,
-        char: _randomChar(),
-        opacity: 0.15 + _rnd.nextDouble() * 0.75,
-      ));
+      symbols.add(_MatrixSymbol(x: _rnd.nextDouble(), y: _rnd.nextDouble(), speed: 0.25 + _rnd.nextDouble() * 1.3, char: _randomChar(), opacity: 0.15 + _rnd.nextDouble() * 0.75));
     }
     _controller.addListener(() {
       setState(() {
@@ -495,17 +504,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  'SOUL OF THE\nINQUISITOR',
-                  style: TextStyle(
-                    color: Color(0xFFFFD700),
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    height: 1.15,
-                    shadows: [Shadow(color: Colors.redAccent, blurRadius: 14)],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                const Text('SOUL OF THE\nINQUISITOR', style: TextStyle(color: Color(0xFFFFD700), fontSize: 32, fontWeight: FontWeight.w900, height: 1.15, shadows: [Shadow(color: Colors.redAccent, blurRadius: 14)]), textAlign: TextAlign.center),
                 const SizedBox(height: 8),
                 const Text('by Инквизитор Данте', style: TextStyle(color: Color(0xFFB8860B), fontSize: 14)),
                 const SizedBox(height: 48),
@@ -529,12 +528,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
     return SizedBox(
       width: 240,
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF1A1A1A),
-          side: const BorderSide(color: Color(0xFFB8860B), width: 1.5),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
+        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A1A1A), side: const BorderSide(color: Color(0xFFB8860B), width: 1.5), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
         onPressed: onTap,
         child: Text(text, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: Color(0xFFFFD700))),
       ),
@@ -555,10 +549,7 @@ class _MatrixPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final tp = TextPainter(textDirection: TextDirection.ltr);
     for (final s in symbols) {
-      tp.text = TextSpan(
-        text: s.char,
-        style: TextStyle(color: Color.fromRGBO(0, 255, 70, s.opacity), fontSize: 15 + s.speed * 5, fontFamily: 'monospace'),
-      );
+      tp.text = TextSpan(text: s.char, style: TextStyle(color: Color.fromRGBO(0, 255, 70, s.opacity), fontSize: 15 + s.speed * 5, fontFamily: 'monospace'));
       tp.layout();
       tp.paint(canvas, Offset(s.x * size.width, s.y * size.height));
     }
@@ -592,11 +583,7 @@ class RecordsMenu extends StatelessWidget {
                           return Container(
                             margin: const EdgeInsets.only(bottom: 10),
                             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1A1A1A),
-                              border: Border.all(color: const Color(0xFFB8860B).withOpacity(0.5)),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                            decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: const Color(0xFFB8860B).withOpacity(0.5)), borderRadius: BorderRadius.circular(8)),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -656,11 +643,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A1A1A), side: const BorderSide(color: Color(0xFFB8860B)), padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14)),
                   onPressed: () {
-                    if (widget.game.isPlaying) {
-                      widget.game.closeSettings();
-                    } else {
-                      widget.game.backToMenu();
-                    }
+                    if (widget.game.isPlaying) widget.game.closeSettings();
+                    else widget.game.backToMenu();
                   },
                   child: Text(widget.game.isPlaying ? 'НАЗАД В БОЙ' : 'НАЗАД', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 16)),
                 ),
@@ -916,7 +900,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   late final double speed;
   double shootTimer = 0;
 
-  Enemy({required this.floor, required this.type}) : super(size: Vector2(56, 62), anchor: Anchor.center, priority: 20);
+  Enemy({required this.floor, required this.type}) : super(size: Vector2(56, 62), anchor: Anchor.center, priority: 30);
 
   @override
   Future<void> onLoad() async {
@@ -924,9 +908,6 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       case EnemyType.shooter: speed = 50 + floor * 6.0; break;
       case EnemyType.melee: speed = 78 + floor * 9.0; break;
       case EnemyType.shielded: speed = 38 + floor * 4.5; size = Vector2(60, 64); break;
-    }
-    if (position.x < 50 || position.y < 50) {
-      position = Vector2(100 + Random().nextDouble() * (game.mapWidth - 200), 100 + Random().nextDouble() * (game.mapHeight - 200));
     }
     add(CircleHitbox(radius: type == EnemyType.shielded ? 26 : 22));
   }
@@ -959,10 +940,13 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   void render(Canvas canvas) {
     final cx = size.x / 2;
     final cy = size.y / 2;
+
+    // Основной корпус
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 7), width: 28, height: 28), const Radius.circular(6)), Paint()..color = const Color(0xFF2A2A2A));
     canvas.drawCircle(Offset(cx - 14, cy + 2), 8, Paint()..color = const Color(0xFF3A3A3A));
     canvas.drawCircle(Offset(cx + 14, cy + 2), 8, Paint()..color = const Color(0xFF3A3A3A));
     canvas.drawCircle(Offset(cx, cy - 15), 12, Paint()..color = const Color(0xFF1A1A1A));
+
     switch (type) {
       case EnemyType.shooter:
         canvas.drawCircle(Offset(cx, cy - 16), 5, Paint()..color = const Color(0xFF00C853));
