@@ -484,6 +484,7 @@ class Portal extends PositionComponent with CollisionCallbacks {
 class MainMenu extends StatelessWidget {
   final InquisitorGame game;
   const MainMenu(this.game, {super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -492,20 +493,77 @@ class MainMenu extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Soul of the Inquisitor', style: TextStyle(color: Colors.redAccent, fontSize: 32, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            const Text('From the Inquisitor\'s perspective', style: TextStyle(color: Colors.white70, fontSize: 15)),
-            const SizedBox(height: 60),
+            // Большой логотип SI
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.redAccent, width: 3.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.redAccent.withOpacity(0.4),
+                    blurRadius: 18,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Text(
+                  'SI',
+                  style: TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 52,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 3,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+            const Text(
+              'Soul of the Inquisitor',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'From the Inquisitor\'s perspective',
+              style: TextStyle(color: Colors.white70, fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'by Инквизитор Данте',
+              style: TextStyle(color: Colors.white54, fontSize: 13),
+            ),
+            const SizedBox(height: 50),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[800],
+                padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16),
+              ),
               onPressed: () => game.startGame(),
-              child: const Text('PLAY', style: TextStyle(fontSize: 22, color: Colors.white)),
+              child: const Text(
+                'PLAY',
+                style: TextStyle(fontSize: 22, color: Colors.white),
+              ),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[800], padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[800],
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+              ),
               onPressed: () => game.openSettings(),
-              child: const Text('Settings', style: TextStyle(fontSize: 18, color: Colors.white)),
+              child: const Text(
+                'Settings',
+                style: TextStyle(fontSize: 18, color: Colors.white),
+              ),
             ),
           ],
         ),
