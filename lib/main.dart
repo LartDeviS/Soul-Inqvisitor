@@ -14,6 +14,7 @@ void main() {
         game: InquisitorGame(),
         overlayBuilderMap: {
           'mainMenu': (context, game) => MainMenu(game as InquisitorGame),
+          'nameInput': (context, game) => NameInputMenu(game as InquisitorGame),
           'settings': (context, game) => SettingsMenu(game as InquisitorGame),
           'gameOver': (context, game) => GameOverMenu(game as InquisitorGame),
           'levelComplete': (context, game) => LevelCompleteMenu(game as InquisitorGame),
@@ -30,6 +31,18 @@ void main() {
 enum WeaponType { bolter, sword }
 enum EnemyType { shooter, melee, shielded, dog, shieldedShooter }
 
+class HighScoreEntry {
+  final String name;
+  final int score;
+  final int seconds;
+  HighScoreEntry(this.name, this.score, this.seconds);
+  String get timeStr {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+}
+
 class InquisitorGame extends FlameGame with HasCollisionDetection {
   late Player player;
   late JoystickComponent moveJoystick;
@@ -38,10 +51,14 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   late HudButtonComponent settingsButton;
   late HudButtonComponent zoomInButton;
   late HudButtonComponent zoomOutButton;
+  HudButtonComponent? portalButton;
 
   int score = 0;
   bool isPlaying = false;
   bool isPaused = false;
+  String playerName = 'Inquisitor';
+  DateTime? playStartTime;
+  int playSeconds = 0;
 
   int currentFloor = 1;
   int currentLevel = 1;
@@ -52,6 +69,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool portalSpawned = false;
   bool isBossLevel = false;
   bool isMiniBossLevel = false;
+  bool nearPortal = false;
 
   double spawnTimer = 0;
   double spawnInterval = 1.2;
@@ -66,13 +84,16 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   double buttonSize = 42;
   double currentZoom = 1.0;
 
-  List<int> highScores = [];
+  List<HighScoreEntry> highScores = [];
 
   final double mapWidth = 900;
   final double mapHeight = 1600;
 
   final TextPaint hudPaint = TextPaint(
     style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+  );
+  final TextPaint labelPaint = TextPaint(
+    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
   );
 
   int get overallLevel => (currentFloor - 1) * 5 + currentLevel;
@@ -87,7 +108,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         return [Vector2(200, 300), Vector2(700, 300), Vector2(200, 1300), Vector2(700, 1300), Vector2(450, 800), Vector2(150, 800), Vector2(750, 800)];
       case 4:
         return [Vector2(130, 220), Vector2(770, 220), Vector2(130, 1400), Vector2(770, 1400), Vector2(450, 600), Vector2(300, 1000), Vector2(600, 1000)];
-      case 5:
       default:
         return [Vector2(180, 300), Vector2(720, 300), Vector2(180, 1300), Vector2(720, 1300), Vector2(450, 450), Vector2(300, 900), Vector2(600, 900)];
     }
@@ -99,10 +119,24 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     camera.viewfinder.zoom = currentZoom;
   }
 
-  void addScore(int value) {
-    highScores.add(value);
-    highScores.sort((a, b) => b.compareTo(a));
+  void addScoreEntry() {
+    if (playStartTime != null) {
+      playSeconds = DateTime.now().difference(playStartTime!).inSeconds;
+    }
+    highScores.add(HighScoreEntry(playerName, score, playSeconds));
+    highScores.sort((a, b) => b.score.compareTo(a.score));
     if (highScores.length > 10) highScores = highScores.take(10).toList();
+  }
+
+  void openNameInput() {
+    overlays.remove('mainMenu');
+    overlays.add('nameInput');
+  }
+
+  void confirmNameAndStart(String name) {
+    playerName = name.trim().isEmpty ? 'Inquisitor' : name.trim();
+    overlays.remove('nameInput');
+    startGame();
   }
 
   void startGame() {
@@ -114,6 +148,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     portalSpawned = false;
     isBossLevel = false;
     isMiniBossLevel = false;
+    nearPortal = false;
+    playStartTime = DateTime.now();
+    playSeconds = 0;
 
     bolterDamage = 8;
     swordDamage = 12;
@@ -124,7 +161,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
     _clearEverything();
     _startLevel();
-    for (final o in ['mainMenu', 'settings', 'gameOver', 'levelComplete', 'upgrade', 'victory', 'records']) {
+    for (final o in ['mainMenu', 'nameInput', 'settings', 'gameOver', 'levelComplete', 'upgrade', 'victory', 'records']) {
       overlays.remove(o);
     }
   }
@@ -133,12 +170,18 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     world.removeAll(world.children.toList());
     camera.viewport.children.whereType<JoystickComponent>().toList().forEach((c) => c.removeFromParent());
     camera.viewport.children.whereType<HudButtonComponent>().toList().forEach((c) => c.removeFromParent());
+    camera.viewport.children.whereType<TextComponent>().toList().forEach((c) => c.removeFromParent());
+    portalButton = null;
   }
+
+  CircleComponent _btn(Color c, double r) =>
+      CircleComponent(radius: r, paint: Paint()..color = c);
 
   void _startLevel() {
     enemiesSpawned = 0;
     enemiesAlive = 0;
     portalSpawned = false;
+    nearPortal = false;
     isBossLevel = (currentLevel == 5);
     isMiniBossLevel = (currentLevel == 3);
     spawnTimer = 0;
@@ -170,15 +213,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     );
 
     switchWeaponButton = HudButtonComponent(
-      button: CircleComponent(radius: 28, paint: Paint()..color = Colors.grey[800]!),
-      buttonDown: CircleComponent(radius: 28, paint: Paint()..color = Colors.grey),
+      button: _btn(Colors.grey[800]!, 28),
+      buttonDown: _btn(Colors.grey, 28),
       margin: const EdgeInsets.only(right: 32, bottom: 160),
       onPressed: () { if (isPlaying && !isPaused) player.switchWeapon(); },
     );
 
     settingsButton = HudButtonComponent(
-      button: CircleComponent(radius: 26, paint: Paint()..color = const Color(0xFF37474F)),
-      buttonDown: CircleComponent(radius: 26, paint: Paint()..color = Colors.blueGrey),
+      button: _btn(const Color(0xFF37474F), 26),
+      buttonDown: _btn(Colors.blueGrey, 26),
       margin: const EdgeInsets.only(right: 32, top: 90),
       onPressed: () {
         if (isPlaying) {
@@ -189,8 +232,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     );
 
     zoomInButton = HudButtonComponent(
-      button: CircleComponent(radius: 24, paint: Paint()..color = const Color(0xFF455A64)),
-      buttonDown: CircleComponent(radius: 24, paint: Paint()..color = Colors.blueGrey[400]!),
+      button: _btn(const Color(0xFF455A64), 24),
+      buttonDown: _btn(Colors.blueGrey[400]!, 24),
       margin: const EdgeInsets.only(left: 28, top: 90),
       onPressed: () {
         currentZoom = (currentZoom + 0.15).clamp(0.7, 1.8);
@@ -199,8 +242,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     );
 
     zoomOutButton = HudButtonComponent(
-      button: CircleComponent(radius: 24, paint: Paint()..color = const Color(0xFF455A64)),
-      buttonDown: CircleComponent(radius: 24, paint: Paint()..color = Colors.blueGrey[400]!),
+      button: _btn(const Color(0xFF455A64), 24),
+      buttonDown: _btn(Colors.blueGrey[400]!, 24),
       margin: const EdgeInsets.only(left: 28, top: 150),
       onPressed: () {
         currentZoom = (currentZoom - 0.15).clamp(0.7, 1.8);
@@ -217,6 +260,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     camera.viewport.add(settingsButton);
     camera.viewport.add(zoomInButton);
     camera.viewport.add(zoomOutButton);
+
+    // Подписи кнопок
+    _addHudLabel('+', const EdgeInsets.only(left: 40, top: 98));
+    _addHudLabel('-', const EdgeInsets.only(left: 42, top: 158));
+    _addHudLabel('S', const EdgeInsets.only(right: 48, top: 98));
+    _addHudLabel('A', const EdgeInsets.only(right: 48, bottom: 168));
+    _addHudLabel('M', const EdgeInsets.only(left: 58, bottom: 50));
+    _addHudLabel('F', const EdgeInsets.only(right: 58, bottom: 50));
+
     camera.follow(player);
     camera.viewfinder.zoom = currentZoom;
 
@@ -230,6 +282,38 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     } else {
       enemiesToSpawn = 6 + (currentLevel * 2) + (currentFloor * 3);
     }
+  }
+
+  void _addHudLabel(String text, EdgeInsets margin) {
+    final t = TextComponent(
+      text: text,
+      textRenderer: labelPaint,
+      priority: 100,
+    );
+    // Позиционируем через margin на viewport — упрощённо через position после layout
+    camera.viewport.add(HudLabel(text: text, margin: margin));
+  }
+
+  void showPortalButton() {
+    if (portalButton != null) return;
+    portalButton = HudButtonComponent(
+      button: _btn(const Color(0xFFE91E63), 32),
+      buttonDown: _btn(const Color(0xFFF48FB1), 32),
+      margin: const EdgeInsets.only(bottom: 200),
+      anchor: Anchor.bottomCenter,
+      onPressed: () {
+        if (isPlaying && !isPaused && portalSpawned) {
+          goToNextLevel();
+        }
+      },
+    );
+    camera.viewport.add(portalButton!);
+    camera.viewport.add(HudLabel(text: 'P', margin: const EdgeInsets.only(bottom: 210)));
+  }
+
+  void hidePortalButton() {
+    portalButton?.removeFromParent();
+    portalButton = null;
   }
 
   void _spawnBosses() {
@@ -357,12 +441,32 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   @override
   void update(double dt) {
     super.update(dt);
-    if (!isPlaying || isPaused || isBossLevel || isMiniBossLevel) return;
-    if (enemiesSpawned < enemiesToSpawn) {
+    if (!isPlaying || isPaused) return;
+
+    if (!isBossLevel && !isMiniBossLevel && enemiesSpawned < enemiesToSpawn) {
       spawnTimer += dt;
       if (spawnTimer >= spawnInterval) {
         spawnTimer = 0;
         _spawnOneEnemy();
+      }
+    }
+
+    // Кнопка P у портала
+    if (portalSpawned && isPlaying) {
+      final portals = world.children.whereType<Portal>();
+      bool near = false;
+      for (final p in portals) {
+        if (player.position.distanceTo(p.position) < 90) {
+          near = true;
+          break;
+        }
+      }
+      if (near && !nearPortal) {
+        nearPortal = true;
+        showPortalButton();
+      } else if (!near && nearPortal) {
+        nearPortal = false;
+        hidePortalButton();
       }
     }
   }
@@ -378,8 +482,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void goToNextLevel() {
     isPlaying = false;
+    hidePortalButton();
+    nearPortal = false;
     if (currentFloor == 5 && currentLevel == 5) {
-      addScore(score);
+      addScoreEntry();
       overlays.add('victory');
       return;
     }
@@ -432,7 +538,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     isPlaying = false;
     isPaused = false;
     _clearEverything();
-    for (final o in ['settings', 'gameOver', 'levelComplete', 'upgrade', 'victory', 'records']) {
+    for (final o in ['settings', 'gameOver', 'levelComplete', 'upgrade', 'victory', 'records', 'nameInput']) {
       overlays.remove(o);
     }
     overlays.add('mainMenu');
@@ -440,14 +546,14 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void showGameOver() {
     isPlaying = false;
-    addScore(score);
+    hidePortalButton();
+    addScoreEntry();
     overlays.add('gameOver');
   }
 
-  bool get areOtherBossesAlive {
-    return world.children.whereType<Boss>().isNotEmpty ||
-        world.children.whereType<KnightBoss>().isNotEmpty;
-  }
+  bool get areOtherBossesAlive =>
+      world.children.whereType<Boss>().isNotEmpty ||
+      world.children.whereType<KnightBoss>().isNotEmpty;
 
   @override
   void render(Canvas canvas) {
@@ -466,11 +572,124 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
       hudPaint.render(canvas, status, Vector2(14, 86));
       hudPaint.render(canvas, player.weapon == WeaponType.bolter ? 'BOLTER' : 'SWORD', Vector2(14, 110));
+      if (playStartTime != null) {
+        final sec = DateTime.now().difference(playStartTime!).inSeconds;
+        final m = sec ~/ 60;
+        final s = sec % 60;
+        hudPaint.render(canvas, 'Time ${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}', Vector2(14, 134));
+      }
     }
   }
 }
 
-// ====================== ТОЧКИ СПАВНА ======================
+/// Подпись на HUD
+class HudLabel extends PositionComponent with HasGameReference<InquisitorGame> {
+  final String text;
+  final EdgeInsets margin;
+  HudLabel({required this.text, required this.margin}) : super(priority: 200);
+
+  @override
+  void onMount() {
+    super.onMount();
+    final size = game.size;
+    double x = margin.left;
+    double y = margin.top;
+    if (margin.right > 0) x = size.x - margin.right - 12;
+    if (margin.bottom > 0) y = size.y - margin.bottom - 12;
+    if (margin.left == 0 && margin.right == 0) x = size.x / 2 - 6;
+    position = Vector2(x, y);
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 4)])),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, Offset.zero);
+  }
+}
+
+// ====================== УМНОЕ ДВИЖЕНИЕ (обход стен) ======================
+mixin SmartMover on PositionComponent, HasGameReference<InquisitorGame> {
+  Vector2 lastMoveDir = Vector2(0, -1);
+  double stuckTimer = 0;
+  Vector2? avoidDir;
+
+  void smartMove(Vector2 target, double speed, double dt, {double radius = 30}) {
+    var desired = (target - position).normalized();
+    if (desired.length2 < 0.001) return;
+
+    // Если есть направление обхода — используем
+    if (avoidDir != null) {
+      stuckTimer -= dt;
+      if (stuckTimer <= 0) avoidDir = null;
+      else desired = avoidDir!;
+    }
+
+    final next = position + desired * speed * dt;
+    if (_canStand(next, radius)) {
+      position = next;
+      lastMoveDir = desired;
+    } else {
+      // Пробуем скользить вдоль стены
+      final slide1 = Vector2(-desired.y, desired.x);
+      final slide2 = Vector2(desired.y, -desired.x);
+      final n1 = position + slide1 * speed * dt;
+      final n2 = position + slide2 * speed * dt;
+      if (_canStand(n1, radius)) {
+        position = n1;
+        avoidDir = slide1;
+        stuckTimer = 0.4;
+        lastMoveDir = slide1;
+      } else if (_canStand(n2, radius)) {
+        position = n2;
+        avoidDir = slide2;
+        stuckTimer = 0.4;
+        lastMoveDir = slide2;
+      } else {
+        // Отталкиваемся назад
+        position -= desired * speed * dt * 0.5;
+        position.x = position.x.clamp(70, game.mapWidth - 70);
+        position.y = position.y.clamp(70, game.mapHeight - 70);
+      }
+    }
+  }
+
+  bool _canStand(Vector2 pos, double radius) {
+    if (pos.x < 60 + radius || pos.x > game.mapWidth - 60 - radius) return false;
+    if (pos.y < 60 + radius || pos.y > game.mapHeight - 60 - radius) return false;
+    for (final w in game.world.children.whereType<Wall>()) {
+      final r = w.toAbsoluteRect();
+      final expanded = Rect.fromLTRB(r.left - radius, r.top - radius, r.right + radius, r.bottom + radius);
+      if (expanded.contains(pos.toOffset())) return false;
+    }
+    for (final o in game.world.children.whereType<Obstacle>()) {
+      if (pos.distanceTo(o.position) < radius + 28) return false;
+    }
+    return true;
+  }
+
+  void pushOutOfWalls(double radius) {
+    for (final w in game.world.children.whereType<Wall>()) {
+      final r = w.toAbsoluteRect();
+      final expanded = Rect.fromLTRB(r.left - radius, r.top - radius, r.right + radius, r.bottom + radius);
+      if (expanded.contains(position.toOffset())) {
+        final cx = r.center.dx;
+        final cy = r.center.dy;
+        final dx = position.x - cx;
+        final dy = position.y - cy;
+        if (dx.abs() > dy.abs()) {
+          position.x += dx > 0 ? 12 : -12;
+        } else {
+          position.y += dy > 0 ? 12 : -12;
+        }
+      }
+    }
+  }
+}
+
+// ====================== СПАВН / ПОЛ / СТЕНЫ ======================
 class EnemySpawnPortal extends PositionComponent {
   double flicker = 0;
   EnemySpawnPortal({required Vector2 position}) : super(position: position, size: Vector2(40, 40), anchor: Anchor.center, priority: 3);
@@ -493,7 +712,6 @@ class PlayerSpawnPoint extends PositionComponent {
   }
 }
 
-// ====================== ПОЛ / СТЕНЫ / ПРЕГРАДЫ / ПОРТАЛ ======================
 class Floor extends PositionComponent {
   Floor({required Vector2 size}) : super(size: size, position: Vector2.zero(), priority: 0);
   @override
@@ -540,7 +758,71 @@ class Portal extends PositionComponent with CollisionCallbacks {
   }
 }
 
-// ====================== МЕНЮ (кратко — те же) ======================
+// ====================== МЕНЮ ======================
+class NameInputMenu extends StatefulWidget {
+  final InquisitorGame game;
+  const NameInputMenu(this.game, {super.key});
+  @override
+  State<NameInputMenu> createState() => _NameInputMenuState();
+}
+
+class _NameInputMenuState extends State<NameInputMenu> {
+  final controller = TextEditingController();
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('ИМЯ ИНКВИЗИТОРА', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 24),
+              TextField(
+                controller: controller,
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+                maxLength: 16,
+                decoration: InputDecoration(
+                  hintText: 'Введите имя...',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: const Color(0xFF1A1A1A),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFB8860B))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFB8860B))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFFFD700), width: 2)),
+                ),
+              ),
+              const SizedBox(height: 28),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A1A1A), side: const BorderSide(color: Color(0xFFB8860B)), padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14)),
+                onPressed: () => widget.game.confirmNameAndStart(controller.text),
+                child: const Text('НАЧАТЬ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  widget.game.overlays.remove('nameInput');
+                  widget.game.overlays.add('mainMenu');
+                },
+                child: const Text('НАЗАД', style: TextStyle(color: Colors.white54)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class MainMenu extends StatefulWidget {
   final InquisitorGame game;
   const MainMenu(this.game, {super.key});
@@ -576,7 +858,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
   }
 
   String _randomChar() {
-    const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンABCDEFXYZ';
+    const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノABCDEFXYZ';
     return chars[_rnd.nextInt(chars.length)];
   }
 
@@ -598,14 +880,14 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
                 const SizedBox(height: 8),
                 const Text('by Инквизитор Данте', style: TextStyle(color: Color(0xFFB8860B), fontSize: 14)),
                 const SizedBox(height: 48),
-                _menuButton('НАЧАТЬ ИГРУ', () => widget.game.startGame()),
+                _btn('НАЧАТЬ ИГРУ', () => widget.game.openNameInput()),
                 const SizedBox(height: 16),
-                _menuButton('РЕКОРДЫ', () {
+                _btn('РЕКОРДЫ', () {
                   widget.game.overlays.remove('mainMenu');
                   widget.game.overlays.add('records');
                 }),
                 const SizedBox(height: 16),
-                _menuButton('НАСТРОЙКИ', () => widget.game.openSettings()),
+                _btn('НАСТРОЙКИ', () => widget.game.openSettings()),
               ],
             ),
           ),
@@ -614,7 +896,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _menuButton(String text, VoidCallback onTap) {
+  Widget _btn(String text, VoidCallback onTap) {
     return SizedBox(
       width: 240,
       child: ElevatedButton(
@@ -662,29 +944,32 @@ class RecordsMenu extends StatelessWidget {
           child: Column(
             children: [
               const Text('РЕКОРДЫ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 28, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.redAccent, blurRadius: 10)])),
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
               Expanded(
                 child: scores.isEmpty
                     ? const Center(child: Text('Пока нет рекордов', style: TextStyle(color: Colors.white54, fontSize: 18)))
                     : ListView.builder(
                         itemCount: scores.length,
                         itemBuilder: (context, index) {
+                          final e = scores[index];
                           return Container(
                             margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                             decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: const Color(0xFFB8860B).withOpacity(0.5)), borderRadius: BorderRadius.circular(8)),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('${index + 1}.', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 18, fontWeight: FontWeight.bold)),
-                                Text('${scores[index]} очков', style: const TextStyle(color: Colors.white, fontSize: 18)),
+                                Text('${index + 1}.', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 16, fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 10),
+                                Expanded(child: Text(e.name, style: const TextStyle(color: Colors.white, fontSize: 16), overflow: TextOverflow.ellipsis)),
+                                Text('${e.score}', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 16, fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 12),
+                                Text(e.timeStr, style: const TextStyle(color: Colors.white70, fontSize: 14)),
                               ],
                             ),
                           );
                         },
                       ),
               ),
-              const SizedBox(height: 20),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A1A1A), side: const BorderSide(color: Color(0xFFB8860B)), padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14)),
                 onPressed: () {
@@ -787,8 +1072,6 @@ class UpgradeMenu extends StatelessWidget {
             children: [
               const SizedBox(height: 16),
               const Text('УЛУЧШЕНИЕ ИНКВИЗИТОРА', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-              const SizedBox(height: 8),
-              Text('Этаж ${game.currentFloor} пройден. Выберите улучшение:', style: const TextStyle(color: Colors.white70, fontSize: 15), textAlign: TextAlign.center),
               const SizedBox(height: 24),
               Expanded(
                 child: ListView(
@@ -832,9 +1115,10 @@ class VictoryMenu extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text('ВЫ ПРОШЛИ ИСПЫТАНИЕ\nИНКВИЗИТОРА', style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold, height: 1.3), textAlign: TextAlign.center),
-            const SizedBox(height: 22),
-            Text('Финальный счёт: ${game.score}', style: const TextStyle(color: Colors.white, fontSize: 21)),
-            const SizedBox(height: 45),
+            const SizedBox(height: 16),
+            Text(game.playerName, style: const TextStyle(color: Colors.white, fontSize: 20)),
+            Text('Счёт: ${game.score}', style: const TextStyle(color: Colors.white70, fontSize: 18)),
+            const SizedBox(height: 40),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB8860B), padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15)),
               onPressed: () => game.backToMenu(),
@@ -858,17 +1142,17 @@ class GameOverMenu extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('ИНКВИЗИТОР ПАЛ', style: TextStyle(color: Colors.redAccent, fontSize: 26, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-            const SizedBox(height: 14),
+            const Text('ИНКВИЗИТОР ПАЛ', style: TextStyle(color: Colors.redAccent, fontSize: 26, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Text(game.playerName, style: const TextStyle(color: Colors.white70, fontSize: 16)),
             Text('Очки: ${game.score}', style: const TextStyle(color: Colors.white, fontSize: 22)),
-            Text('Этаж ${game.currentFloor}  •  Уровень ${game.currentLevel}', style: const TextStyle(color: Colors.white70, fontSize: 15)),
-            const SizedBox(height: 45),
+            const SizedBox(height: 40),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14)),
-              onPressed: () => game.startGame(),
+              onPressed: () => game.openNameInput(),
               child: const Text('ПОПРОБОВАТЬ СНОВА', style: TextStyle(fontSize: 18, color: Colors.white)),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[800], padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 13)),
               onPressed: () => game.backToMenu(),
@@ -913,8 +1197,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     position.y = position.y.clamp(55, game.mapHeight - 55);
     if (game.attackJoystick.direction != JoystickDirection.idle) {
       attackTimer += dt;
-      final interval = weapon == WeaponType.bolter ? 0.30 : 0.42;
-      if (attackTimer >= interval) {
+      if (attackTimer >= (weapon == WeaponType.bolter ? 0.30 : 0.42)) {
         attackTimer = 0;
         _doAttack();
       }
@@ -981,17 +1264,15 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       if (other is Enemy) game.onEnemyKilled();
     }
     if (other is Boss || other is KnightBoss || other is KingBoss || other is MiniBoss) takeDamage(1);
-    if (other is Portal && weapon == WeaponType.sword) game.goToNextLevel();
   }
 }
 
 // ====================== ВРАГИ ======================
-class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   final EnemyType type;
   late final double speed;
   double shootTimer = 0;
-  int contactDamage = 1;
 
   Enemy({required this.floor, required this.type}) : super(size: Vector2(56, 62), anchor: Anchor.center, priority: 30);
 
@@ -1001,25 +1282,28 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       case EnemyType.shooter: speed = 50 + floor * 6.0; break;
       case EnemyType.melee: speed = 78 + floor * 9.0; break;
       case EnemyType.shielded: speed = 38 + floor * 4.5; size = Vector2(60, 64); break;
-      case EnemyType.dog: speed = 130 + floor * 12.0; size = Vector2(48, 40); contactDamage = 2; break;
+      case EnemyType.dog: speed = 130 + floor * 12.0; size = Vector2(48, 40); break;
       case EnemyType.shieldedShooter: speed = 45 + floor * 5.0; size = Vector2(58, 62); break;
     }
-    add(CircleHitbox(radius: type == EnemyType.dog ? 18 : (type == EnemyType.shielded || type == EnemyType.shieldedShooter ? 26 : 22)));
+    add(CircleHitbox(radius: type == EnemyType.dog ? 18 : 22));
   }
 
   @override
   void update(double dt) {
     super.update(dt);
     if (!game.isPlaying || game.isPaused) return;
-    final toPlayer = (game.player.position - position).normalized();
-    position.add(toPlayer * speed * dt);
-    angle = toPlayer.screenAngle();
-    position.x = position.x.clamp(70, game.mapWidth - 70);
-    position.y = position.y.clamp(70, game.mapHeight - 70);
+    final dist = position.distanceTo(game.player.position);
+    smartMove(game.player.position, speed, dt, radius: 22);
+    pushOutOfWalls(22);
+    angle = (game.player.position - position).screenAngle();
+
     if (type == EnemyType.shooter || type == EnemyType.shieldedShooter) {
+      // Чем ближе — тем чаще стреляет
+      final interval = dist < 180 ? 0.7 : (dist < 350 ? 1.2 : 1.85);
       shootTimer += dt;
-      if (shootTimer >= 1.85) {
+      if (shootTimer >= interval) {
         shootTimer = 0;
+        final toPlayer = (game.player.position - position).normalized();
         game.world.add(EnemyBullet(position: position.clone(), direction: toPlayer)..priority = 22);
       }
     }
@@ -1028,7 +1312,12 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle) position -= (intersectionPoints.first - position).normalized() * 8;
+    if (other is Wall || other is Obstacle) {
+      final n = (position - intersectionPoints.first).normalized();
+      position += n * 10;
+      avoidDir = Vector2(-n.y, n.x);
+      stuckTimer = 0.5;
+    }
   }
 
   @override
@@ -1069,8 +1358,8 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   }
 }
 
-// ====================== МИНИ-БОСС (дробовик) ======================
-class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+// ====================== МИНИ-БОСС ======================
+class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   late int maxHp;
   late int currentHp;
@@ -1081,7 +1370,6 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
 
   @override
   Future<void> onLoad() async {
-    // Половина HP обычного босса
     maxHp = ((220 + floor * 90) / 2).round();
     currentHp = maxHp;
     add(CircleHitbox(radius: 34));
@@ -1091,23 +1379,20 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void update(double dt) {
     super.update(dt);
     if (!game.isPlaying || game.isPaused) return;
-    final toPlayer = (game.player.position - position).normalized();
-    position.add(toPlayer * (48 + floor * 4.0) * dt);
-    angle = toPlayer.screenAngle();
-    position.x = position.x.clamp(70, game.mapWidth - 70);
-    position.y = position.y.clamp(70, game.mapHeight - 70);
+    final dist = position.distanceTo(game.player.position);
+    smartMove(game.player.position, 48 + floor * 4.0, dt, radius: 34);
+    pushOutOfWalls(34);
+    angle = (game.player.position - position).screenAngle();
 
+    final interval = dist < 200 ? 0.9 : 1.5;
     shootTimer += dt;
-    if (shootTimer >= 1.6) {
+    if (shootTimer >= interval) {
       shootTimer = 0;
-      // Дробовик: 3 снаряда веером
+      final toPlayer = (game.player.position - position).normalized();
       final baseAngle = atan2(toPlayer.y, toPlayer.x);
       for (final offset in [-0.28, 0.0, 0.28]) {
         final a = baseAngle + offset;
-        game.world.add(BossProjectile(
-          position: position.clone(),
-          direction: Vector2(cos(a), sin(a)),
-        )..priority = 22);
+        game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
       }
     }
   }
@@ -1125,7 +1410,10 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is Wall || other is Obstacle) {
-      position -= (intersectionPoints.first - position).normalized() * 7;
+      final n = (position - intersectionPoints.first).normalized();
+      position += n * 14;
+      avoidDir = Vector2(-n.y, n.x);
+      stuckTimer = 0.6;
     }
   }
 
@@ -1137,10 +1425,7 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     canvas.drawCircle(Offset(cx - 22, cy + 2), 12, Paint()..color = const Color(0xFF5D4037));
     canvas.drawCircle(Offset(cx + 22, cy + 2), 12, Paint()..color = const Color(0xFF5D4037));
     canvas.drawCircle(Offset(cx, cy - 20), 16, Paint()..color = const Color(0xFF1B0000));
-    // Дробовик
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8, cy - 4, 28, 10), const Radius.circular(2)), Paint()..color = const Color(0xFF795548));
-    canvas.drawRect(Rect.fromLTWH(cx + 32, cy - 2, 10, 6), Paint()..color = const Color(0xFF4E342E));
-
     final barW = 70.0;
     final hpP = (currentHp / maxHp).clamp(0.0, 1.0);
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - barW / 2, -24, barW, 9), const Radius.circular(3)), Paint()..color = Colors.black.withOpacity(0.75));
@@ -1149,7 +1434,7 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
 }
 
 // ====================== БОССЫ ======================
-class Boss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+class Boss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   late int maxHp;
   late int currentHp;
@@ -1169,13 +1454,14 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   void update(double dt) {
     super.update(dt);
     if (!game.isPlaying || game.isPaused) return;
-    final toPlayer = (game.player.position - position).normalized();
-    position.add(toPlayer * (38 + floor * 5.0) * dt);
-    angle = toPlayer.screenAngle();
-    position.x = position.x.clamp(75, game.mapWidth - 75);
-    position.y = position.y.clamp(75, game.mapHeight - 75);
+    final dist = position.distanceTo(game.player.position);
+    smartMove(game.player.position, 38 + floor * 5.0, dt, radius: 42);
+    pushOutOfWalls(42);
+    angle = (game.player.position - position).screenAngle();
+
+    final interval = dist < 220 ? 1.2 : 2.1;
     attackTimer += dt;
-    if (attackTimer >= 2.1) {
+    if (attackTimer >= interval) {
       attackTimer = 0;
       for (int i = 0; i < 8; i++) {
         final a = (i / 8) * 2 * pi;
@@ -1196,7 +1482,12 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle) position -= (intersectionPoints.first - position).normalized() * 7;
+    if (other is Wall || other is Obstacle) {
+      final n = (position - intersectionPoints.first).normalized();
+      position += n * 16;
+      avoidDir = Vector2(-n.y, n.x);
+      stuckTimer = 0.7;
+    }
   }
 
   @override
@@ -1216,10 +1507,11 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   }
 }
 
-class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   late int maxHp;
   late int currentHp;
+  double meleeTimer = 0;
 
   KnightBoss({required this.floor, required Vector2 position})
       : super(position: position, size: Vector2(90, 100), anchor: Anchor.center, priority: 25);
@@ -1235,11 +1527,18 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   void update(double dt) {
     super.update(dt);
     if (!game.isPlaying || game.isPaused) return;
-    final toPlayer = (game.player.position - position).normalized();
-    position.add(toPlayer * (70 + floor * 8.0) * dt);
-    angle = toPlayer.screenAngle();
-    position.x = position.x.clamp(75, game.mapWidth - 75);
-    position.y = position.y.clamp(75, game.mapHeight - 75);
+    final dist = position.distanceTo(game.player.position);
+    smartMove(game.player.position, 70 + floor * 8.0, dt, radius: 40);
+    pushOutOfWalls(40);
+    angle = (game.player.position - position).screenAngle();
+
+    // Чаще бьёт вблизи
+    final interval = dist < 120 ? 0.45 : 0.9;
+    meleeTimer += dt;
+    if (meleeTimer >= interval && dist < 100) {
+      meleeTimer = 0;
+      game.player.takeDamage(2);
+    }
   }
 
   void takeDamage(int amount) {
@@ -1254,8 +1553,12 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle) position -= (intersectionPoints.first - position).normalized() * 7;
-    if (other is Player) other.takeDamage(2);
+    if (other is Wall || other is Obstacle) {
+      final n = (position - intersectionPoints.first).normalized();
+      position += n * 16;
+      avoidDir = Vector2(-n.y, n.x);
+      stuckTimer = 0.7;
+    }
   }
 
   @override
@@ -1275,13 +1578,11 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   }
 }
 
-class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   late int maxHp;
   late int currentHp;
   late int phaseHp;
   int phase = 1;
-
-  double attackTimer = 0;
   double meleeTimer = 0;
   double phase2Timer = 0;
   int phase2VolleyCount = 0;
@@ -1301,26 +1602,20 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void update(double dt) {
     super.update(dt);
     if (!game.isPlaying || game.isPaused) return;
-
-    final toPlayer = (game.player.position - position).normalized();
-    // Фаза 1 — быстрее, фаза 2 — медленнее
+    final dist = position.distanceTo(game.player.position);
     final speed = phase == 1 ? 95.0 : 35.0;
-    position.add(toPlayer * speed * dt);
-    angle = toPlayer.screenAngle();
-    position.x = position.x.clamp(80, game.mapWidth - 80);
-    position.y = position.y.clamp(80, game.mapHeight - 80);
+    smartMove(game.player.position, speed, dt, radius: 52);
+    pushOutOfWalls(52);
+    angle = (game.player.position - position).screenAngle();
 
     if (phase == 1) {
-      // Только ближний бой
+      final interval = dist < 130 ? 0.4 : 0.7;
       meleeTimer += dt;
-      if (meleeTimer >= 0.7) {
+      if (meleeTimer >= interval && dist < 105) {
         meleeTimer = 0;
-        if (position.distanceTo(game.player.position) < 100) {
-          game.player.takeDamage(3);
-        }
+        game.player.takeDamage(3);
       }
     } else {
-      // Фаза 2 — залпы
       phase2Timer += dt;
       if (phase2VolleyCount > 0) {
         if (phase2Timer >= 0.35) {
@@ -1334,11 +1629,9 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
         _fireVolley();
       }
       meleeTimer += dt;
-      if (meleeTimer >= 1.2) {
+      if (meleeTimer >= 1.0 && dist < 95) {
         meleeTimer = 0;
-        if (position.distanceTo(game.player.position) < 90) {
-          game.player.takeDamage(2);
-        }
+        game.player.takeDamage(2);
       }
     }
   }
@@ -1351,9 +1644,7 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   }
 
   void takeDamage(int amount) {
-    // Не получает урон, пока живы босс и рыцарь
     if (game.areOtherBossesAlive) return;
-
     currentHp -= amount;
     if (currentHp <= 0) {
       currentHp = 0;
@@ -1372,7 +1663,10 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is Wall || other is Obstacle) {
-      position -= (intersectionPoints.first - position).normalized() * 8;
+      final n = (position - intersectionPoints.first).normalized();
+      position += n * 18;
+      avoidDir = Vector2(-n.y, n.x);
+      stuckTimer = 0.8;
     }
   }
 
@@ -1381,7 +1675,6 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     final cx = size.x / 2;
     final cy = size.y / 2;
     final invuln = game.areOtherBossesAlive;
-
     canvas.drawRRect(
       RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 12), width: 80, height: 70), const Radius.circular(12)),
       Paint()..color = invuln ? const Color(0xFF4A148C) : const Color(0xFF1A0000),
@@ -1392,22 +1685,15 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy - 48), width: 30, height: 12), Paint()..color = const Color(0xFFFFD700));
     canvas.drawCircle(Offset(cx - 8, cy - 32), 5, Paint()..color = const Color(0xFFFF1744));
     canvas.drawCircle(Offset(cx + 8, cy - 32), 5, Paint()..color = const Color(0xFFFF1744));
-
-    // Щит неуязвимости
     if (invuln) {
-      canvas.drawCircle(Offset(cx, cy), 58, Paint()
-        ..color = const Color(0xFF9C27B0).withOpacity(0.35)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4);
+      canvas.drawCircle(Offset(cx, cy), 58, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 4);
     }
-
     final barW = 100.0;
     final barH = 9.0;
     final phase2Hp = (currentHp - phaseHp).clamp(0, phaseHp);
     final p2 = phase2Hp / phaseHp;
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - barW / 2, -48, barW, barH), const Radius.circular(3)), Paint()..color = Colors.black.withOpacity(0.8));
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - barW / 2, -48, barW * p2, barH), const Radius.circular(3)), Paint()..color = const Color(0xFFFFD700));
-
     final phase1Hp = currentHp.clamp(0, phaseHp);
     final p1 = phase1Hp / phaseHp;
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - barW / 2, -36, barW, barH), const Radius.circular(3)), Paint()..color = Colors.black.withOpacity(0.8));
@@ -1491,7 +1777,6 @@ class MeleeAttack extends CircleComponent with HasGameReference<InquisitorGame>,
     if (other is KnightBoss) other.takeDamage(game.swordDamage);
     if (other is KingBoss) other.takeDamage(game.swordDamage);
     if (other is MiniBoss) other.takeDamage(game.swordDamage);
-    if (other is Portal) game.goToNextLevel();
   }
 }
 
