@@ -51,10 +51,7 @@ class HighScoreEntry {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
   String get progressStr => completed ? 'ВСЁ ПРОЙДЕНО' : 'Этаж $floor / Ур. $level';
-  Map<String, dynamic> toJson() => {
-        'name': name, 'score': score, 'seconds': seconds,
-        'floor': floor, 'level': level, 'completed': completed,
-      };
+  Map<String, dynamic> toJson() => {'name': name, 'score': score, 'seconds': seconds, 'floor': floor, 'level': level, 'completed': completed};
   factory HighScoreEntry.fromJson(Map<String, dynamic> j) => HighScoreEntry(
         j['name'] as String? ?? '?',
         j['score'] as int? ?? 0,
@@ -85,13 +82,11 @@ class GameSave {
     required this.playSeconds, required this.dateIso,
   });
   Map<String, dynamic> toJson() => {
-        'name': name, 'floor': floor, 'level': level, 'score': score,
-        'health': health, 'maxHealth': maxHealth,
+        'name': name, 'floor': floor, 'level': level, 'score': score, 'health': health, 'maxHealth': maxHealth,
         'bolterDamage': bolterDamage, 'rifleDamage': rifleDamage, 'shotgunDamage': shotgunDamage,
         'swordDamage': swordDamage, 'axeDamage': axeDamage, 'hammerDamage': hammerDamage,
-        'playerSpeed': playerSpeed, 'defenseChance': defenseChance,
-        'ranged': ranged, 'melee': melee, 'usingMelee': usingMelee,
-        'hasDash': hasDash, 'ever11': ever11, 'ever21': ever21,
+        'playerSpeed': playerSpeed, 'defenseChance': defenseChance, 'ranged': ranged, 'melee': melee,
+        'usingMelee': usingMelee, 'hasDash': hasDash, 'ever11': ever11, 'ever21': ever21,
         'playSeconds': playSeconds, 'dateIso': dateIso,
       };
   factory GameSave.fromJson(Map<String, dynamic> j) => GameSave(
@@ -128,6 +123,7 @@ class GameSave {
   }
 }
 
+/// Warhammer-style procedural sprites
 class WHDraw {
   static void inquisitor(Canvas c, {required double cx, required double cy, double s = 1.2, bool cape = true}) {
     if (cape) {
@@ -164,73 +160,71 @@ class WHDraw {
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 8 * s), width: 20 * s, height: 6 * s), Radius.circular(2 * s)), Paint()..color = dark);
   }
 
+  // Weapons drawn pointing roughly +X (right) from (cx,cy)
   static void bolter(Canvas c, double cx, double cy, double s) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy + 2 * s, 10 * s, 16 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF8D6E63));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy + 14 * s, 8 * s, 12 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF6D4C41));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 10 * s, cy - 10 * s, 28 * s, 16 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFFC62828));
-    c.drawCircle(Offset(cx + 28 * s, cy - 2 * s), 5 * s, Paint()..color = const Color(0xFFFFF8E1));
-    c.drawCircle(Offset(cx + 28 * s, cy - 2 * s), 2.2 * s, Paint()..color = const Color(0xFF37474F));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 36 * s, cy - 6 * s, 18 * s, 8 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
-    c.drawRect(Rect.fromLTWH(cx + 52 * s, cy - 4 * s, 8 * s, 4 * s), Paint()..color = const Color(0xFF37474F));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 2 * s, 10 * s, 14 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF8D6E63));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy + 10 * s, 8 * s, 12 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF6D4C41));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy - 10 * s, 30 * s, 14 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFFC62828));
+    c.drawCircle(Offset(cx + 24 * s, cy - 3 * s), 4.5 * s, Paint()..color = const Color(0xFFFFF8E1));
+    c.drawCircle(Offset(cx + 24 * s, cy - 3 * s), 2 * s, Paint()..color = const Color(0xFF37474F));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 34 * s, cy - 7 * s, 18 * s, 7 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
+    c.drawRect(Rect.fromLTWH(cx + 50 * s, cy - 5 * s, 10 * s, 4 * s), Paint()..color = const Color(0xFF37474F));
   }
 
   static void rifle(Canvas c, double cx, double cy, double s) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - 8 * s, cy - 4 * s, 16 * s, 12 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF6D4C41));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 6 * s, 36 * s, 12 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFFA1887F));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - 6 * s, cy - 4 * s, 14 * s, 11 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF6D4C41));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 6 * s, 38 * s, 11 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFFA1887F));
     for (int i = 0; i < 4; i++) {
-      c.drawCircle(Offset(cx + 28 * s + i * 5 * s, cy), 4 * s, Paint()..color = const Color(0xFF00E5FF).withOpacity(0.85));
+      c.drawCircle(Offset(cx + 28 * s + i * 5 * s, cy), 3.5 * s, Paint()..color = const Color(0xFF00E5FF).withOpacity(0.85));
     }
-    c.drawRect(Rect.fromLTWH(cx + 46 * s, cy - 3 * s, 22 * s, 6 * s), Paint()..color = const Color(0xFF78909C));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 14 * s, cy + 6 * s, 8 * s, 14 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF5D4037));
+    c.drawRect(Rect.fromLTWH(cx + 46 * s, cy - 3 * s, 22 * s, 5 * s), Paint()..color = const Color(0xFF78909C));
   }
 
   static void shotgun(Canvas c, double cx, double cy, double s) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - 4 * s, cy - 4 * s, 18 * s, 14 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF6D4C41));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 12 * s, cy - 6 * s, 28 * s, 12 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
-    c.drawRect(Rect.fromLTWH(cx + 38 * s, cy - 3 * s, 20 * s, 6 * s), Paint()..color = const Color(0xFF37474F));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - 2 * s, cy - 4 * s, 16 * s, 12 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF6D4C41));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 12 * s, cy - 5 * s, 28 * s, 10 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
+    c.drawRect(Rect.fromLTWH(cx + 38 * s, cy - 3 * s, 18 * s, 5 * s), Paint()..color = const Color(0xFF37474F));
   }
 
   static void powerSword(Canvas c, double cx, double cy, double s) {
     final blade = Path()
-      ..moveTo(cx + 14 * s, cy - 2 * s)
-      ..lineTo(cx + 18 * s, cy - 36 * s)
-      ..lineTo(cx + 22 * s, cy - 2 * s)
+      ..moveTo(cx + 10 * s, cy - 2 * s)
+      ..lineTo(cx + 14 * s, cy - 34 * s)
+      ..lineTo(cx + 18 * s, cy - 2 * s)
       ..close();
     c.drawPath(blade, Paint()..color = const Color(0xFF4DD0E1));
-    c.drawRect(Rect.fromCenter(center: Offset(cx + 14 * s, cy), width: 18 * s, height: 5 * s), Paint()..color = const Color(0xFFB8860B));
-    c.drawCircle(Offset(cx + 14 * s, cy), 5 * s, Paint()..color = const Color(0xFFECEFF1));
-    c.drawCircle(Offset(cx + 12.5 * s, cy - 1 * s), 1.2 * s, Paint()..color = const Color(0xFF212121));
-    c.drawCircle(Offset(cx + 15.5 * s, cy - 1 * s), 1.2 * s, Paint()..color = const Color(0xFF212121));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 2 * s, 10 * s, 6 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF8B0000));
+    c.drawRect(Rect.fromCenter(center: Offset(cx + 10 * s, cy), width: 16 * s, height: 5 * s), Paint()..color = const Color(0xFFB8860B));
+    c.drawCircle(Offset(cx + 10 * s, cy), 4.5 * s, Paint()..color = const Color(0xFFECEFF1));
+    c.drawCircle(Offset(cx + 8.5 * s, cy - 1 * s), 1.1 * s, Paint()..color = const Color(0xFF212121));
+    c.drawCircle(Offset(cx + 11.5 * s, cy - 1 * s), 1.1 * s, Paint()..color = const Color(0xFF212121));
   }
 
   static void chainAxe(Canvas c, double cx, double cy, double s) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 3 * s, 28 * s, 6 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF8D4E3A));
-    final head = Offset(cx + 38 * s, cy);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 2.5 * s, 26 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF8D4E3A));
+    final head = Offset(cx + 34 * s, cy);
     final top = Path()
-      ..moveTo(head.dx, head.dy - 4 * s)
-      ..lineTo(head.dx + 8 * s, head.dy - 22 * s)
-      ..lineTo(head.dx + 18 * s, head.dy - 8 * s)
-      ..lineTo(head.dx + 10 * s, head.dy)
+      ..moveTo(head.dx, head.dy - 3 * s)
+      ..lineTo(head.dx + 7 * s, head.dy - 20 * s)
+      ..lineTo(head.dx + 16 * s, head.dy - 7 * s)
+      ..lineTo(head.dx + 9 * s, head.dy)
       ..close();
     final bot = Path()
-      ..moveTo(head.dx, head.dy + 4 * s)
-      ..lineTo(head.dx + 8 * s, head.dy + 22 * s)
-      ..lineTo(head.dx + 18 * s, head.dy + 8 * s)
-      ..lineTo(head.dx + 10 * s, head.dy)
+      ..moveTo(head.dx, head.dy + 3 * s)
+      ..lineTo(head.dx + 7 * s, head.dy + 20 * s)
+      ..lineTo(head.dx + 16 * s, head.dy + 7 * s)
+      ..lineTo(head.dx + 9 * s, head.dy)
       ..close();
     c.drawPath(top, Paint()..color = const Color(0xFF78909C));
     c.drawPath(bot, Paint()..color = const Color(0xFF78909C));
-    c.drawCircle(head, 6 * s, Paint()..color = const Color(0xFF546E7A));
-    c.drawCircle(head, 3.5 * s, Paint()..color = const Color(0xFFE53935));
+    c.drawCircle(head, 5.5 * s, Paint()..color = const Color(0xFF546E7A));
+    c.drawCircle(head, 3 * s, Paint()..color = const Color(0xFFE53935));
   }
 
   static void thunderHammer(Canvas c, double cx, double cy, double s) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy - 2 * s, 36 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF3E2723));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 50 * s, cy), width: 18 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF455A64));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 50 * s, cy), width: 12 * s, height: 14 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFFB8860B));
-    c.drawCircle(Offset(cx + 50 * s, cy), 4 * s, Paint()..color = const Color(0xFF37474F));
-    c.drawCircle(Offset(cx + 50 * s, cy), 2 * s, Paint()..color = const Color(0xFFFFD700));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 2 * s, 32 * s, 4.5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF3E2723));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 44 * s, cy), width: 16 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF455A64));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 44 * s, cy), width: 11 * s, height: 13 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFFB8860B));
+    c.drawCircle(Offset(cx + 44 * s, cy), 3.5 * s, Paint()..color = const Color(0xFF37474F));
   }
 
   static void chaosHound(Canvas c, double cx, double cy) {
@@ -253,19 +247,6 @@ class WHDraw {
     }
   }
 
-  static void shieldedMarine(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFF2979FF)}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 8 * s, cy + 26 * s), width: 11 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF212121));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 26 * s), width: 11 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF212121));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 30 * s, height: 28 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF2A2A2A));
-    c.drawCircle(Offset(cx - 16 * s, cy - 4 * s), 10 * s, Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx + 16 * s, cy - 4 * s), 10 * s, Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx, cy - 16 * s), 11 * s, Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx - 3.5 * s, cy - 16 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawCircle(Offset(cx + 3.5 * s, cy - 16 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 4 * s, cy + 6 * s), width: 36 * s, height: 48 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF37474F));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 4 * s, cy + 6 * s), width: 30 * s, height: 42 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF263238));
-  }
-
   static void cultistShooter(Canvas c, double cx, double cy, double s) {
     final cloak = Path()
       ..moveTo(cx - 14 * s, cy)
@@ -274,14 +255,20 @@ class WHDraw {
       ..quadraticBezierTo(cx + 22 * s, cy + 20 * s, cx + 10 * s, cy)
       ..close();
     c.drawPath(cloak, Paint()..color = const Color(0xFF5D4037).withOpacity(0.9));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 7 * s, cy + 28 * s), width: 10 * s, height: 16 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 7 * s, cy + 28 * s), width: 10 * s, height: 16 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 8 * s), width: 22 * s, height: 24 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF4E342E));
     c.drawCircle(Offset(cx, cy - 12 * s), 10 * s, Paint()..color = const Color(0xFF37474F));
     c.drawCircle(Offset(cx - 3 * s, cy - 13 * s), 3 * s, Paint()..color = const Color(0xFF1B5E20));
     c.drawCircle(Offset(cx + 3 * s, cy - 13 * s), 3 * s, Paint()..color = const Color(0xFF1B5E20));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy + 2 * s, 26 * s, 7 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF455A64));
+    c.drawOval(Rect.fromCenter(center: Offset(cx, cy - 6 * s), width: 10 * s, height: 5 * s), Paint()..color = const Color(0xFF546E7A));
+    // rifle in hands
+    bolter(c, cx + 2 * s, cy + 2 * s, s * 0.75);
   }
 
   static void cultistMelee(Canvas c, double cx, double cy, double s) {
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 7 * s, cy + 30 * s), width: 11 * s, height: 18 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4A1515));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 7 * s, cy + 30 * s), width: 11 * s, height: 18 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4A1515));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 12 * s), width: 28 * s, height: 36 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF6B1B1B));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 26 * s, height: 22 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF5D4037));
     c.drawCircle(Offset(cx, cy - 16 * s), 10 * s, Paint()..color = const Color(0xFF3E2723));
@@ -290,8 +277,33 @@ class WHDraw {
     for (int i = 0; i < 3; i++) {
       final ox = (i - 1) * 8.0 * s;
       c.drawCircle(Offset(cx + ox, cy - 28 * s), 5 * s, Paint()..color = const Color(0xFFECEFF1));
+      c.drawCircle(Offset(cx + ox - 1.5 * s, cy - 29 * s), 1.1 * s, Paint()..color = const Color(0xFF212121));
+      c.drawCircle(Offset(cx + ox + 1.5 * s, cy - 29 * s), 1.1 * s, Paint()..color = const Color(0xFF212121));
     }
-    c.drawLine(Offset(cx + 14 * s, cy + 2 * s), Offset(cx + 28 * s, cy - 16 * s), Paint()..color = const Color(0xFFB0BEC5)..strokeWidth = 3 * s);
+    // dual blades
+    c.drawLine(Offset(cx + 14 * s, cy + 2 * s), Offset(cx + 30 * s, cy - 18 * s), Paint()..color = const Color(0xFFB0BEC5)..strokeWidth = 3.2 * s..strokeCap = StrokeCap.round);
+    c.drawLine(Offset(cx - 14 * s, cy + 2 * s), Offset(cx - 28 * s, cy - 14 * s), Paint()..color = const Color(0xFF90A4AE)..strokeWidth = 2.8 * s..strokeCap = StrokeCap.round);
+  }
+
+  static void shieldedMarine(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFF2979FF), bool withGun = false}) {
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 8 * s, cy + 26 * s), width: 11 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF212121));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 26 * s), width: 11 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF212121));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 30 * s, height: 28 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF2A2A2A));
+    c.drawCircle(Offset(cx - 16 * s, cy - 4 * s), 10 * s, Paint()..color = const Color(0xFF1A1A1A));
+    c.drawCircle(Offset(cx + 16 * s, cy - 4 * s), 10 * s, Paint()..color = const Color(0xFF1A1A1A));
+    c.drawCircle(Offset(cx, cy - 16 * s), 11 * s, Paint()..color = const Color(0xFF1A1A1A));
+    c.drawCircle(Offset(cx - 3.5 * s, cy - 16 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
+    c.drawCircle(Offset(cx + 3.5 * s, cy - 16 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
+    // shield
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 6 * s, cy + 6 * s), width: 36 * s, height: 48 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF37474F));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 6 * s, cy + 6 * s), width: 30 * s, height: 42 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF263238));
+    final tri = Path()
+      ..moveTo(cx + 6 * s, cy - 6 * s)
+      ..lineTo(cx - 2 * s, cy + 4 * s)
+      ..lineTo(cx + 14 * s, cy + 4 * s)
+      ..close();
+    c.drawPath(tri, Paint()..color = accent.withOpacity(0.75)..style = PaintingStyle.stroke..strokeWidth = 1.8 * s);
+    if (withGun) bolter(c, cx - 6 * s, cy + 2 * s, s * 0.7);
   }
 
   static void hereticBoss(Canvas c, double cx, double cy, double s) {
@@ -300,19 +312,31 @@ class WHDraw {
       final a = (i / 6) * 2 * pi - pi / 2;
       final x = cx + cos(a) * 36 * s;
       final y = cy - 8 * s + sin(a) * 36 * s;
+      c.drawLine(Offset(x, y), Offset(x + cos(a) * 10 * s, y + sin(a) * 10 * s), Paint()..color = const Color(0xFF78909C)..strokeWidth = 2.5 * s);
       c.drawCircle(Offset(x + cos(a) * 12 * s, y + sin(a) * 12 * s), 4 * s, Paint()..color = const Color(0xFFECEFF1));
     }
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 16 * s), width: 28 * s, height: 40 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 24 * s, height: 20 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF3E2723));
+    c.drawCircle(Offset(cx, cy + 14 * s), 6 * s, Paint()..color = const Color(0xFFB8860B));
     c.drawCircle(Offset(cx, cy - 14 * s), 11 * s, Paint()..color = const Color(0xFFC4A484));
+    for (int i = 0; i < 5; i++) {
+      final a = -2.2 + i * 0.35;
+      c.drawLine(Offset(cx, cy - 18 * s), Offset(cx + cos(a) * 16 * s, cy - 18 * s + sin(a) * 14 * s), Paint()..color = const Color(0xFF8B0000)..strokeWidth = 2.5 * s);
+    }
     c.drawCircle(Offset(cx - 3.5 * s, cy - 14 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
     c.drawCircle(Offset(cx + 3.5 * s, cy - 14 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
+    // staff / weapon
+    c.drawLine(Offset(cx + 16 * s, cy + 8 * s), Offset(cx + 28 * s, cy - 28 * s), Paint()..color = const Color(0xFF5D4037)..strokeWidth = 4 * s);
+    c.drawCircle(Offset(cx + 28 * s, cy - 30 * s), 7 * s, Paint()..color = const Color(0xFFFF1744).withOpacity(0.7));
   }
 
   static void knightBoss(Canvas c, double cx, double cy, double s) {
+    c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 50 * s, height: 36 * s), Paint()..color = const Color(0xFF4E342E).withOpacity(0.5));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 12 * s, cy + 32 * s), width: 16 * s, height: 26 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF2A2A2A));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 12 * s, cy + 32 * s), width: 16 * s, height: 26 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF2A2A2A));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 40 * s, height: 34 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
     c.drawCircle(Offset(cx, cy), 8 * s, Paint()..color = const Color(0xFFB71C1C));
+    c.drawCircle(Offset(cx, cy), 4 * s, Paint()..color = const Color(0xFFFFD700));
     c.drawCircle(Offset(cx - 22 * s, cy - 8 * s), 14 * s, Paint()..color = const Color(0xFF3E2723));
     c.drawCircle(Offset(cx + 22 * s, cy - 8 * s), 14 * s, Paint()..color = const Color(0xFF3E2723));
     c.drawCircle(Offset(cx, cy - 22 * s), 12 * s, Paint()..color = const Color(0xFF212121));
@@ -329,6 +353,8 @@ class WHDraw {
       ..quadraticBezierTo(cx + 30 * s, cy + 30 * s, cx + 16 * s, cy)
       ..close();
     c.drawPath(cape, Paint()..color = const Color(0xFF4A148C).withOpacity(0.85));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 12 * s, cy + 34 * s), width: 16 * s, height: 28 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 12 * s, cy + 34 * s), width: 16 * s, height: 28 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF1A1A1A));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 44 * s, height: 36 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 44 * s, height: 36 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFFC9A227)..style = PaintingStyle.stroke..strokeWidth = 2.5 * s);
     c.drawCircle(Offset(cx, cy - 4 * s), 5 * s, Paint()..color = const Color(0xFFFF1744));
@@ -415,10 +441,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool _everReached11 = false;
   bool _everReached21 = false;
 
-  // AUDIO: BGM never shares player with SFX
+  // ===== AUDIO: BGM never shares channel with SFX =====
   AudioPlayer? _bgmPlayer;
   final List<AudioPlayer> _sfxPool = [];
-  static const int _sfxPoolSize = 6;
+  static const int _sfxPoolSize = 8;
   int _sfxIdx = 0;
 
   final TextPaint hudPaint = TextPaint(
@@ -440,14 +466,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   Future<void> onLoad() async {
     camera.viewfinder.visibleGameSize = Vector2(mapWidth, mapHeight);
     camera.viewfinder.zoom = currentZoom;
-    await initAudio();
-    await loadPersistedData();
-  }
-
-  Future<void> initAudio() async {
     for (int i = 0; i < _sfxPoolSize; i++) {
       _sfxPool.add(AudioPlayer());
     }
+    await loadPersistedData();
   }
 
   Future<void> _playSfx(String file) async {
@@ -456,6 +478,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       final p = _sfxPool[_sfxIdx % _sfxPoolSize];
       _sfxIdx++;
       await p.stop();
+      await p.setPlayerMode(PlayerMode.lowLatency);
       await p.setVolume(soundVolume);
       await p.play(AssetSource('sounds/$file'));
     } catch (_) {
@@ -475,17 +498,30 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (!musicEnabled) return;
     try {
       if (_bgmPlayer != null) {
-        await _bgmPlayer!.setVolume(musicVolume);
-        // already playing — just update volume
         final st = _bgmPlayer!.state;
-        if (st == PlayerState.playing) return;
+        if (st == PlayerState.playing || st == PlayerState.paused) {
+          await _bgmPlayer!.setVolume(musicVolume);
+          if (st == PlayerState.paused) await _bgmPlayer!.resume();
+          return;
+        }
       }
       await stopMusic();
-      _bgmPlayer = AudioPlayer();
-      await _bgmPlayer!.setReleaseMode(ReleaseMode.loop);
-      await _bgmPlayer!.setVolume(musicVolume);
-      await _bgmPlayer!.play(AssetSource('sounds/bgm.mp3'));
-    } catch (_) {}
+      final p = AudioPlayer();
+      await p.setReleaseMode(ReleaseMode.loop);
+      await p.setPlayerMode(PlayerMode.mediaPlayer);
+      await p.setVolume(musicVolume);
+      await p.play(AssetSource('sounds/bgm.mp3'));
+      _bgmPlayer = p;
+    } catch (_) {
+      try {
+        final p = AudioPlayer();
+        await p.setReleaseMode(ReleaseMode.loop);
+        await p.setPlayerMode(PlayerMode.mediaPlayer);
+        await p.setVolume(musicVolume);
+        await p.play(AssetSource('bgm.mp3'));
+        _bgmPlayer = p;
+      } catch (_) {}
+    }
   }
 
   Future<void> stopMusic() async {
@@ -542,28 +578,14 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   Future<void> saveGame() async {
     if (!isPlaying) return;
     final save = GameSave(
-      name: playerName,
-      floor: currentFloor,
-      level: currentLevel,
-      score: score,
-      health: player.health,
-      maxHealth: maxHealth,
-      bolterDamage: bolterDamage,
-      rifleDamage: rifleDamage,
-      shotgunDamage: shotgunDamage,
-      swordDamage: swordDamage,
-      axeDamage: axeDamage,
-      hammerDamage: hammerDamage,
-      playerSpeed: playerSpeed,
-      defenseChance: defenseChance,
-      ranged: rangedWeapon.name,
-      melee: meleeWeapon.name,
-      usingMelee: usingMelee,
-      hasDash: hasDashAbility,
-      ever11: _everReached11,
-      ever21: _everReached21,
-      playSeconds: _currentPlaySeconds(),
-      dateIso: DateTime.now().toIso8601String(),
+      name: playerName, floor: currentFloor, level: currentLevel, score: score,
+      health: player.health, maxHealth: maxHealth,
+      bolterDamage: bolterDamage, rifleDamage: rifleDamage, shotgunDamage: shotgunDamage,
+      swordDamage: swordDamage, axeDamage: axeDamage, hammerDamage: hammerDamage,
+      playerSpeed: playerSpeed, defenseChance: defenseChance,
+      ranged: rangedWeapon.name, melee: meleeWeapon.name, usingMelee: usingMelee,
+      hasDash: hasDashAbility, ever11: _everReached11, ever21: _everReached21,
+      playSeconds: _currentPlaySeconds(), dateIso: DateTime.now().toIso8601String(),
     );
     saves.insert(0, save);
     if (saves.length > 8) saves = saves.take(8).toList();
@@ -605,7 +627,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     currentZoom = 0.85;
     _clearEverything();
     _startLevel();
-    // restore HP after player created
     player.health = s.health.clamp(1, maxHealth);
     player.maxHealth = maxHealth;
     for (final o in ['mainMenu', 'loadSave', 'settings', 'nameInput', 'gameOver', 'levelComplete', 'upgrade', 'victory', 'records', 'backpack']) {
@@ -616,10 +637,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void addScoreEntry({bool completed = false}) {
     playSeconds = _currentPlaySeconds();
-    highScores.add(HighScoreEntry(
-      playerName, score, playSeconds,
-      floor: currentFloor, level: currentLevel, completed: completed,
-    ));
+    highScores.add(HighScoreEntry(playerName, score, playSeconds, floor: currentFloor, level: currentLevel, completed: completed));
     highScores.sort((a, b) => b.score.compareTo(a.score));
     if (highScores.length > 15) highScores = highScores.take(15).toList();
     _persistScores();
@@ -2023,7 +2041,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   late int health;
   late int maxHealth;
   double attackTimer = 0;
-  Vector2 aimDir = Vector2(0, -1); // last aim / attack direction
+  Vector2 aimDir = Vector2(0, -1);
 
   Player(this.moveJoystick) : super(size: Vector2(72, 80), anchor: Anchor.center, priority: 15);
 
@@ -2043,7 +2061,6 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     if (moveJoystick.direction != JoystickDirection.idle) {
       position.add(moveJoystick.relativeDelta * spd * dt);
     }
-    // aim: prefer attack stick, else move stick
     if (game.attackJoystick.direction != JoystickDirection.idle) {
       final d = game.attackJoystick.relativeDelta;
       if (d.length2 > 0.01) aimDir = d.normalized();
@@ -2139,7 +2156,6 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     if (game.dashActive > 0) {
       canvas.drawCircle(Offset(cx, cy), 44, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.28));
     }
-    // body faces aim slightly (flip if aiming left)
     final facingLeft = aimDir.x < -0.15;
     canvas.save();
     if (facingLeft) {
@@ -2150,12 +2166,10 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.2, cape: true);
     canvas.restore();
 
-    // weapon rotated toward aim (0 = right in draw space → offset by -pi/2 for "up" default art)
     final ang = atan2(aimDir.y, aimDir.x);
     canvas.save();
     canvas.translate(cx, cy);
     canvas.rotate(ang);
-    // weapons drawn pointing to +X after rotation
     if (game.usingMelee) {
       switch (game.meleeWeapon) {
         case MeleeWeapon.sword:
@@ -2432,17 +2446,18 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         WHDraw.chaosHound(canvas, cx, cy);
         break;
       case EnemyType.shooter:
-        WHDraw.cultistShooter(canvas, cx, cy, 1.1);
+        // body + built-in bolter in WHDraw.cultistShooter
+        WHDraw.cultistShooter(canvas, cx, cy, 1.15);
         break;
       case EnemyType.melee:
-        WHDraw.cultistMelee(canvas, cx, cy, 1.1);
+        // dual blades drawn inside cultistMelee
+        WHDraw.cultistMelee(canvas, cx, cy, 1.15);
         break;
       case EnemyType.shielded:
-        WHDraw.shieldedMarine(canvas, cx, cy, 1.1);
+        WHDraw.shieldedMarine(canvas, cx, cy, 1.15, accent: const Color(0xFF2979FF), withGun: false);
         break;
       case EnemyType.shieldedShooter:
-        WHDraw.shieldedMarine(canvas, cx, cy, 1.05, accent: const Color(0xFF00BCD4));
-        WHDraw.bolter(canvas, cx - 8, cy, 0.85);
+        WHDraw.shieldedMarine(canvas, cx, cy, 1.1, accent: const Color(0xFF00BCD4), withGun: true);
         break;
     }
   }
@@ -2621,7 +2636,6 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     canvas.drawRect(Rect.fromLTWH(cx - 44, -32, 88 * hpP, 10), Paint()..color = const Color(0xFF78909C));
   }
 }
-
 class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   late int maxHp, currentHp, phaseHp;
   int phase = 1;
