@@ -21,7 +21,7 @@ void main() {
           'settings': (c, g) => SettingsMenu(g as InquisitorGame),
           'gameOver': (c, g) => GameOverMenu(g as InquisitorGame),
           'levelComplete': (c, g) => LevelCompleteMenu(g as InquisitorGame),
-          'upgrade': (c, g) => UpgradeMenu(g as InquisitorGame),
+          'skills': (c, g) => SkillsMenu(g as InquisitorGame),
           'victory': (c, g) => VictoryMenu(g as InquisitorGame),
           'records': (c, g) => RecordsMenu(g as InquisitorGame),
           'backpack': (c, g) => BackpackMenu(g as InquisitorGame),
@@ -50,48 +50,95 @@ extension DiffLabel on Difficulty {
     }
   }
 
-  String get short {
-    switch (this) {
-      case Difficulty.easy:
-        return 'E';
-      case Difficulty.normal:
-        return 'N';
-      case Difficulty.hard:
-        return 'H';
-    }
-  }
-
   double get hpMult {
     switch (this) {
       case Difficulty.easy:
-        return 0.70;
+        return 0.75;
       case Difficulty.normal:
-        return 1.0;
+        return 1.15;
       case Difficulty.hard:
-        return 1.50;
+        return 1.70;
     }
   }
 
   double get dmgMult {
     switch (this) {
       case Difficulty.easy:
-        return 0.65;
+        return 0.70;
       case Difficulty.normal:
-        return 1.0;
+        return 1.05;
       case Difficulty.hard:
-        return 1.40;
+        return 1.45;
     }
   }
 
   double get bossHpMult {
     switch (this) {
       case Difficulty.easy:
-        return 0.75;
+        return 0.80;
       case Difficulty.normal:
-        return 1.0;
+        return 1.20;
       case Difficulty.hard:
-        return 1.65;
+        return 1.85;
     }
+  }
+}
+
+/// RPG skill ranks (spent points)
+class SkillTree {
+  int hp = 0; // +1 maxHP each
+  int speed = 0; // +12 move each
+  int attackSpeed = 0; // -4% cooldown each (cap)
+  int defense = 0; // +3% block each (cap 45%)
+  int damage = 0; // +6% all damage each
+
+  int get totalSpent => hp + speed + attackSpeed + defense + damage;
+
+  Map<String, dynamic> toJson() => {
+        'hp': hp,
+        'speed': speed,
+        'attackSpeed': attackSpeed,
+        'defense': defense,
+        'damage': damage,
+      };
+
+  factory SkillTree.fromJson(Map<String, dynamic>? j) {
+    if (j == null) return SkillTree();
+    return SkillTree()
+      ..hp = j['hp'] as int? ?? 0
+      ..speed = j['speed'] as int? ?? 0
+      ..attackSpeed = j['attackSpeed'] as int? ?? 0
+      ..defense = j['defense'] as int? ?? 0
+      ..damage = j['damage'] as int? ?? 0;
+  }
+}
+
+/// Cosmetic customization
+class Customization {
+  int armorHue = 210; // 0-360 blue-grey default
+  int capeHue = 0; // red
+  int weaponHue = 45; // gold
+  int trimHue = 45; // gold aquila
+
+  Color armorColor([double l = 0.28]) => HSLColor.fromAHSL(1, armorHue.toDouble(), 0.18, l).toColor();
+  Color capeColor([double l = 0.28]) => HSLColor.fromAHSL(1, capeHue.toDouble(), 0.75, l).toColor();
+  Color weaponColor([double l = 0.45]) => HSLColor.fromAHSL(1, weaponHue.toDouble(), 0.65, l).toColor();
+  Color trimColor([double l = 0.55]) => HSLColor.fromAHSL(1, trimHue.toDouble(), 0.70, l).toColor();
+
+  Map<String, dynamic> toJson() => {
+        'armorHue': armorHue,
+        'capeHue': capeHue,
+        'weaponHue': weaponHue,
+        'trimHue': trimHue,
+      };
+
+  factory Customization.fromJson(Map<String, dynamic>? j) {
+    if (j == null) return Customization();
+    return Customization()
+      ..armorHue = j['armorHue'] as int? ?? 210
+      ..capeHue = j['capeHue'] as int? ?? 0
+      ..weaponHue = j['weaponHue'] as int? ?? 45
+      ..trimHue = j['trimHue'] as int? ?? 45;
   }
 }
 
@@ -102,8 +149,8 @@ class HighScoreEntry {
   final int floor;
   final int level;
   final bool completed;
-  final String difficulty; // easy | normal | hard
-  final bool arena; // finished after arena run
+  final String difficulty;
+  final bool arena;
 
   HighScoreEntry(
     this.name,
@@ -163,6 +210,9 @@ class GameSave {
   final String difficulty;
   final bool arenaMode;
   final int arenaKills;
+  final int skillPoints;
+  final Map<String, dynamic> skills;
+  final Map<String, dynamic> custom;
 
   GameSave({
     required this.name,
@@ -190,6 +240,9 @@ class GameSave {
     this.difficulty = 'normal',
     this.arenaMode = false,
     this.arenaKills = 0,
+    this.skillPoints = 0,
+    this.skills = const {},
+    this.custom = const {},
   });
 
   Map<String, dynamic> toJson() => {
@@ -218,6 +271,9 @@ class GameSave {
         'difficulty': difficulty,
         'arenaMode': arenaMode,
         'arenaKills': arenaKills,
+        'skillPoints': skillPoints,
+        'skills': skills,
+        'custom': custom,
       };
 
   factory GameSave.fromJson(Map<String, dynamic> j) => GameSave(
@@ -246,6 +302,9 @@ class GameSave {
         difficulty: j['difficulty'] as String? ?? 'normal',
         arenaMode: j['arenaMode'] as bool? ?? false,
         arenaKills: j['arenaKills'] as int? ?? 0,
+        skillPoints: j['skillPoints'] as int? ?? 0,
+        skills: Map<String, dynamic>.from(j['skills'] as Map? ?? {}),
+        custom: Map<String, dynamic>.from(j['custom'] as Map? ?? {}),
       );
 
   String get dateStr {
@@ -258,7 +317,6 @@ class GameSave {
   }
 }
 
-/// Floating damage number
 class DamageNumber extends PositionComponent {
   final int amount;
   final Color color;
@@ -296,181 +354,330 @@ class DamageNumber extends PositionComponent {
   }
 }
 
+/// High-detail procedural Warhammer sprites + cosmetic colors
 class WHDraw {
-  static void inquisitor(Canvas c, {required double cx, required double cy, double s = 1.2, bool cape = true, double flash = 0}) {
+  static void _leg(Canvas c, double x, double y, double s, Color armor, Color dark) {
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, y), width: 13 * s, height: 24 * s), Radius.circular(2 * s)), Paint()..color = armor);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, y + 10 * s), width: 15 * s, height: 8 * s), Radius.circular(1.5 * s)), Paint()..color = dark);
+    // knee plate
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, y - 2 * s), width: 11 * s, height: 7 * s), Radius.circular(1 * s)), Paint()..color = dark);
+  }
+
+  static void _boot(Canvas c, double x, double y, double s, Color dark) {
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(x - 8 * s, y, 16 * s, 7 * s), Radius.circular(2 * s)), Paint()..color = dark);
+  }
+
+  static void inquisitor(
+    Canvas c, {
+    required double cx,
+    required double cy,
+    double s = 1.25,
+    bool cape = true,
+    double flash = 0,
+    Customization? custom,
+  }) {
+    final armor = custom?.armorColor(0.30) ?? const Color(0xFF3A4A55);
+    final armorLite = custom?.armorColor(0.42) ?? const Color(0xFF4A5A68);
+    final dark = custom?.armorColor(0.16) ?? const Color(0xFF1E2830);
+    final gold = custom?.trimColor(0.55) ?? const Color(0xFFC9A227);
+    final capeCol = custom?.capeColor(0.28) ?? const Color(0xFF8B0000);
+    final skin = const Color(0xFFC4A484);
+
+    // cape layers
     if (cape) {
-      final capePath = Path()
-        ..moveTo(cx - 18 * s, cy + 2 * s)
-        ..quadraticBezierTo(cx - 40 * s, cy + 30 * s, cx - 12 * s, cy + 48 * s)
-        ..lineTo(cx + 12 * s, cy + 48 * s)
-        ..quadraticBezierTo(cx + 40 * s, cy + 30 * s, cx + 18 * s, cy + 2 * s)
+      final back = Path()
+        ..moveTo(cx - 16 * s, cy)
+        ..quadraticBezierTo(cx - 48 * s, cy + 28 * s, cx - 14 * s, cy + 54 * s)
+        ..lineTo(cx + 14 * s, cy + 54 * s)
+        ..quadraticBezierTo(cx + 48 * s, cy + 28 * s, cx + 16 * s, cy)
         ..close();
-      c.drawPath(capePath, Paint()..color = const Color(0xFF8B0000));
+      c.drawPath(back, Paint()..color = capeCol.withOpacity(0.95));
+      // folds
+      c.drawLine(Offset(cx - 8 * s, cy + 12 * s), Offset(cx - 16 * s, cy + 48 * s), Paint()..color = Colors.black26..strokeWidth = 2 * s);
+      c.drawLine(Offset(cx + 8 * s, cy + 12 * s), Offset(cx + 16 * s, cy + 48 * s), Paint()..color = Colors.black26..strokeWidth = 2 * s);
+      // gold trim on cape edge
+      c.drawPath(back, Paint()..color = gold.withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 1.5 * s);
     }
-    const armor = Color(0xFF3A4A55);
-    const dark = Color(0xFF1E2830);
-    const gold = Color(0xFFC9A227);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 9 * s, cy + 28 * s), width: 12 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = armor);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 9 * s, cy + 28 * s), width: 12 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = armor);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 32 * s, height: 30 * s), Radius.circular(4 * s)), Paint()..color = armor);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 18 * s, height: 16 * s), Radius.circular(3 * s)), Paint()..color = dark);
-    c.drawCircle(Offset(cx, cy + 4 * s), 5 * s, Paint()..color = gold);
-    c.drawCircle(Offset(cx - 18 * s, cy - 4 * s), 11 * s, Paint()..color = armor);
-    c.drawCircle(Offset(cx + 18 * s, cy - 4 * s), 11 * s, Paint()..color = armor);
-    c.drawCircle(Offset(cx, cy - 18 * s), 11 * s, Paint()..color = const Color(0xFFC4A484));
-    c.drawCircle(Offset(cx - 3.5 * s, cy - 19 * s), 1.8 * s, Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx + 3.5 * s, cy - 19 * s), 1.8 * s, Paint()..color = const Color(0xFF1A1A1A));
+
+    // legs
+    _leg(c, cx - 10 * s, cy + 30 * s, s, armor, dark);
+    _leg(c, cx + 10 * s, cy + 30 * s, s, armor, dark);
+    _boot(c, cx - 10 * s, cy + 40 * s, s, dark);
+    _boot(c, cx + 10 * s, cy + 40 * s, s, dark);
+
+    // torso power armor
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 36 * s, height: 34 * s), Radius.circular(5 * s)), Paint()..color = armor);
+    // chest plate
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 22 * s, height: 20 * s), Radius.circular(4 * s)), Paint()..color = armorLite);
+    // aquila
+    c.drawCircle(Offset(cx, cy + 4 * s), 6 * s, Paint()..color = gold);
+    c.drawCircle(Offset(cx, cy + 4 * s), 3 * s, Paint()..color = dark);
+    // wing strokes of aquila
+    c.drawLine(Offset(cx - 2 * s, cy + 3 * s), Offset(cx - 10 * s, cy - 2 * s), Paint()..color = gold..strokeWidth = 2 * s);
+    c.drawLine(Offset(cx + 2 * s, cy + 3 * s), Offset(cx + 10 * s, cy - 2 * s), Paint()..color = gold..strokeWidth = 2 * s);
+
+    // pauldron L/R with trim
+    c.drawCircle(Offset(cx - 20 * s, cy - 4 * s), 13 * s, Paint()..color = armor);
+    c.drawCircle(Offset(cx + 20 * s, cy - 4 * s), 13 * s, Paint()..color = armor);
+    c.drawArc(Rect.fromCircle(center: Offset(cx - 20 * s, cy - 4 * s), radius: 13 * s), pi, pi, false, Paint()..color = gold..style = PaintingStyle.stroke..strokeWidth = 2 * s);
+    c.drawArc(Rect.fromCircle(center: Offset(cx + 20 * s, cy - 4 * s), radius: 13 * s), pi, pi, false, Paint()..color = gold..style = PaintingStyle.stroke..strokeWidth = 2 * s);
+    c.drawCircle(Offset(cx - 20 * s, cy - 4 * s), 5 * s, Paint()..color = gold.withOpacity(0.5));
+    c.drawCircle(Offset(cx + 20 * s, cy - 4 * s), 5 * s, Paint()..color = gold.withOpacity(0.5));
+
+    // arms
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 24 * s, cy + 14 * s), width: 10 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = armor);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 24 * s, cy + 14 * s), width: 10 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = armor);
+    // gloves
+    c.drawCircle(Offset(cx - 24 * s, cy + 24 * s), 5 * s, Paint()..color = dark);
+    c.drawCircle(Offset(cx + 24 * s, cy + 24 * s), 5 * s, Paint()..color = dark);
+
+    // head + helm visor
+    c.drawCircle(Offset(cx, cy - 18 * s), 12 * s, Paint()..color = skin);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 22 * s), width: 22 * s, height: 10 * s), Radius.circular(2 * s)), Paint()..color = dark);
+    // visor slit glow
+    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 19 * s), width: 14 * s, height: 3 * s), Paint()..color = const Color(0xFFFF1744).withOpacity(0.85));
+    c.drawCircle(Offset(cx - 4 * s, cy - 19 * s), 1.6 * s, Paint()..color = const Color(0xFFFF8A80));
+    c.drawCircle(Offset(cx + 4 * s, cy - 19 * s), 1.6 * s, Paint()..color = const Color(0xFFFF8A80));
+    // collar
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 8 * s), width: 20 * s, height: 6 * s), Radius.circular(2 * s)), Paint()..color = dark);
+
     if (flash > 0) {
-      c.drawCircle(Offset(cx, cy), 40 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
+      c.drawCircle(Offset(cx, cy), 44 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
     }
   }
 
-  static void bolter(Canvas c, double cx, double cy, double s) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 2 * s, 10 * s, 14 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF8D6E63));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy - 10 * s, 30 * s, 14 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFFC62828));
-    c.drawCircle(Offset(cx + 24 * s, cy - 3 * s), 4.5 * s, Paint()..color = const Color(0xFFFFF8E1));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 34 * s, cy - 7 * s, 18 * s, 7 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
-    c.drawRect(Rect.fromLTWH(cx + 50 * s, cy - 5 * s, 10 * s, 4 * s), Paint()..color = const Color(0xFF37474F));
+  static void bolter(Canvas c, double cx, double cy, double s, {Color? accent}) {
+    final body = accent ?? const Color(0xFFC62828);
+    final metal = const Color(0xFF546E7A);
+    final wood = const Color(0xFF6D4C41);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 2 * s, 11 * s, 15 * s), Radius.circular(2 * s)), Paint()..color = wood);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy + 11 * s, 9 * s, 12 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF5D4037));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy - 11 * s, 32 * s, 15 * s), Radius.circular(2 * s)), Paint()..color = body);
+    // magazine
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 18 * s, cy + 4 * s, 10 * s, 14 * s), Radius.circular(1 * s)), Paint()..color = metal);
+    // aquila plate
+    c.drawCircle(Offset(cx + 26 * s, cy - 3 * s), 5 * s, Paint()..color = const Color(0xFFFFF8E1));
+    c.drawCircle(Offset(cx + 26 * s, cy - 3 * s), 2.2 * s, Paint()..color = const Color(0xFF37474F));
+    // barrel
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 38 * s, cy - 7 * s, 20 * s, 7 * s), Radius.circular(1 * s)), Paint()..color = metal);
+    c.drawRect(Rect.fromLTWH(cx + 56 * s, cy - 5 * s, 12 * s, 4 * s), Paint()..color = const Color(0xFF37474F));
+    // muzzle brake vents
+    for (int i = 0; i < 3; i++) {
+      c.drawRect(Rect.fromLTWH(cx + 58 * s + i * 3 * s, cy - 7 * s, 1.5 * s, 8 * s), Paint()..color = const Color(0xFF212121));
+    }
   }
 
-  static void rifle(Canvas c, double cx, double cy, double s) {
+  static void rifle(Canvas c, double cx, double cy, double s, {Color? accent}) {
+    final glow = accent ?? const Color(0xFF00E5FF);
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - 6 * s, cy - 4 * s, 14 * s, 11 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF6D4C41));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 6 * s, 38 * s, 11 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFFA1887F));
-    for (int i = 0; i < 4; i++) {
-      c.drawCircle(Offset(cx + 28 * s + i * 5 * s, cy), 3.5 * s, Paint()..color = const Color(0xFF00E5FF).withOpacity(0.85));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 6 * s, 40 * s, 11 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFFA1887F));
+    for (int i = 0; i < 5; i++) {
+      c.drawCircle(Offset(cx + 26 * s + i * 5 * s, cy), 3.2 * s, Paint()..color = glow.withOpacity(0.85));
     }
-    c.drawRect(Rect.fromLTWH(cx + 46 * s, cy - 3 * s, 22 * s, 5 * s), Paint()..color = const Color(0xFF78909C));
+    c.drawRect(Rect.fromLTWH(cx + 48 * s, cy - 3 * s, 24 * s, 5 * s), Paint()..color = const Color(0xFF78909C));
   }
 
-  static void shotgun(Canvas c, double cx, double cy, double s) {
+  static void shotgun(Canvas c, double cx, double cy, double s, {Color? accent}) {
+    final body = accent ?? const Color(0xFF546E7A);
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - 2 * s, cy - 4 * s, 16 * s, 12 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF6D4C41));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 12 * s, cy - 5 * s, 28 * s, 10 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
-    c.drawRect(Rect.fromLTWH(cx + 38 * s, cy - 3 * s, 18 * s, 5 * s), Paint()..color = const Color(0xFF37474F));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 12 * s, cy - 5 * s, 30 * s, 10 * s), Radius.circular(1 * s)), Paint()..color = body);
+    c.drawRect(Rect.fromLTWH(cx + 40 * s, cy - 3 * s, 20 * s, 5 * s), Paint()..color = const Color(0xFF37474F));
   }
 
-  static void powerSword(Canvas c, double cx, double cy, double s) {
-    final blade = Path()
+  static void powerSword(Canvas c, double cx, double cy, double s, {Color? accent}) {
+    final blade = accent ?? const Color(0xFF4DD0E1);
+    final p = Path()
       ..moveTo(cx + 10 * s, cy - 2 * s)
-      ..lineTo(cx + 14 * s, cy - 34 * s)
+      ..lineTo(cx + 14 * s, cy - 42 * s)
       ..lineTo(cx + 18 * s, cy - 2 * s)
       ..close();
-    c.drawPath(blade, Paint()..color = const Color(0xFF4DD0E1));
-    c.drawRect(Rect.fromCenter(center: Offset(cx + 10 * s, cy), width: 16 * s, height: 5 * s), Paint()..color = const Color(0xFFB8860B));
-    c.drawCircle(Offset(cx + 10 * s, cy), 4.5 * s, Paint()..color = const Color(0xFFECEFF1));
+    c.drawPath(p, Paint()..color = blade);
+    c.drawPath(p, Paint()..color = Colors.white.withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 1.2 * s);
+    c.drawRect(Rect.fromCenter(center: Offset(cx + 10 * s, cy), width: 18 * s, height: 6 * s), Paint()..color = const Color(0xFFB8860B));
+    c.drawCircle(Offset(cx + 10 * s, cy), 5 * s, Paint()..color = const Color(0xFFECEFF1));
+    // energy tip
+    c.drawCircle(Offset(cx + 14 * s, cy - 40 * s), 3 * s, Paint()..color = blade.withOpacity(0.7));
   }
 
-  static void chainAxe(Canvas c, double cx, double cy, double s) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 2.5 * s, 26 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF8D4E3A));
-    final head = Offset(cx + 34 * s, cy);
+  static void chainAxe(Canvas c, double cx, double cy, double s, {Color? accent}) {
+    final teeth = accent ?? const Color(0xFF78909C);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 2.5 * s, 30 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF8D4E3A));
+    final head = Offset(cx + 38 * s, cy);
     final top = Path()
       ..moveTo(head.dx, head.dy - 3 * s)
-      ..lineTo(head.dx + 7 * s, head.dy - 20 * s)
-      ..lineTo(head.dx + 16 * s, head.dy - 7 * s)
-      ..lineTo(head.dx + 9 * s, head.dy)
+      ..lineTo(head.dx + 8 * s, head.dy - 24 * s)
+      ..lineTo(head.dx + 18 * s, head.dy - 8 * s)
+      ..lineTo(head.dx + 10 * s, head.dy)
       ..close();
     final bot = Path()
       ..moveTo(head.dx, head.dy + 3 * s)
-      ..lineTo(head.dx + 7 * s, head.dy + 20 * s)
-      ..lineTo(head.dx + 16 * s, head.dy + 7 * s)
-      ..lineTo(head.dx + 9 * s, head.dy)
+      ..lineTo(head.dx + 8 * s, head.dy + 24 * s)
+      ..lineTo(head.dx + 18 * s, head.dy + 8 * s)
+      ..lineTo(head.dx + 10 * s, head.dy)
       ..close();
-    c.drawPath(top, Paint()..color = const Color(0xFF78909C));
-    c.drawPath(bot, Paint()..color = const Color(0xFF78909C));
-    c.drawCircle(head, 5.5 * s, Paint()..color = const Color(0xFF546E7A));
-    c.drawCircle(head, 3 * s, Paint()..color = const Color(0xFFE53935));
+    c.drawPath(top, Paint()..color = teeth);
+    c.drawPath(bot, Paint()..color = teeth);
+    // teeth notches
+    for (int i = 0; i < 4; i++) {
+      c.drawLine(Offset(head.dx + 6 * s + i * 2.5 * s, head.dy - 8 * s - i * 3 * s), Offset(head.dx + 10 * s + i * 2.5 * s, head.dy - 12 * s - i * 3 * s), Paint()..color = const Color(0xFF37474F)..strokeWidth = 1.5 * s);
+    }
+    c.drawCircle(head, 6 * s, Paint()..color = const Color(0xFF546E7A));
+    c.drawCircle(head, 3.2 * s, Paint()..color = const Color(0xFFE53935));
   }
 
-  static void thunderHammer(Canvas c, double cx, double cy, double s) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 2 * s, 32 * s, 4.5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF3E2723));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 44 * s, cy), width: 16 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF455A64));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 44 * s, cy), width: 11 * s, height: 13 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFFB8860B));
+  static void thunderHammer(Canvas c, double cx, double cy, double s, {Color? accent}) {
+    final headCol = accent ?? const Color(0xFFB8860B);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 2 * s, 36 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF3E2723));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 48 * s, cy), width: 18 * s, height: 24 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF455A64));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 48 * s, cy), width: 12 * s, height: 16 * s), Radius.circular(1 * s)), Paint()..color = headCol);
+    c.drawCircle(Offset(cx + 48 * s, cy), 4 * s, Paint()..color = const Color(0xFF37474F));
+    // lightning arcs
+    c.drawLine(Offset(cx + 48 * s, cy - 14 * s), Offset(cx + 54 * s, cy - 22 * s), Paint()..color = const Color(0xFF00E5FF).withOpacity(0.7)..strokeWidth = 1.5 * s);
+    c.drawLine(Offset(cx + 48 * s, cy + 14 * s), Offset(cx + 54 * s, cy + 22 * s), Paint()..color = const Color(0xFF00E5FF).withOpacity(0.7)..strokeWidth = 1.5 * s);
   }
 
   static void chaosHound(Canvas c, double cx, double cy, {double flash = 0}) {
-    c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 2), width: 48, height: 26), Paint()..color = const Color(0xFF2D1F14));
-    c.drawOval(Rect.fromCenter(center: Offset(cx + 20, cy - 6), width: 26, height: 20), Paint()..color = const Color(0xFF3E2723));
-    c.drawCircle(Offset(cx + 24, cy - 10), 3.5, Paint()..color = const Color(0xFFFFFDE7));
-    for (final lx in [-16.0, -6.0, 6.0, 16.0]) {
-      c.drawLine(Offset(cx + lx, cy + 12), Offset(cx + lx - 3, cy + 24), Paint()..color = const Color(0xFF4E342E)..strokeWidth = 3.5);
+    c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 2), width: 52, height: 28), Paint()..color = const Color(0xFF2D1F14));
+    // ribs
+    for (int i = 0; i < 5; i++) {
+      c.drawLine(Offset(cx - 8.0 + i * 7, cy - 8), Offset(cx - 4.0 + i * 7, cy + 6), Paint()..color = const Color(0xFFD7CCC8)..strokeWidth = 1.8);
     }
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 28, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
+    c.drawOval(Rect.fromCenter(center: Offset(cx + 22, cy - 8), width: 28, height: 22), Paint()..color = const Color(0xFF3E2723));
+    final jaw = Path()..moveTo(cx + 30, cy - 2)..lineTo(cx + 42, cy + 8)..lineTo(cx + 28, cy + 10)..close();
+    c.drawPath(jaw, Paint()..color = const Color(0xFF4A1C1C));
+    for (final fx in [32.0, 36.0, 40.0]) {
+      c.drawLine(Offset(cx + fx, cy), Offset(cx + fx + 1, cy + 8), Paint()..color = const Color(0xFFECEFF1)..strokeWidth = 1.8..strokeCap = StrokeCap.round);
+    }
+    c.drawCircle(Offset(cx + 26, cy - 12), 4, Paint()..color = const Color(0xFFFFFDE7));
+    c.drawCircle(Offset(cx + 26, cy - 12), 1.8, Paint()..color = const Color(0xFFB71C1C));
+    for (final lx in [-18.0, -6.0, 8.0, 18.0]) {
+      c.drawLine(Offset(cx + lx, cy + 12), Offset(cx + lx - 3, cy + 26), Paint()..color = const Color(0xFF4E342E)..strokeWidth = 3.8..strokeCap = StrokeCap.round);
+      c.drawCircle(Offset(cx + lx - 3, cy + 27), 3.2, Paint()..color = const Color(0xFFB71C1C));
+    }
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 30, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void cultistShooter(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     final cloak = Path()
       ..moveTo(cx - 14 * s, cy)
-      ..quadraticBezierTo(cx - 28 * s, cy + 24 * s, cx - 8 * s, cy + 40 * s)
-      ..lineTo(cx + 8 * s, cy + 40 * s)
-      ..quadraticBezierTo(cx + 22 * s, cy + 20 * s, cx + 10 * s, cy)
+      ..quadraticBezierTo(cx - 30 * s, cy + 26 * s, cx - 8 * s, cy + 44 * s)
+      ..lineTo(cx + 8 * s, cy + 44 * s)
+      ..quadraticBezierTo(cx + 24 * s, cy + 22 * s, cx + 10 * s, cy)
       ..close();
-    c.drawPath(cloak, Paint()..color = const Color(0xFF5D4037).withOpacity(0.9));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 8 * s), width: 22 * s, height: 24 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF4E342E));
-    c.drawCircle(Offset(cx, cy - 12 * s), 10 * s, Paint()..color = const Color(0xFF37474F));
-    c.drawCircle(Offset(cx - 3 * s, cy - 13 * s), 3 * s, Paint()..color = const Color(0xFF1B5E20));
-    c.drawCircle(Offset(cx + 3 * s, cy - 13 * s), 3 * s, Paint()..color = const Color(0xFF1B5E20));
-    bolter(c, cx + 2 * s, cy + 2 * s, s * 0.75);
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 32 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
-  }
-
-  static void cultistMelee(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 12 * s), width: 28 * s, height: 36 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF6B1B1B));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 26 * s, height: 22 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF5D4037));
-    c.drawCircle(Offset(cx, cy - 16 * s), 10 * s, Paint()..color = const Color(0xFF3E2723));
-    c.drawCircle(Offset(cx - 3 * s, cy - 16 * s), 1.8 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawCircle(Offset(cx + 3 * s, cy - 16 * s), 1.8 * s, Paint()..color = const Color(0xFFFF1744));
-    for (int i = 0; i < 3; i++) {
-      c.drawCircle(Offset(cx + (i - 1) * 8.0 * s, cy - 28 * s), 5 * s, Paint()..color = const Color(0xFFECEFF1));
-    }
-    c.drawLine(Offset(cx + 14 * s, cy + 2 * s), Offset(cx + 30 * s, cy - 18 * s), Paint()..color = const Color(0xFFB0BEC5)..strokeWidth = 3.2 * s);
-    c.drawLine(Offset(cx - 14 * s, cy + 2 * s), Offset(cx - 28 * s, cy - 14 * s), Paint()..color = const Color(0xFF90A4AE)..strokeWidth = 2.8 * s);
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 32 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
-  }
-
-  static void shieldedMarine(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFF2979FF), bool withGun = false, double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 30 * s, height: 28 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF2A2A2A));
-    c.drawCircle(Offset(cx, cy - 16 * s), 11 * s, Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx - 3.5 * s, cy - 16 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawCircle(Offset(cx + 3.5 * s, cy - 16 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 6 * s, cy + 6 * s), width: 36 * s, height: 48 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF37474F));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 6 * s, cy + 6 * s), width: 30 * s, height: 42 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF263238));
-    if (withGun) bolter(c, cx - 6 * s, cy + 2 * s, s * 0.7);
+    c.drawPath(cloak, Paint()..color = const Color(0xFF5D4037).withOpacity(0.92));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 8 * s, cy + 30 * s), width: 11 * s, height: 18 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 30 * s), width: 11 * s, height: 18 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 8 * s), width: 24 * s, height: 26 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF4E342E));
+    // gas mask
+    c.drawCircle(Offset(cx, cy - 12 * s), 11 * s, Paint()..color = const Color(0xFF37474F));
+    c.drawCircle(Offset(cx - 3.5 * s, cy - 13 * s), 3.2 * s, Paint()..color = const Color(0xFF1B5E20));
+    c.drawCircle(Offset(cx + 3.5 * s, cy - 13 * s), 3.2 * s, Paint()..color = const Color(0xFF1B5E20));
+    c.drawOval(Rect.fromCenter(center: Offset(cx, cy - 5 * s), width: 12 * s, height: 6 * s), Paint()..color = const Color(0xFF546E7A));
+    bolter(c, cx + 2 * s, cy + 2 * s, s * 0.78);
     if (flash > 0) c.drawCircle(Offset(cx, cy), 34 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
+  static void cultistMelee(Canvas c, double cx, double cy, double s, {double flash = 0}) {
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 8 * s, cy + 32 * s), width: 12 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4A1515));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 32 * s), width: 12 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4A1515));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 12 * s), width: 30 * s, height: 38 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF6B1B1B));
+    // apron
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 18 * s), width: 20 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 28 * s, height: 24 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF5D4037));
+    c.drawCircle(Offset(cx, cy - 16 * s), 11 * s, Paint()..color = const Color(0xFF3E2723));
+    c.drawCircle(Offset(cx - 3.5 * s, cy - 16 * s), 2 * s, Paint()..color = const Color(0xFFFF1744));
+    c.drawCircle(Offset(cx + 3.5 * s, cy - 16 * s), 2 * s, Paint()..color = const Color(0xFFFF1744));
+    for (int i = 0; i < 3; i++) {
+      final ox = (i - 1) * 9.0 * s;
+      c.drawCircle(Offset(cx + ox, cy - 30 * s), 5.5 * s, Paint()..color = const Color(0xFFECEFF1));
+      c.drawCircle(Offset(cx + ox - 1.5 * s, cy - 31 * s), 1.2 * s, Paint()..color = const Color(0xFF212121));
+      c.drawCircle(Offset(cx + ox + 1.5 * s, cy - 31 * s), 1.2 * s, Paint()..color = const Color(0xFF212121));
+    }
+    c.drawLine(Offset(cx + 16 * s, cy + 2 * s), Offset(cx + 34 * s, cy - 22 * s), Paint()..color = const Color(0xFFB0BEC5)..strokeWidth = 3.5 * s..strokeCap = StrokeCap.round);
+    c.drawLine(Offset(cx - 16 * s, cy + 2 * s), Offset(cx - 32 * s, cy - 16 * s), Paint()..color = const Color(0xFF90A4AE)..strokeWidth = 3.0 * s..strokeCap = StrokeCap.round);
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 34 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
+  }
+
+  static void shieldedMarine(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFF2979FF), bool withGun = false, double flash = 0}) {
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 9 * s, cy + 28 * s), width: 12 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF212121));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 9 * s, cy + 28 * s), width: 12 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF212121));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 32 * s, height: 30 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF2A2A2A));
+    c.drawCircle(Offset(cx - 18 * s, cy - 4 * s), 11 * s, Paint()..color = const Color(0xFF1A1A1A));
+    c.drawCircle(Offset(cx + 18 * s, cy - 4 * s), 11 * s, Paint()..color = const Color(0xFF1A1A1A));
+    c.drawCircle(Offset(cx, cy - 16 * s), 12 * s, Paint()..color = const Color(0xFF1A1A1A));
+    c.drawCircle(Offset(cx - 4 * s, cy - 16 * s), 2.6 * s, Paint()..color = const Color(0xFFFF1744));
+    c.drawCircle(Offset(cx + 4 * s, cy - 16 * s), 2.6 * s, Paint()..color = const Color(0xFFFF1744));
+    // tower shield
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 6 * s), width: 40 * s, height: 52 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF37474F));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 6 * s), width: 34 * s, height: 46 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF263238));
+    final tri = Path()
+      ..moveTo(cx + 8 * s, cy - 8 * s)
+      ..lineTo(cx, cy + 4 * s)
+      ..lineTo(cx + 16 * s, cy + 4 * s)
+      ..close();
+    c.drawPath(tri, Paint()..color = accent.withOpacity(0.8)..style = PaintingStyle.stroke..strokeWidth = 2 * s);
+    c.drawLine(Offset(cx + 8 * s, cy + 6 * s), Offset(cx + 8 * s, cy + 22 * s), Paint()..color = accent.withOpacity(0.5)..strokeWidth = 2 * s);
+    if (withGun) bolter(c, cx - 8 * s, cy + 2 * s, s * 0.72);
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 36 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
+  }
+
   static void hereticBoss(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawCircle(Offset(cx, cy - 8 * s), 36 * s, Paint()..color = const Color(0xFF4A0000).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 3 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 16 * s), width: 28 * s, height: 40 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx, cy - 14 * s), 11 * s, Paint()..color = const Color(0xFFC4A484));
-    c.drawCircle(Offset(cx - 3.5 * s, cy - 14 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawCircle(Offset(cx + 3.5 * s, cy - 14 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawLine(Offset(cx + 16 * s, cy + 8 * s), Offset(cx + 28 * s, cy - 28 * s), Paint()..color = const Color(0xFF5D4037)..strokeWidth = 4 * s);
-    c.drawCircle(Offset(cx + 28 * s, cy - 30 * s), 7 * s, Paint()..color = const Color(0xFFFF1744).withOpacity(0.7));
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 50 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
+    c.drawCircle(Offset(cx, cy - 8 * s), 38 * s, Paint()..color = const Color(0xFF4A0000).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 3 * s);
+    for (int i = 0; i < 6; i++) {
+      final a = (i / 6) * 2 * pi - pi / 2;
+      final x = cx + cos(a) * 38 * s;
+      final y = cy - 8 * s + sin(a) * 38 * s;
+      c.drawLine(Offset(x, y), Offset(x + cos(a) * 12 * s, y + sin(a) * 12 * s), Paint()..color = const Color(0xFF78909C)..strokeWidth = 2.5 * s);
+      c.drawCircle(Offset(x + cos(a) * 14 * s, y + sin(a) * 14 * s), 4.5 * s, Paint()..color = const Color(0xFFECEFF1));
+    }
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 16 * s), width: 30 * s, height: 42 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawCircle(Offset(cx, cy + 14 * s), 7 * s, Paint()..color = const Color(0xFFB8860B));
+    c.drawCircle(Offset(cx, cy - 14 * s), 12 * s, Paint()..color = const Color(0xFFC4A484));
+    for (int i = 0; i < 5; i++) {
+      final a = -2.2 + i * 0.35;
+      c.drawLine(Offset(cx, cy - 18 * s), Offset(cx + cos(a) * 18 * s, cy - 18 * s + sin(a) * 16 * s), Paint()..color = const Color(0xFF8B0000)..strokeWidth = 2.5 * s);
+    }
+    c.drawCircle(Offset(cx - 4 * s, cy - 14 * s), 2.6 * s, Paint()..color = const Color(0xFFFF1744));
+    c.drawCircle(Offset(cx + 4 * s, cy - 14 * s), 2.6 * s, Paint()..color = const Color(0xFFFF1744));
+    c.drawLine(Offset(cx + 18 * s, cy + 8 * s), Offset(cx + 30 * s, cy - 30 * s), Paint()..color = const Color(0xFF5D4037)..strokeWidth = 4.5 * s);
+    c.drawCircle(Offset(cx + 30 * s, cy - 32 * s), 8 * s, Paint()..color = const Color(0xFFFF1744).withOpacity(0.75));
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 52 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
 
   static void knightBoss(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 40 * s, height: 34 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx, cy), 8 * s, Paint()..color = const Color(0xFFB71C1C));
-    c.drawCircle(Offset(cx, cy - 22 * s), 12 * s, Paint()..color = const Color(0xFF212121));
-    c.drawCircle(Offset(cx - 3 * s, cy - 22 * s), 2.5 * s, Paint()..color = const Color(0xFFFF6D00));
-    c.drawCircle(Offset(cx + 3 * s, cy - 22 * s), 2.5 * s, Paint()..color = const Color(0xFFFF6D00));
-    powerSword(c, cx + 8 * s, cy + 4 * s, s * 0.95);
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 48 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
+    c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 52 * s, height: 38 * s), Paint()..color = const Color(0xFF4E342E).withOpacity(0.5));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 13 * s, cy + 34 * s), width: 17 * s, height: 28 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF2A2A2A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 13 * s, cy + 34 * s), width: 17 * s, height: 28 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF2A2A2A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 42 * s, height: 36 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawCircle(Offset(cx, cy), 9 * s, Paint()..color = const Color(0xFFB71C1C));
+    c.drawCircle(Offset(cx, cy), 4.5 * s, Paint()..color = const Color(0xFFFFD700));
+    c.drawCircle(Offset(cx - 24 * s, cy - 8 * s), 15 * s, Paint()..color = const Color(0xFF3E2723));
+    c.drawCircle(Offset(cx + 24 * s, cy - 8 * s), 15 * s, Paint()..color = const Color(0xFF3E2723));
+    c.drawCircle(Offset(cx, cy - 22 * s), 13 * s, Paint()..color = const Color(0xFF212121));
+    c.drawCircle(Offset(cx - 3.5 * s, cy - 22 * s), 2.6 * s, Paint()..color = const Color(0xFFFF6D00));
+    c.drawCircle(Offset(cx + 3.5 * s, cy - 22 * s), 2.6 * s, Paint()..color = const Color(0xFFFF6D00));
+    powerSword(c, cx + 10 * s, cy + 4 * s, s * 1.05);
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 50 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
 
   static void kingBossDraw(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     final cape = Path()
-      ..moveTo(cx - 20 * s, cy)
-      ..quadraticBezierTo(cx - 45 * s, cy + 35 * s, cx - 10 * s, cy + 52 * s)
-      ..lineTo(cx + 10 * s, cy + 52 * s)
-      ..quadraticBezierTo(cx + 30 * s, cy + 30 * s, cx + 16 * s, cy)
+      ..moveTo(cx - 22 * s, cy)
+      ..quadraticBezierTo(cx - 48 * s, cy + 36 * s, cx - 12 * s, cy + 56 * s)
+      ..lineTo(cx + 12 * s, cy + 56 * s)
+      ..quadraticBezierTo(cx + 32 * s, cy + 32 * s, cx + 18 * s, cy)
       ..close();
-    c.drawPath(cape, Paint()..color = const Color(0xFF4A148C).withOpacity(0.85));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 44 * s, height: 36 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 44 * s, height: 36 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFFC9A227)..style = PaintingStyle.stroke..strokeWidth = 2.5 * s);
-    c.drawCircle(Offset(cx, cy - 22 * s), 11 * s, Paint()..color = const Color(0xFFC4A484));
-    thunderHammer(c, cx + 6 * s, cy + 4 * s, s * 0.85);
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 55 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
+    c.drawPath(cape, Paint()..color = const Color(0xFF4A148C).withOpacity(0.88));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 13 * s, cy + 36 * s), width: 17 * s, height: 30 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 13 * s, cy + 36 * s), width: 17 * s, height: 30 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 46 * s, height: 38 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 46 * s, height: 38 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFFC9A227)..style = PaintingStyle.stroke..strokeWidth = 2.8 * s);
+    c.drawCircle(Offset(cx, cy - 4 * s), 5.5 * s, Paint()..color = const Color(0xFFFF1744));
+    c.drawCircle(Offset(cx - 26 * s, cy - 6 * s), 15 * s, Paint()..color = const Color(0xFF2A2A2A));
+    c.drawCircle(Offset(cx + 26 * s, cy - 6 * s), 15 * s, Paint()..color = const Color(0xFF2A2A2A));
+    c.drawCircle(Offset(cx, cy - 22 * s), 12 * s, Paint()..color = const Color(0xFFC4A484));
+    thunderHammer(c, cx + 8 * s, cy + 4 * s, s * 0.9);
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 58 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
 }
 
@@ -495,8 +702,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int _savedPlaySeconds = 0;
 
   Difficulty difficulty = Difficulty.normal;
+  SkillTree skills = SkillTree();
+  int skillPoints = 0;
+  Customization custom = Customization();
 
-  // Arena (after beat level 25)
   bool arenaMode = false;
   int arenaKills = 0;
   int arenaWave = 1;
@@ -515,6 +724,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   double spawnTimer = 0;
   double spawnInterval = 1.2;
 
+  int baseBolter = 8, baseRifle = 18, baseShotgun = 10;
+  int baseSword = 12, baseAxe = 14, baseHammer = 28;
+  int baseMaxHealth = 6;
+  double baseSpeed = 210;
+
   int bolterDamage = 8;
   int rifleDamage = 18;
   int shotgunDamage = 10;
@@ -524,6 +738,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int maxHealth = 6;
   double playerSpeed = 210;
   double defenseChance = 0.0;
+  double attackSpeedMult = 1.0; // lower = faster (cooldowns * this)
 
   RangedWeapon rangedWeapon = RangedWeapon.bolter;
   MeleeWeapon meleeWeapon = MeleeWeapon.sword;
@@ -538,7 +753,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   double soundVolume = 0.8;
   double musicVolume = 0.45;
 
-  // Camera shake
   double shakeTime = 0;
   double shakePower = 0;
 
@@ -575,6 +789,54 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool get unlockedShotgun => overallLevel >= 21 || _everReached21;
   bool get unlockedAxe => overallLevel >= 11 || _everReached11;
   bool get unlockedHammer => overallLevel >= 21 || _everReached21;
+
+  /// Enemy HP grows with level + skills pressure
+  double get worldThreat => 1.0 + overallLevel * 0.06 + skills.totalSpent * 0.02;
+
+  void recomputeStats() {
+    maxHealth = baseMaxHealth + skills.hp;
+    playerSpeed = baseSpeed + skills.speed * 12.0;
+    defenseChance = min(0.45, skills.defense * 0.03);
+    attackSpeedMult = max(0.55, 1.0 - skills.attackSpeed * 0.04);
+    final dmgM = 1.0 + skills.damage * 0.06;
+    bolterDamage = (baseBolter * dmgM).round();
+    rifleDamage = (baseRifle * dmgM).round();
+    shotgunDamage = (baseShotgun * dmgM).round();
+    swordDamage = (baseSword * dmgM).round();
+    axeDamage = (baseAxe * dmgM).round();
+    hammerDamage = (baseHammer * dmgM).round();
+  }
+
+  void spendSkill(String id) {
+    if (skillPoints <= 0) return;
+    switch (id) {
+      case 'hp':
+        skills.hp++;
+        break;
+      case 'speed':
+        skills.speed++;
+        break;
+      case 'attackSpeed':
+        if (skills.attackSpeed >= 11) return;
+        skills.attackSpeed++;
+        break;
+      case 'defense':
+        if (skills.defense >= 15) return;
+        skills.defense++;
+        break;
+      case 'damage':
+        skills.damage++;
+        break;
+      default:
+        return;
+    }
+    skillPoints--;
+    recomputeStats();
+    if (isPlaying) {
+      player.maxHealth = maxHealth;
+      if (id == 'hp') player.health = min(player.health + 1, maxHealth);
+    }
+  }
 
   void _checkUnlocks() {
     if (overallLevel >= 11) _everReached11 = true;
@@ -681,6 +943,17 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         final list = jsonDecode(sv) as List<dynamic>;
         saves = list.map((e) => GameSave.fromJson(Map<String, dynamic>.from(e as Map))).toList();
       }
+      final cu = prefs.getString('customization');
+      if (cu != null) {
+        custom = Customization.fromJson(Map<String, dynamic>.from(jsonDecode(cu) as Map));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> persistCustomization() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('customization', jsonEncode(custom.toJson()));
     } catch (_) {}
   }
 
@@ -731,10 +1004,14 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       difficulty: difficulty.name,
       arenaMode: arenaMode,
       arenaKills: arenaKills,
+      skillPoints: skillPoints,
+      skills: skills.toJson(),
+      custom: custom.toJson(),
     );
     saves.insert(0, save);
     if (saves.length > 8) saves = saves.take(8).toList();
     await _persistSaves();
+    await persistCustomization();
     playClick();
   }
 
@@ -743,15 +1020,18 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     currentFloor = s.floor;
     currentLevel = s.level;
     score = s.score;
-    maxHealth = s.maxHealth;
-    bolterDamage = s.bolterDamage;
-    rifleDamage = s.rifleDamage;
-    shotgunDamage = s.shotgunDamage;
-    swordDamage = s.swordDamage;
-    axeDamage = s.axeDamage;
-    hammerDamage = s.hammerDamage;
-    playerSpeed = s.playerSpeed;
-    defenseChance = s.defenseChance;
+    skills = SkillTree.fromJson(s.skills);
+    skillPoints = s.skillPoints;
+    custom = Customization.fromJson(s.custom);
+    baseMaxHealth = 6;
+    baseSpeed = 210;
+    baseBolter = 8;
+    baseRifle = 18;
+    baseShotgun = 10;
+    baseSword = 12;
+    baseAxe = 14;
+    baseHammer = 28;
+    recomputeStats();
     rangedWeapon = RangedWeapon.values.firstWhere((e) => e.name == s.ranged, orElse: () => RangedWeapon.bolter);
     meleeWeapon = MeleeWeapon.values.firstWhere((e) => e.name == s.melee, orElse: () => MeleeWeapon.sword);
     usingMelee = s.usingMelee;
@@ -781,7 +1061,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
     player.health = s.health.clamp(1, maxHealth);
     player.maxHealth = maxHealth;
-    for (final o in ['mainMenu', 'loadSave', 'settings', 'nameInput', 'gameOver', 'levelComplete', 'upgrade', 'victory', 'records', 'backpack']) {
+    for (final o in ['mainMenu', 'loadSave', 'settings', 'nameInput', 'gameOver', 'levelComplete', 'skills', 'victory', 'records', 'backpack']) {
       overlays.remove(o);
     }
     startMusic();
@@ -866,6 +1146,17 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     score = 0;
     currentFloor = 1;
     currentLevel = 1;
+    skills = SkillTree();
+    skillPoints = 0;
+    baseMaxHealth = 6;
+    baseSpeed = 210;
+    baseBolter = 8;
+    baseRifle = 18;
+    baseShotgun = 10;
+    baseSword = 12;
+    baseAxe = 14;
+    baseHammer = 28;
+    recomputeStats();
     portalSpawned = false;
     isBossLevel = false;
     isMiniBossLevel = false;
@@ -882,15 +1173,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     hasDashAbility = false;
     dashCooldown = 0;
     dashActive = 0;
-    bolterDamage = 8;
-    rifleDamage = 18;
-    shotgunDamage = 10;
-    swordDamage = 12;
-    axeDamage = 14;
-    hammerDamage = 28;
-    maxHealth = 6;
-    playerSpeed = 210;
-    defenseChance = 0.0;
     currentZoom = 0.85;
     rangedWeapon = RangedWeapon.bolter;
     meleeWeapon = MeleeWeapon.sword;
@@ -899,7 +1181,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     shakePower = 0;
     _clearEverything();
     _startLevel();
-    for (final o in ['mainMenu', 'nameInput', 'settings', 'gameOver', 'levelComplete', 'upgrade', 'victory', 'records', 'backpack', 'loadSave']) {
+    for (final o in ['mainMenu', 'nameInput', 'settings', 'gameOver', 'levelComplete', 'skills', 'victory', 'records', 'backpack', 'loadSave']) {
       overlays.remove(o);
     }
     startMusic();
@@ -1035,11 +1317,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     isBossLevel = currentLevel == 5;
     isMiniBossLevel = currentLevel == 3;
     spawnTimer = 0;
-    spawnInterval = max(0.45, 1.3 - (currentFloor * 0.1) - (currentLevel * 0.06));
+    spawnInterval = max(0.40, 1.25 - (currentFloor * 0.1) - (currentLevel * 0.06));
     secretBossUnlockedThisLevel = false;
     secretBossSpawned = false;
     cornerStandTimer = 0;
     _checkUnlocks();
+    recomputeStats();
 
     world.add(Floor(size: Vector2(mapWidth, mapHeight))..priority = 0);
     _createWalls();
@@ -1059,7 +1342,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       world.add(MiniBoss(floor: currentFloor, position: Vector2(mapWidth / 2, mapHeight / 2 - 220))..priority = 24);
     } else {
       enemiesToSpawn = 6 + (currentLevel * 2) + (currentFloor * 3);
-      if (difficulty == Difficulty.hard) enemiesToSpawn = (enemiesToSpawn * 1.25).round();
+      enemiesToSpawn = (enemiesToSpawn * worldThreat * 0.85).round();
+      if (difficulty == Difficulty.hard) enemiesToSpawn = (enemiesToSpawn * 1.2).round();
       if (difficulty == Difficulty.easy) enemiesToSpawn = max(4, (enemiesToSpawn * 0.85).round());
     }
   }
@@ -1067,7 +1351,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void _startArenaLevel() {
     enemiesSpawned = 0;
     enemiesAlive = 0;
-    enemiesToSpawn = 999999; // endless
+    enemiesToSpawn = 999999;
     portalSpawned = false;
     nearPortal = false;
     isBossLevel = false;
@@ -1078,6 +1362,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     secretBossSpawned = false;
     cornerStandTimer = 0;
     _checkUnlocks();
+    recomputeStats();
     world.add(Floor(size: Vector2(mapWidth, mapHeight))..priority = 0);
     _createWalls();
     _createObstacles();
@@ -1140,6 +1425,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     secretBossDefeated = true;
     hasDashAbility = true;
     score += 6666;
+    skillPoints += 2;
     enemiesAlive = max(0, enemiesAlive - 1);
     triggerShake(power: 12, time: 0.35);
     _ensureDashButton();
@@ -1270,8 +1556,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   @override
   void update(double dt) {
     super.update(dt);
-
-    // camera shake
     if (shakeTime > 0) {
       shakeTime -= dt;
       final ox = (Random().nextDouble() - 0.5) * 2 * shakePower * (shakeTime > 0 ? 1 : 0);
@@ -1281,13 +1565,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
       if (shakeTime <= 0) shakePower = 0;
     }
-
     if (!isPlaying || isPaused) return;
     if (dashCooldown > 0) dashCooldown = max(0, dashCooldown - dt);
     if (dashActive > 0) dashActive = max(0, dashActive - dt);
 
     if (arenaMode) {
-      // keep pressure: spawn if few alive
       if (enemiesAlive < 6 + arenaWave.clamp(0, 10)) {
         spawnTimer += dt;
         final iv = max(0.35, spawnInterval - arenaWave * 0.03);
@@ -1339,6 +1621,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       score += isBoss ? 250 : (12 + arenaWave * 2);
       if (arenaKills % 100 == 0) {
         arenaWave++;
+        skillPoints += 1;
         _spawnArenaBoss();
       }
       return;
@@ -1352,48 +1635,29 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
   }
 
+  /// After portal: award skill point(s), open skills, then continue
   void goToNextLevel() {
     isPlaying = false;
     hidePortalButton();
     nearPortal = false;
+    // skill points: 1 per level, +1 on boss levels
+    skillPoints += isBossLevel ? 2 : 1;
     if (currentFloor == 5 && currentLevel == 5) {
       stopMusic();
       overlays.add('victory');
       return;
     }
-    if (currentLevel == 5) {
-      overlays.add('upgrade');
-      return;
-    }
-    currentLevel++;
-    overlays.add('levelComplete');
+    overlays.add('skills');
   }
 
-  void applyUpgrade(String type) {
-    switch (type) {
-      case 'bolter':
-        bolterDamage += 5;
-        rifleDamage += 4;
-        shotgunDamage += 3;
-        break;
-      case 'sword':
-        swordDamage += 5;
-        axeDamage += 4;
-        hammerDamage += 6;
-        break;
-      case 'health':
-        maxHealth += 2;
-        break;
-      case 'speed':
-        playerSpeed += 28;
-        break;
-      case 'defense':
-        defenseChance = min(0.45, defenseChance + 0.13);
-        break;
+  void finishSkillsAndContinue() {
+    overlays.remove('skills');
+    if (currentLevel == 5) {
+      currentFloor++;
+      currentLevel = 1;
+    } else {
+      currentLevel++;
     }
-    currentFloor++;
-    currentLevel = 1;
-    overlays.remove('upgrade');
     overlays.add('levelComplete');
   }
 
@@ -1413,6 +1677,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void closeSettings() {
     overlays.remove('settings');
     isPaused = false;
+    persistCustomization();
   }
 
   void closeBackpack() {
@@ -1428,7 +1693,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     addScoreEntry(completed: false, fromArena: arenaMode);
     arenaMode = false;
     _clearEverything();
-    for (final o in ['settings', 'gameOver', 'levelComplete', 'upgrade', 'victory', 'records', 'nameInput', 'backpack', 'loadSave']) {
+    for (final o in ['settings', 'gameOver', 'levelComplete', 'skills', 'victory', 'records', 'nameInput', 'backpack', 'loadSave']) {
       overlays.remove(o);
     }
     overlays.add('mainMenu');
@@ -1440,7 +1705,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     isPaused = false;
     arenaMode = false;
     _clearEverything();
-    for (final o in ['settings', 'gameOver', 'levelComplete', 'upgrade', 'victory', 'records', 'nameInput', 'backpack', 'loadSave']) {
+    for (final o in ['settings', 'gameOver', 'levelComplete', 'skills', 'victory', 'records', 'nameInput', 'backpack', 'loadSave']) {
       overlays.remove(o);
     }
     overlays.add('mainMenu');
@@ -1492,14 +1757,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     hudPaint.render(canvas, 'Score: $score', Vector2(14, arenaMode ? 58 : 36));
     hudPaint.render(canvas, 'HP: ${player.health}/${player.maxHealth}', Vector2(14, arenaMode ? 80 : 58));
     hudPaint.render(canvas, '${difficulty.labelRu} | $currentWeaponName', Vector2(14, 102));
+    hudPaint.render(canvas, 'SP: $skillPoints', Vector2(14, 124));
     final sec = _currentPlaySeconds();
     hudPaint.render(
       canvas,
       'Time ${(sec ~/ 60).toString().padLeft(2, '0')}:${(sec % 60).toString().padLeft(2, '0')}',
-      Vector2(14, 124),
+      Vector2(14, 146),
     );
     if (hasDashAbility && dashCooldown > 0) {
-      hudPaint.render(canvas, 'U CD ${dashCooldown.toStringAsFixed(1)}', Vector2(14, 146));
+      hudPaint.render(canvas, 'U CD ${dashCooldown.toStringAsFixed(1)}', Vector2(14, 168));
     }
   }
 }
@@ -1697,6 +1963,83 @@ class Portal extends PositionComponent with CollisionCallbacks {
   }
 }
 // ====================== MENUS ======================
+class SkillsMenu extends StatefulWidget {
+  final InquisitorGame game;
+  const SkillsMenu(this.game, {super.key});
+  @override
+  State<SkillsMenu> createState() => _SkillsMenuState();
+}
+
+class _SkillsMenuState extends State<SkillsMenu> {
+  @override
+  Widget build(BuildContext context) {
+    final g = widget.game;
+    final s = g.skills;
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.94),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('ОЧКИ НАВЫКОВ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
+              Text('Доступно: ${g.skillPoints}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  children: [
+                    _row('Здоровье', 'HP +1', s.hp, () => setState(() => g.spendSkill('hp'))),
+                    _row('Скорость', 'Ход +12', s.speed, () => setState(() => g.spendSkill('speed'))),
+                    _row('Скор. атаки', 'КД −4% (макс 11)', s.attackSpeed, () => setState(() => g.spendSkill('attackSpeed'))),
+                    _row('Защита', 'Блок +3% (макс 15)', s.defense, () => setState(() => g.spendSkill('defense'))),
+                    _row('Урон', 'Весь урон +6%', s.damage, () => setState(() => g.spendSkill('damage'))),
+                  ],
+                ),
+              ),
+              Text(
+                'Текущее: HP ${g.maxHealth} • Скор ${g.playerSpeed.toInt()} • Блок ${(g.defenseChance * 100).toInt()}% • AS ${(g.attackSpeedMult * 100).toInt()}%',
+                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A1A1A), side: const BorderSide(color: Color(0xFFFFD700)), padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () {
+                  g.playClick();
+                  g.finishSkillsAndContinue();
+                },
+                child: Text(g.skillPoints > 0 ? 'ПРОДОЛЖИТЬ (осталось ${g.skillPoints})' : 'ПРОДОЛЖИТЬ', style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String title, String desc, int rank, VoidCallback onAdd) {
+    final can = widget.game.skillPoints > 0;
+    return Card(
+      color: const Color(0xFF1A1A1A),
+      child: ListTile(
+        title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        subtitle: Text('$desc  •  ранг $rank', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        trailing: ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: can ? const Color(0xFFB8860B) : const Color(0xFF333333)),
+          onPressed: can
+              ? () {
+                  widget.game.playClick();
+                  onAdd();
+                }
+              : null,
+          child: const Text('+1', style: TextStyle(color: Colors.white)),
+        ),
+      ),
+    );
+  }
+}
+
 class BackpackMenu extends StatelessWidget {
   final InquisitorGame game;
   const BackpackMenu(this.game, {super.key});
@@ -1712,14 +2055,16 @@ class BackpackMenu extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text('РЮКЗАК', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
-              Text('${game.playerName} • ${game.difficulty.labelRu}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              const SizedBox(height: 12),
+              Text('${game.playerName} • ${game.difficulty.labelRu} • SP ${game.skillPoints}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+              const SizedBox(height: 8),
               _s('HP', '${game.player.health}/${game.maxHealth}'),
               _s('Скорость', '${game.playerSpeed.toInt()}'),
               _s('Защита', '${(game.defenseChance * 100).toInt()}%'),
+              _s('Скор. атаки', '${(game.attackSpeedMult * 100).toInt()}% КД'),
+              _s('Урон+', '+${game.skills.damage * 6}%'),
               if (game.hasDashAbility) _s('U', 'DASH'),
               if (game.arenaMode) _s('Арена', 'W${game.arenaWave} / ${game.arenaKills} kills'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               const Text('Дальний', style: TextStyle(color: Color(0xFFFFD700))),
               Wrap(spacing: 8, children: [
                 _w('Болтер', true, !game.usingMelee && game.rangedWeapon == RangedWeapon.bolter, () {
@@ -1768,9 +2113,7 @@ class BackpackMenu extends StatelessWidget {
       );
 
   Widget _w(String n, bool u, bool sel, VoidCallback f) => ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: sel ? const Color(0xFFB8860B) : (u ? const Color(0xFF2A2A2A) : const Color(0xFF151515)),
-        ),
+        style: ElevatedButton.styleFrom(backgroundColor: sel ? const Color(0xFFB8860B) : (u ? const Color(0xFF2A2A2A) : const Color(0xFF151515))),
         onPressed: u ? f : null,
         child: Text(u ? n : '🔒 $n', style: TextStyle(color: u ? Colors.white : Colors.white24)),
       );
@@ -1804,38 +2147,19 @@ class _NameInputMenuState extends State<NameInputMenu> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Text('ИМЯ ИНКВИЗИТОРА', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-              TextField(
-                controller: c,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(hintText: 'Имя...', hintStyle: TextStyle(color: Colors.white38)),
-              ),
+              TextField(controller: c, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Имя...', hintStyle: TextStyle(color: Colors.white38))),
               const SizedBox(height: 20),
               const Text('СЛОЖНОСТЬ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 16)),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  _diffBtn(Difficulty.easy, Colors.green),
-                  const SizedBox(width: 8),
-                  _diffBtn(Difficulty.normal, const Color(0xFFB8860B)),
-                  const SizedBox(width: 8),
-                  _diffBtn(Difficulty.hard, Colors.redAccent),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                diff == Difficulty.easy
-                    ? 'Меньше HP и урона у врагов'
-                    : (diff == Difficulty.hard
-                        ? 'Больше HP, урон, фазы боссов'
-                        : 'Стандартный баланс'),
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-                textAlign: TextAlign.center,
-              ),
+              Row(children: [
+                _diffBtn(Difficulty.easy, Colors.green),
+                const SizedBox(width: 8),
+                _diffBtn(Difficulty.normal, const Color(0xFFB8860B)),
+                const SizedBox(width: 8),
+                _diffBtn(Difficulty.hard, Colors.redAccent),
+              ]),
               const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () => widget.game.confirmNameAndStart(c.text, diff),
-                child: const Text('НАЧАТЬ'),
-              ),
+              ElevatedButton(onPressed: () => widget.game.confirmNameAndStart(c.text, diff), child: const Text('НАЧАТЬ')),
               TextButton(
                 onPressed: () {
                   widget.game.overlays.remove('nameInput');
@@ -1854,11 +2178,7 @@ class _NameInputMenuState extends State<NameInputMenu> {
     final sel = diff == d;
     return Expanded(
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: sel ? color : const Color(0xFF1A1A1A),
-          side: BorderSide(color: color, width: sel ? 2 : 1),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-        ),
+        style: ElevatedButton.styleFrom(backgroundColor: sel ? color : const Color(0xFF1A1A1A), side: BorderSide(color: color, width: sel ? 2 : 1), padding: const EdgeInsets.symmetric(vertical: 12)),
         onPressed: () => setState(() => diff = d),
         child: Text(d.labelRu, style: TextStyle(color: sel ? Colors.white : color, fontWeight: FontWeight.bold, fontSize: 13)),
       ),
@@ -1918,17 +2238,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  'SOUL OF THE\nINQUISITOR',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Color(0xFFFFD700),
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    height: 1.15,
-                    shadows: [Shadow(color: Colors.redAccent, blurRadius: 14)],
-                  ),
-                ),
+                const Text('SOUL OF THE\nINQUISITOR', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 32, fontWeight: FontWeight.w900, height: 1.15, shadows: [Shadow(color: Colors.redAccent, blurRadius: 14)])),
                 const SizedBox(height: 8),
                 const Text('by Инквизитор Данте', style: TextStyle(color: Color(0xFFB8860B), fontSize: 14)),
                 const SizedBox(height: 40),
@@ -1964,12 +2274,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
     return SizedBox(
       width: 280,
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF1A1A1A),
-          side: const BorderSide(color: Color(0xFFB8860B), width: 1.5),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
+        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A1A1A), side: const BorderSide(color: Color(0xFFB8860B), width: 1.5), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
         onPressed: onTap,
         child: Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Color(0xFFFFD700))),
       ),
@@ -1990,10 +2295,7 @@ class _MP extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final tp = TextPainter(textDirection: TextDirection.ltr);
     for (final s in symbols) {
-      tp.text = TextSpan(
-        text: s.char,
-        style: TextStyle(color: Color.fromRGBO(0, 255, 70, s.opacity), fontSize: 14 + s.speed * 4, fontFamily: 'monospace'),
-      );
+      tp.text = TextSpan(text: s.char, style: TextStyle(color: Color.fromRGBO(0, 255, 70, s.opacity), fontSize: 14 + s.speed * 4, fontFamily: 'monospace'));
       tp.layout();
       tp.paint(canvas, Offset(s.x * size.width, s.y * size.height));
     }
@@ -2014,10 +2316,7 @@ class LoadSaveMenu extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('ЗАГРУЗИТЬ СОХРАНЕНИЕ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-            ),
+            const Padding(padding: EdgeInsets.all(16), child: Text('ЗАГРУЗИТЬ СОХРАНЕНИЕ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold))),
             Expanded(
               child: game.saves.isEmpty
                   ? const Center(child: Text('Нет сохранений', style: TextStyle(color: Colors.white54)))
@@ -2031,7 +2330,7 @@ class LoadSaveMenu extends StatelessWidget {
                           child: ListTile(
                             title: Text(s.name, style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
                             subtitle: Text(
-                              '${s.arenaMode ? "АРЕНА" : "Этаж ${s.floor} / Ур. ${s.level}"}  •  ${s.difficulty.toUpperCase()}\nОчки ${s.score}  •  ${s.dateStr}',
+                              '${s.arenaMode ? "АРЕНА" : "Этаж ${s.floor} / Ур. ${s.level}"}  •  ${s.difficulty.toUpperCase()}  •  SP ${s.skillPoints}\nОчки ${s.score}  •  ${s.dateStr}',
                               style: const TextStyle(color: Colors.white70, fontSize: 13),
                             ),
                             isThreeLine: true,
@@ -2116,111 +2415,137 @@ class _SettingsMenuState extends State<SettingsMenu> {
   @override
   Widget build(BuildContext context) {
     final g = widget.game;
+    final c = g.custom;
     return Scaffold(
       backgroundColor: Colors.black.withOpacity(0.92),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('НАСТРОЙКИ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              Text('Джойстик: ${g.joystickSize.toInt()}', style: const TextStyle(color: Colors.white)),
-              Slider(value: g.joystickSize, min: 55, max: 120, divisions: 13, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.joystickSize = v)),
-              Text('Кнопки: ${g.buttonSize.toInt()}', style: const TextStyle(color: Colors.white)),
-              Slider(value: g.buttonSize, min: 28, max: 65, divisions: 8, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.buttonSize = v)),
-              SwitchListTile(
-                title: const Text('Звуки', style: TextStyle(color: Colors.white)),
-                value: g.soundEnabled,
-                activeColor: const Color(0xFFFFD700),
-                onChanged: (v) => setState(() => g.soundEnabled = v),
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            const Text('НАСТРОЙКИ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('Джойстик: ${g.joystickSize.toInt()}', style: const TextStyle(color: Colors.white)),
+            Slider(value: g.joystickSize, min: 55, max: 120, divisions: 13, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.joystickSize = v)),
+            Text('Кнопки: ${g.buttonSize.toInt()}', style: const TextStyle(color: Colors.white)),
+            Slider(value: g.buttonSize, min: 28, max: 65, divisions: 8, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.buttonSize = v)),
+            SwitchListTile(title: const Text('Звуки', style: TextStyle(color: Colors.white)), value: g.soundEnabled, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.soundEnabled = v)),
+            Text('Громкость эффектов: ${(g.soundVolume * 100).toInt()}%', style: const TextStyle(color: Colors.white70)),
+            Slider(value: g.soundVolume, min: 0, max: 1, activeColor: const Color(0xFFFFD700), onChanged: g.soundEnabled ? (v) => setState(() => g.soundVolume = v) : null),
+            SwitchListTile(
+              title: const Text('Музыка', style: TextStyle(color: Colors.white)),
+              value: g.musicEnabled,
+              activeColor: const Color(0xFFFFD700),
+              onChanged: (v) {
+                setState(() {
+                  g.musicEnabled = v;
+                  g.applyMusicSetting();
+                });
+              },
+            ),
+            Text('Громкость музыки: ${(g.musicVolume * 100).toInt()}%', style: const TextStyle(color: Colors.white70)),
+            Slider(
+              value: g.musicVolume,
+              min: 0,
+              max: 1,
+              activeColor: const Color(0xFFFFD700),
+              onChanged: g.musicEnabled
+                  ? (v) {
+                      setState(() {
+                        g.musicVolume = v;
+                        g._bgmPlayer?.setVolume(v);
+                      });
+                    }
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            const Text('КАСТОМИЗАЦИЯ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            // preview strip
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFF111111),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFB8860B)),
               ),
-              Text('Громкость эффектов: ${(g.soundVolume * 100).toInt()}%', style: const TextStyle(color: Colors.white70)),
-              Slider(value: g.soundVolume, min: 0, max: 1, activeColor: const Color(0xFFFFD700), onChanged: g.soundEnabled ? (v) => setState(() => g.soundVolume = v) : null),
-              SwitchListTile(
-                title: const Text('Музыка', style: TextStyle(color: Colors.white)),
-                value: g.musicEnabled,
-                activeColor: const Color(0xFFFFD700),
-                onChanged: (v) {
-                  setState(() {
-                    g.musicEnabled = v;
-                    g.applyMusicSetting();
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _swatch(c.armorColor(0.32), 'Броня'),
+                  _swatch(c.capeColor(0.30), 'Плащ'),
+                  _swatch(c.weaponColor(0.45), 'Оружие'),
+                  _swatch(c.trimColor(0.55), 'Отделка'),
+                ],
+              ),
+            ),
+            Text('Броня: ${c.armorHue}°', style: const TextStyle(color: Colors.white70)),
+            Slider(value: c.armorHue.toDouble(), min: 0, max: 360, activeColor: c.armorColor(0.4), onChanged: (v) => setState(() => c.armorHue = v.round())),
+            Text('Плащ: ${c.capeHue}°', style: const TextStyle(color: Colors.white70)),
+            Slider(value: c.capeHue.toDouble(), min: 0, max: 360, activeColor: c.capeColor(0.4), onChanged: (v) => setState(() => c.capeHue = v.round())),
+            Text('Оружие: ${c.weaponHue}°', style: const TextStyle(color: Colors.white70)),
+            Slider(value: c.weaponHue.toDouble(), min: 0, max: 360, activeColor: c.weaponColor(0.45), onChanged: (v) => setState(() => c.weaponHue = v.round())),
+            Text('Отделка (золото/аквила): ${c.trimHue}°', style: const TextStyle(color: Colors.white70)),
+            Slider(value: c.trimHue.toDouble(), min: 0, max: 360, activeColor: c.trimColor(0.55), onChanged: (v) => setState(() => c.trimHue = v.round())),
+            TextButton(
+              onPressed: () => setState(() {
+                c.armorHue = 210;
+                c.capeHue = 0;
+                c.weaponHue = 45;
+                c.trimHue = 45;
+              }),
+              child: const Text('Сбросить цвета', style: TextStyle(color: Colors.white54)),
+            ),
+            if (g.isPlaying) ...[
+              const SizedBox(height: 8),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+                onPressed: () async {
+                  await g.saveGame();
+                  setState(() => _saveMsg = 'Сохранено!');
+                  Future.delayed(const Duration(seconds: 2), () {
+                    if (mounted) setState(() => _saveMsg = null);
                   });
                 },
+                child: const Text('СОХРАНИТЬ ИГРУ', style: TextStyle(color: Colors.white)),
               ),
-              Text('Громкость музыки: ${(g.musicVolume * 100).toInt()}%', style: const TextStyle(color: Colors.white70)),
-              Slider(
-                value: g.musicVolume,
-                min: 0,
-                max: 1,
-                activeColor: const Color(0xFFFFD700),
-                onChanged: g.musicEnabled
-                    ? (v) {
-                        setState(() {
-                          g.musicVolume = v;
-                          g._bgmPlayer?.setVolume(v);
-                        });
-                      }
-                    : null,
-              ),
-              if (g.isPlaying) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), padding: const EdgeInsets.symmetric(vertical: 12)),
-                    onPressed: () async {
-                      await g.saveGame();
-                      setState(() => _saveMsg = 'Сохранено!');
-                      Future.delayed(const Duration(seconds: 2), () {
-                        if (mounted) setState(() => _saveMsg = null);
-                      });
-                    },
-                    child: const Text('СОХРАНИТЬ ИГРУ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                if (_saveMsg != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(_saveMsg!, style: const TextStyle(color: Colors.greenAccent)),
-                  ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C), padding: const EdgeInsets.symmetric(vertical: 12)),
-                    onPressed: () {
-                      g.playClick();
-                      g.exitMatch();
-                    },
-                    child: const Text('ВЫХОД ИЗ МАТЧА', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-              const Spacer(),
-              Center(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A1A1A),
-                    side: const BorderSide(color: Color(0xFFB8860B)),
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                  ),
-                  onPressed: () {
-                    g.playClick();
-                    if (g.isPlaying) {
-                      g.closeSettings();
-                    } else {
-                      g.backToMenu();
-                    }
-                  },
-                  child: Text(g.isPlaying ? 'НАЗАД В БОЙ' : 'НАЗАД', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 16)),
-                ),
+              if (_saveMsg != null) Text(_saveMsg!, style: const TextStyle(color: Colors.greenAccent)),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C)),
+                onPressed: () {
+                  g.playClick();
+                  g.exitMatch();
+                },
+                child: const Text('ВЫХОД ИЗ МАТЧА', style: TextStyle(color: Colors.white)),
               ),
             ],
-          ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A1A1A), side: const BorderSide(color: Color(0xFFB8860B))),
+              onPressed: () {
+                g.playClick();
+                if (g.isPlaying) {
+                  g.closeSettings();
+                } else {
+                  g.persistCustomization();
+                  g.backToMenu();
+                }
+              },
+              child: Text(g.isPlaying ? 'НАЗАД В БОЙ' : 'НАЗАД', style: const TextStyle(color: Color(0xFFFFD700))),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _swatch(Color col, String label) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(width: 28, height: 28, decoration: BoxDecoration(color: col, shape: BoxShape.circle, border: Border.all(color: Colors.white24))),
+        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+      ],
     );
   }
 }
@@ -2237,32 +2562,8 @@ class LevelCompleteMenu extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text('УРОВЕНЬ ПРОЙДЕН', style: TextStyle(color: Colors.greenAccent, fontSize: 26, fontWeight: FontWeight.bold)),
-            Text('Очки: ${game.score}', style: const TextStyle(color: Colors.white)),
+            Text('Очки: ${game.score}  •  SP: ${game.skillPoints}', style: const TextStyle(color: Colors.white)),
             ElevatedButton(onPressed: game.nextLevel, child: const Text('ДАЛЬШЕ')),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class UpgradeMenu extends StatelessWidget {
-  final InquisitorGame game;
-  const UpgradeMenu(this.game, {super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.92),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            const Text('УЛУЧШЕНИЕ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-            ElevatedButton(onPressed: () => game.applyUpgrade('bolter'), child: const Text('Урон дальнего')),
-            ElevatedButton(onPressed: () => game.applyUpgrade('sword'), child: const Text('Урон ближнего')),
-            ElevatedButton(onPressed: () => game.applyUpgrade('health'), child: const Text('Здоровье')),
-            ElevatedButton(onPressed: () => game.applyUpgrade('speed'), child: const Text('Скорость')),
-            ElevatedButton(onPressed: () => game.applyUpgrade('defense'), child: const Text('Защита')),
           ],
         ),
       ),
@@ -2283,23 +2584,15 @@ class VictoryMenu extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
-                'ВЫ ЗАКОНЧИЛИ ПРОХОЖДЕНИЕ\nИСПЫТАНИЯ ИНКВИЗИТОРА',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold, height: 1.3),
-              ),
+              const Text('ВЫ ЗАКОНЧИЛИ ПРОХОЖДЕНИЕ\nИСПЫТАНИЯ ИНКВИЗИТОРА', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold, height: 1.3)),
               const SizedBox(height: 16),
-              Text('${game.playerName}', style: const TextStyle(color: Colors.white, fontSize: 18)),
+              Text(game.playerName, style: const TextStyle(color: Colors.white, fontSize: 18)),
               Text('Очки: ${game.score}  •  ${game.difficulty.labelRu}', style: const TextStyle(color: Colors.white70)),
               const SizedBox(height: 36),
               SizedBox(
                 width: 260,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A1A1A),
-                    side: const BorderSide(color: Color(0xFFFFD700)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A1A1A), side: const BorderSide(color: Color(0xFFFFD700)), padding: const EdgeInsets.symmetric(vertical: 14)),
                   onPressed: () {
                     game.playClick();
                     game.finishAfterVictory();
@@ -2311,22 +2604,13 @@ class VictoryMenu extends StatelessWidget {
               SizedBox(
                 width: 260,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A148C),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A148C), padding: const EdgeInsets.symmetric(vertical: 14)),
                   onPressed: () {
                     game.playClick();
                     game.startArena();
                   },
                   child: const Text('ПРОДОЛЖИТЬ АРЕНУ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Арена: бесконечные враги.\nКаждый 100-й — случайный босс.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white38, fontSize: 12),
               ),
             ],
           ),
@@ -2372,14 +2656,14 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   Vector2 aimDir = Vector2(0, -1);
   double hurtFlash = 0;
 
-  Player(this.moveJoystick) : super(size: Vector2(72, 80), anchor: Anchor.center, priority: 15);
+  Player(this.moveJoystick) : super(size: Vector2(76, 86), anchor: Anchor.center, priority: 15);
 
   @override
   Future<void> onLoad() async {
     maxHealth = game.maxHealth;
     health = maxHealth;
     position = game.playerSpawnPos.clone();
-    add(CircleHitbox(radius: 28));
+    add(CircleHitbox(radius: 30));
   }
 
   @override
@@ -2412,24 +2696,33 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   }
 
   double _cd() {
+    double base;
     if (game.usingMelee) {
       switch (game.meleeWeapon) {
         case MeleeWeapon.sword:
-          return 0.42;
+          base = 0.42;
+          break;
         case MeleeWeapon.axe:
-          return 0.58;
+          base = 0.58;
+          break;
         case MeleeWeapon.hammer:
-          return 0.75;
+          base = 0.75;
+          break;
+      }
+    } else {
+      switch (game.rangedWeapon) {
+        case RangedWeapon.bolter:
+          base = 0.30;
+          break;
+        case RangedWeapon.rifle:
+          base = 0.55;
+          break;
+        case RangedWeapon.shotgun:
+          base = 0.70;
+          break;
       }
     }
-    switch (game.rangedWeapon) {
-      case RangedWeapon.bolter:
-        return 0.30;
-      case RangedWeapon.rifle:
-        return 0.55;
-      case RangedWeapon.shotgun:
-        return 0.70;
-    }
+    return base * game.attackSpeedMult;
   }
 
   void _atk() {
@@ -2440,15 +2733,16 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
     final d = aimDir.length2 < 0.01 ? Vector2(0, -1) : aimDir;
     if (game.usingMelee) {
+      // enlarged radii to match larger sprites
       switch (game.meleeWeapon) {
         case MeleeWeapon.sword:
-          game.world.add(MeleeAttack(position: position + d * 40, direction: d, radius: 38, damage: game.swordDamage, color: const Color(0xFF00E5FF))..priority = 13);
+          game.world.add(MeleeAttack(position: position + d * 48, direction: d, radius: 56, damage: game.swordDamage, color: const Color(0xFF00E5FF))..priority = 13);
           break;
         case MeleeWeapon.axe:
-          game.world.add(MeleeAttack(position: position.clone(), direction: d, radius: 78, damage: game.axeDamage, color: const Color(0xFFFF6D00))..priority = 13);
+          game.world.add(MeleeAttack(position: position.clone(), direction: d, radius: 108, damage: game.axeDamage, color: const Color(0xFFFF6D00))..priority = 13);
           break;
         case MeleeWeapon.hammer:
-          game.world.add(MeleeAttack(position: position + d * 24, direction: d, radius: 82, damage: game.hammerDamage, color: const Color(0xFFFFD600))..priority = 13);
+          game.world.add(MeleeAttack(position: position + d * 28, direction: d, radius: 118, damage: game.hammerDamage, color: const Color(0xFFFFD600))..priority = 13);
           break;
       }
     } else {
@@ -2488,7 +2782,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     if (game.dashActive > 0) {
-      canvas.drawCircle(Offset(cx, cy), 44, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.28));
+      canvas.drawCircle(Offset(cx, cy), 46, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.28));
     }
     final facingLeft = aimDir.x < -0.15;
     canvas.save();
@@ -2497,35 +2791,36 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       canvas.scale(-1, 1);
       canvas.translate(-cx, -cy);
     }
-    WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.2, cape: true, flash: hurtFlash / 0.15);
+    WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.28, cape: true, flash: hurtFlash / 0.15, custom: game.custom);
     canvas.restore();
 
     final ang = atan2(aimDir.y, aimDir.x);
+    final wAccent = game.custom.weaponColor(0.45);
     canvas.save();
     canvas.translate(cx, cy);
     canvas.rotate(ang);
     if (game.usingMelee) {
       switch (game.meleeWeapon) {
         case MeleeWeapon.sword:
-          WHDraw.powerSword(canvas, 0, 0, 1.15);
+          WHDraw.powerSword(canvas, 0, 0, 1.25, accent: wAccent);
           break;
         case MeleeWeapon.axe:
-          WHDraw.chainAxe(canvas, 0, 0, 1.15);
+          WHDraw.chainAxe(canvas, 0, 0, 1.25, accent: wAccent);
           break;
         case MeleeWeapon.hammer:
-          WHDraw.thunderHammer(canvas, 0, 0, 1.15);
+          WHDraw.thunderHammer(canvas, 0, 0, 1.25, accent: wAccent);
           break;
       }
     } else {
       switch (game.rangedWeapon) {
         case RangedWeapon.bolter:
-          WHDraw.bolter(canvas, 0, 0, 1.1);
+          WHDraw.bolter(canvas, 0, 0, 1.18, accent: wAccent);
           break;
         case RangedWeapon.rifle:
-          WHDraw.rifle(canvas, 0, 0, 1.1);
+          WHDraw.rifle(canvas, 0, 0, 1.18, accent: wAccent);
           break;
         case RangedWeapon.shotgun:
-          WHDraw.shotgun(canvas, 0, 0, 1.1);
+          WHDraw.shotgun(canvas, 0, 0, 1.18, accent: wAccent);
           break;
       }
     }
@@ -2542,9 +2837,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     if (other is Enemy || other is EnemyBullet || other is BossProjectile) {
       takeDamage(other is Enemy && other.type == EnemyType.dog ? 2 : 1);
       other.removeFromParent();
-      if (other is Enemy) {
-        game.onEnemyKilled();
-      }
+      if (other is Enemy) game.onEnemyKilled();
     }
     if (other is Boss || other is KnightBoss || other is KingBoss || other is MiniBoss || other is TentacleBoss) {
       takeDamage(1);
@@ -2556,7 +2849,6 @@ class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, Coll
   final Vector2 direction;
   final int damage;
   final double speed;
-  final Set<int> _hitIds = {};
 
   Bullet({
     required super.position,
@@ -2621,7 +2913,7 @@ class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, Coll
 class MeleeAttack extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
   final int damage;
-  double life = 0.2;
+  double life = 0.22;
   final Set<int> _hit = {};
 
   MeleeAttack({
@@ -2630,7 +2922,7 @@ class MeleeAttack extends CircleComponent with HasGameReference<InquisitorGame>,
     required double radius,
     required this.damage,
     required Color color,
-  }) : super(radius: radius, anchor: Anchor.center, paint: Paint()..color = color.withOpacity(0.45), priority: 13);
+  }) : super(radius: radius, anchor: Anchor.center, paint: Paint()..color = color.withOpacity(0.42), priority: 13);
 
   @override
   Future<void> onLoad() async => add(CircleHitbox());
@@ -2686,9 +2978,7 @@ class EnemyBullet extends CircleComponent with HasGameReference<InquisitorGame>,
     super.update(dt);
     if (!game.isPlaying) return;
     position.add(direction * 160 * dt);
-    if (position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) {
-      removeFromParent();
-    }
+    if (position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) removeFromParent();
   }
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
@@ -2708,9 +2998,7 @@ class BossProjectile extends CircleComponent with HasGameReference<InquisitorGam
     super.update(dt);
     if (!game.isPlaying) return;
     position.add(direction * 185 * dt);
-    if (position.x < -80 || position.x > game.mapWidth + 80 || position.y < -80 || position.y > game.mapHeight + 80) {
-      removeFromParent();
-    }
+    if (position.x < -80 || position.x > game.mapWidth + 80 || position.y < -80 || position.y > game.mapHeight + 80) removeFromParent();
   }
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
@@ -2729,35 +3017,36 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   double meleeTimer = 0;
   double hurtFlash = 0;
 
-  Enemy({required this.floor, required this.type}) : super(size: Vector2(68, 78), anchor: Anchor.center, priority: 30);
+  Enemy({required this.floor, required this.type}) : super(size: Vector2(72, 82), anchor: Anchor.center, priority: 30);
 
   @override
   Future<void> onLoad() async {
+    final threat = game.worldThreat * game.difficulty.hpMult;
     switch (type) {
       case EnemyType.shooter:
         speed = 55 + floor * 6.0;
-        maxHp = (18 + floor * 6 * game.difficulty.hpMult).round();
+        maxHp = (22 + floor * 8 * threat).round();
         break;
       case EnemyType.melee:
         speed = 85 + floor * 9.0;
-        maxHp = (22 + floor * 7 * game.difficulty.hpMult).round();
+        maxHp = (26 + floor * 9 * threat).round();
         break;
       case EnemyType.shielded:
         speed = 42 + floor * 4.5;
-        maxHp = (30 + floor * 8 * game.difficulty.hpMult).round();
+        maxHp = (36 + floor * 10 * threat).round();
         break;
       case EnemyType.dog:
         speed = 145 + floor * 12.0;
-        size = Vector2(58, 44);
-        maxHp = (14 + floor * 5 * game.difficulty.hpMult).round();
+        size = Vector2(62, 48);
+        maxHp = (16 + floor * 6 * threat).round();
         break;
       case EnemyType.shieldedShooter:
         speed = 48 + floor * 5.0;
-        maxHp = (28 + floor * 8 * game.difficulty.hpMult).round();
+        maxHp = (32 + floor * 10 * threat).round();
         break;
     }
     hp = maxHp;
-    add(CircleHitbox(radius: type == EnemyType.dog ? 20 : 26));
+    add(CircleHitbox(radius: type == EnemyType.dog ? 22 : 28));
   }
 
   void applyDamage(int amount) {
@@ -2785,8 +3074,8 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     if (!game.isPlaying || game.isPaused) return;
     final dist = position.distanceTo(game.player.position);
     final isRanged = type == EnemyType.shooter || type == EnemyType.shieldedShooter;
-    smartMove(game.player.position, speed, dt, radius: 26, kite: isRanged, preferDist: isRanged ? 280.0 : 0.0);
-    pushOutOfWalls(26);
+    smartMove(game.player.position, speed, dt, radius: 28, kite: isRanged, preferDist: isRanged ? 280.0 : 0.0);
+    pushOutOfWalls(28);
     if (isRanged) {
       final interval = dist < 160 ? 0.55 : (dist < 320 ? 0.95 : 1.55);
       shootTimer += dt;
@@ -2796,7 +3085,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       }
     }
     if (type == EnemyType.melee || type == EnemyType.dog || type == EnemyType.shielded) {
-      final hitRange = type == EnemyType.dog ? 55.0 : 70.0;
+      final hitRange = type == EnemyType.dog ? 58.0 : 74.0;
       final interval = dist < 100 ? 0.45 : 0.85;
       meleeTimer += dt;
       if (meleeTimer >= interval && dist < hitRange) {
@@ -2826,16 +3115,16 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         WHDraw.chaosHound(canvas, cx, cy, flash: f);
         break;
       case EnemyType.shooter:
-        WHDraw.cultistShooter(canvas, cx, cy, 1.15, flash: f);
+        WHDraw.cultistShooter(canvas, cx, cy, 1.2, flash: f);
         break;
       case EnemyType.melee:
-        WHDraw.cultistMelee(canvas, cx, cy, 1.15, flash: f);
+        WHDraw.cultistMelee(canvas, cx, cy, 1.2, flash: f);
         break;
       case EnemyType.shielded:
-        WHDraw.shieldedMarine(canvas, cx, cy, 1.15, flash: f);
+        WHDraw.shieldedMarine(canvas, cx, cy, 1.2, flash: f);
         break;
       case EnemyType.shieldedShooter:
-        WHDraw.shieldedMarine(canvas, cx, cy, 1.1, accent: const Color(0xFF00BCD4), withGun: true, flash: f);
+        WHDraw.shieldedMarine(canvas, cx, cy, 1.15, accent: const Color(0xFF00BCD4), withGun: true, flash: f);
         break;
     }
   }
@@ -2846,17 +3135,17 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   late int maxHp, currentHp;
   double shootTimer = 0;
   double hurtFlash = 0;
-  int phase = 1; // hard: 2 bars
+  int phase = 1;
 
   MiniBoss({required this.floor, required Vector2 position})
-      : super(position: position, size: Vector2(92, 102), anchor: Anchor.center, priority: 24);
+      : super(position: position, size: Vector2(96, 106), anchor: Anchor.center, priority: 24);
 
   @override
   Future<void> onLoad() async {
     final bars = game.difficulty == Difficulty.hard ? 2 : 1;
-    maxHp = (((220 + floor * 90) / 2) * game.difficulty.bossHpMult * bars).round();
+    maxHp = (((240 + floor * 95) / 2) * game.difficulty.bossHpMult * game.worldThreat * bars).round();
     currentHp = maxHp;
-    add(CircleHitbox(radius: 40));
+    add(CircleHitbox(radius: 42));
   }
 
   int get _barHp {
@@ -2871,8 +3160,8 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     if (!game.isPlaying || game.isPaused) return;
     final dist = position.distanceTo(game.player.position);
     final spd = (52 + floor * 4.0) * (phase >= 2 ? 1.15 : 1.0);
-    smartMove(game.player.position, spd, dt, radius: 40, kite: true, preferDist: 260);
-    pushOutOfWalls(40);
+    smartMove(game.player.position, spd, dt, radius: 42, kite: true, preferDist: 260);
+    pushOutOfWalls(42);
     final baseIv = dist < 200 ? 0.75 : 1.35;
     final interval = phase >= 2 ? baseIv * 0.7 : baseIv;
     shootTimer += dt;
@@ -2914,12 +3203,11 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
-    WHDraw.cultistShooter(canvas, cx, cy, 1.5, flash: hurtFlash / 0.12);
-    WHDraw.shotgun(canvas, cx + 4, cy, 1.3);
+    WHDraw.cultistShooter(canvas, cx, cy, 1.55, flash: hurtFlash / 0.12);
+    WHDraw.shotgun(canvas, cx + 4, cy, 1.35);
     final bars = game.difficulty == Difficulty.hard ? 2 : 1;
     for (int i = 0; i < bars; i++) {
-      final barMax = _barHp.toDouble();
-      final remain = (currentHp - i * _barHp).clamp(0, _barHp) / barMax;
+      final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
       canvas.drawRect(
         Rect.fromLTWH(cx - 38, -30 - i * 12.0, 76 * remain, 9),
         Paint()..color = i == 0 ? const Color(0xFFFF8A65) : const Color(0xFFFF5722),
@@ -2933,17 +3221,17 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   late int maxHp, currentHp;
   double attackTimer = 0;
   double hurtFlash = 0;
-  int phase = 1; // hard: up to 3 bars
+  int phase = 1;
 
   Boss({required this.floor, required Vector2 position})
-      : super(position: position, size: Vector2(112, 122), anchor: Anchor.center, priority: 25);
+      : super(position: position, size: Vector2(116, 126), anchor: Anchor.center, priority: 25);
 
   @override
   Future<void> onLoad() async {
     final bars = game.difficulty == Difficulty.hard ? 3 : 1;
-    maxHp = ((220 + floor * 90) * game.difficulty.bossHpMult * bars).round();
+    maxHp = ((240 + floor * 95) * game.difficulty.bossHpMult * game.worldThreat * bars).round();
     currentHp = maxHp;
-    add(CircleHitbox(radius: 48));
+    add(CircleHitbox(radius: 50));
   }
 
   int get _barHp {
@@ -2968,8 +3256,8 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     if (!game.isPlaying || game.isPaused) return;
     final dist = position.distanceTo(game.player.position);
     final spd = (42 + floor * 5.0) * (1 + (phase - 1) * 0.12);
-    smartMove(game.player.position, spd, dt, radius: 48);
-    pushOutOfWalls(48);
+    smartMove(game.player.position, spd, dt, radius: 50);
+    pushOutOfWalls(50);
     final baseIv = dist < 220 ? 1.05 : 1.9;
     final interval = baseIv / (1 + (phase - 1) * 0.25);
     attackTimer += dt;
@@ -2980,7 +3268,6 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         final a = (i / count) * 2 * pi;
         game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
       }
-      // hard phase 3: extra aimed shots
       if (phase >= 3) {
         final toP = (game.player.position - position).normalized();
         for (final o in [-0.25, 0.0, 0.25]) {
@@ -3014,7 +3301,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
-    WHDraw.hereticBoss(canvas, cx, cy, 1.5, flash: hurtFlash / 0.12);
+    WHDraw.hereticBoss(canvas, cx, cy, 1.55, flash: hurtFlash / 0.12);
     final bars = game.difficulty == Difficulty.hard ? 3 : 1;
     for (int i = 0; i < bars; i++) {
       final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
@@ -3032,14 +3319,14 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   int phase = 1;
 
   KnightBoss({required this.floor, required Vector2 position})
-      : super(position: position, size: Vector2(105, 115), anchor: Anchor.center, priority: 25);
+      : super(position: position, size: Vector2(110, 120), anchor: Anchor.center, priority: 25);
 
   @override
   Future<void> onLoad() async {
     final bars = game.difficulty == Difficulty.hard ? 3 : 1;
-    maxHp = ((280 + floor * 100) * game.difficulty.bossHpMult * bars).round();
+    maxHp = ((300 + floor * 105) * game.difficulty.bossHpMult * game.worldThreat * bars).round();
     currentHp = maxHp;
-    add(CircleHitbox(radius: 46));
+    add(CircleHitbox(radius: 48));
   }
 
   int get _barHp {
@@ -3064,14 +3351,13 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     if (!game.isPlaying || game.isPaused) return;
     final dist = position.distanceTo(game.player.position);
     final spd = (78 + floor * 8.0) * (1 + (phase - 1) * 0.15);
-    smartMove(game.player.position, spd, dt, radius: 46);
-    pushOutOfWalls(46);
+    smartMove(game.player.position, spd, dt, radius: 48);
+    pushOutOfWalls(48);
     final interval = (dist < 130 ? 0.4 : 0.8) / (1 + (phase - 1) * 0.2);
     meleeTimer += dt;
     if (meleeTimer >= interval && dist < 110 + phase * 8) {
       meleeTimer = 0;
-      game.player.takeDamage(1 + phase); // harder later phases
-      // phase 2+: shockwave ring
+      game.player.takeDamage(1 + phase);
       if (phase >= 2) {
         for (int i = 0; i < 6 + phase * 2; i++) {
           final a = (i / (6 + phase * 2)) * 2 * pi;
@@ -3104,7 +3390,7 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
-    WHDraw.knightBoss(canvas, cx, cy, 1.45, flash: hurtFlash / 0.12);
+    WHDraw.knightBoss(canvas, cx, cy, 1.5, flash: hurtFlash / 0.12);
     final bars = game.difficulty == Difficulty.hard ? 3 : 1;
     for (int i = 0; i < bars; i++) {
       final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
@@ -3119,24 +3405,22 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   double meleeTimer = 0, phase2Timer = 0;
   int phase2VolleyCount = 0;
   double hurtFlash = 0;
-  // hard: up to 4 visual bars (2 base phases × harder scaling)
-  int hardBars = 1;
+  int hardBars = 2;
 
   KingBoss({required Vector2 position})
-      : super(position: position, size: Vector2(140, 150), anchor: Anchor.center, priority: 26);
+      : super(position: position, size: Vector2(145, 155), anchor: Anchor.center, priority: 26);
 
   @override
   Future<void> onLoad() async {
     hardBars = game.difficulty == Difficulty.hard ? 4 : 2;
-    phaseHp = (400 * game.difficulty.bossHpMult).round();
-    maxHp = phaseHp * (game.difficulty == Difficulty.hard ? 2 : 2);
-    // On hard, inflate total HP further for 4 bar display
+    phaseHp = (420 * game.difficulty.bossHpMult * game.worldThreat).round();
+    maxHp = phaseHp * 2;
     if (game.difficulty == Difficulty.hard) {
       maxHp = (maxHp * 1.35).round();
       phaseHp = maxHp ~/ 2;
     }
     currentHp = maxHp;
-    add(CircleHitbox(radius: 58));
+    add(CircleHitbox(radius: 60));
   }
 
   int get _barHp => max(1, maxHp ~/ hardBars);
@@ -3144,7 +3428,6 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void _checkHardPhase() {
     if (game.difficulty != Difficulty.hard) return;
     final barIndex = ((maxHp - currentHp) / _barHp).floor() + 1;
-    // map bars 1-2 -> phase 1 aggressive melee, 3-4 -> phase 2 volleys + faster
     final want = barIndex >= 3 ? 2 : 1;
     if (want != phase) {
       phase = want;
@@ -3160,17 +3443,16 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     if (!game.isPlaying || game.isPaused) return;
     final dist = position.distanceTo(game.player.position);
     final hardBoost = game.difficulty == Difficulty.hard ? 1.0 + ((maxHp - currentHp) / maxHp) * 0.4 : 1.0;
-    smartMove(game.player.position, (phase == 1 ? 100.0 : 38.0) * hardBoost, dt, radius: 58);
-    pushOutOfWalls(58);
+    smartMove(game.player.position, (phase == 1 ? 100.0 : 38.0) * hardBoost, dt, radius: 60);
+    pushOutOfWalls(60);
 
     if (phase == 1) {
       final interval = (dist < 140 ? 0.38 : 0.65) / hardBoost;
       meleeTimer += dt;
-      if (meleeTimer >= interval && dist < 115) {
+      if (meleeTimer >= interval && dist < 120) {
         meleeTimer = 0;
         game.player.takeDamage(3);
         if (game.difficulty == Difficulty.hard) {
-          // close shockwave
           for (int i = 0; i < 8; i++) {
             final a = (i / 8) * 2 * pi;
             game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
@@ -3233,9 +3515,9 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     final inv = game.areOtherBossesAlive;
-    WHDraw.kingBossDraw(canvas, cx, cy, 1.55, flash: hurtFlash / 0.12);
+    WHDraw.kingBossDraw(canvas, cx, cy, 1.6, flash: hurtFlash / 0.12);
     if (inv) {
-      canvas.drawCircle(Offset(cx, cy), 66, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 4);
+      canvas.drawCircle(Offset(cx, cy), 68, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 4);
     }
     for (int i = 0; i < hardBars; i++) {
       final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
@@ -3252,7 +3534,6 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     }
   }
 }
-
 class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   static const int maxHpConst = 6666;
   late int maxHp;
@@ -3265,14 +3546,14 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
   int hardBars = 1;
 
   TentacleBoss({required Vector2 position})
-      : super(position: position, size: Vector2(150, 150), anchor: Anchor.center, priority: 28);
+      : super(position: position, size: Vector2(155, 155), anchor: Anchor.center, priority: 28);
 
   @override
   Future<void> onLoad() async {
     hardBars = game.difficulty == Difficulty.hard ? 3 : 1;
-    maxHp = (maxHpConst * game.difficulty.bossHpMult * (game.difficulty == Difficulty.hard ? 1.2 : 1.0)).round();
+    maxHp = (maxHpConst * game.difficulty.bossHpMult * game.worldThreat * (game.difficulty == Difficulty.hard ? 1.15 : 1.0)).round();
     currentHp = maxHp;
-    add(CircleHitbox(radius: 58));
+    add(CircleHitbox(radius: 60));
   }
 
   int get _barHp => max(1, maxHp ~/ hardBars);
@@ -3285,8 +3566,8 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
     anim += dt;
     final dist = position.distanceTo(game.player.position);
     final hardBoost = game.difficulty == Difficulty.hard ? 1.2 : 1.0;
-    smartMove(game.player.position, (phase == 1 ? 45.0 : 30.0) * hardBoost, dt, radius: 58);
-    pushOutOfWalls(58);
+    smartMove(game.player.position, (phase == 1 ? 45.0 : 30.0) * hardBoost, dt, radius: 60);
+    pushOutOfWalls(60);
     if (phase == 1) {
       phaseTimer += dt;
       final iv = game.difficulty == Difficulty.hard ? 1.4 : 1.8;
@@ -3311,8 +3592,8 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
         if (meleeGap >= (game.difficulty == Difficulty.hard ? 0.42 : 0.55)) {
           meleeGap = 0;
           meleeHitsLeft--;
-          game.world.add(TentacleSlam(position: position.clone(), radius: game.cellSize * 2.2)..priority = 27);
-          if (dist < game.cellSize * 2.2 + 35) game.player.takeDamage(2);
+          game.world.add(TentacleSlam(position: position.clone(), radius: game.cellSize * 2.4)..priority = 27);
+          if (dist < game.cellSize * 2.4 + 35) game.player.takeDamage(2);
         }
       } else {
         phaseTimer += dt;
@@ -3350,27 +3631,36 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
     final cx = size.x / 2, cy = size.y / 2, t = anim;
     for (int i = 0; i < 8; i++) {
       final baseA = (i / 8) * 2 * pi + t * 0.6;
-      final wave = sin(t * 3 + i) * 20;
+      final wave = sin(t * 3 + i) * 22;
       final path = Path()..moveTo(cx, cy);
       for (int s = 1; s <= 6; s++) {
         final f = s / 6;
         final ang = baseA + sin(t * 2 + s * 0.4 + i) * 0.35;
-        path.lineTo(cx + cos(ang) * (30 + f * 60 + wave * f), cy + sin(ang) * (30 + f * 60 + wave * f));
+        path.lineTo(cx + cos(ang) * (32 + f * 64 + wave * f), cy + sin(ang) * (32 + f * 64 + wave * f));
       }
       canvas.drawPath(
         path,
         Paint()
           ..color = Color.lerp(const Color(0xFF1A0033), const Color(0xFF4A148C), 0.4 + 0.3 * sin(t + i))!
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 11
+          ..strokeWidth = 12
           ..strokeCap = StrokeCap.round,
       );
+      // suckers
+      for (int s = 2; s <= 5; s++) {
+        final f = s / 6;
+        final ang = baseA + sin(t * 2 + s * 0.4 + i) * 0.35;
+        final sx = cx + cos(ang) * (32 + f * 64 + wave * f);
+        final sy = cy + sin(ang) * (32 + f * 64 + wave * f);
+        canvas.drawCircle(Offset(sx, sy), 3.5, Paint()..color = const Color(0xFF6A1B9A).withOpacity(0.7));
+      }
     }
-    canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy), width: 76, height: 68), Paint()..color = const Color(0xFF12001F));
-    canvas.drawCircle(Offset(cx, cy - 6), 15, Paint()..color = const Color(0xFF0D0D0D));
-    canvas.drawCircle(Offset(cx, cy - 6), 10, Paint()..color = const Color(0xFFFF1744));
+    canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy), width: 80, height: 72), Paint()..color = const Color(0xFF12001F));
+    canvas.drawCircle(Offset(cx, cy - 6), 16, Paint()..color = const Color(0xFF0D0D0D));
+    canvas.drawCircle(Offset(cx, cy - 6), 11, Paint()..color = const Color(0xFFFF1744));
+    canvas.drawCircle(Offset(cx + 3, cy - 8), 3.5, Paint()..color = Colors.white);
     if (hurtFlash > 0) {
-      canvas.drawCircle(Offset(cx, cy), 70, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * (hurtFlash / 0.12)));
+      canvas.drawCircle(Offset(cx, cy), 72, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * (hurtFlash / 0.12)));
     }
     for (int i = 0; i < hardBars; i++) {
       final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
