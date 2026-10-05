@@ -84,13 +84,20 @@ extension DiffLabel on Difficulty {
   }
 }
 
-/// RPG skill ranks (spent points)
 class SkillTree {
-  int hp = 0; // +1 maxHP each
-  int speed = 0; // +12 move each
-  int attackSpeed = 0; // -4% cooldown each (cap)
-  int defense = 0; // +3% block each (cap 45%)
-  int damage = 0; // +6% all damage each
+  int hp;
+  int speed;
+  int attackSpeed;
+  int defense;
+  int damage;
+
+  SkillTree({
+    this.hp = 0,
+    this.speed = 0,
+    this.attackSpeed = 0,
+    this.defense = 0,
+    this.damage = 0,
+  });
 
   int get totalSpent => hp + speed + attackSpeed + defense + damage;
 
@@ -104,21 +111,28 @@ class SkillTree {
 
   factory SkillTree.fromJson(Map<String, dynamic>? j) {
     if (j == null) return SkillTree();
-    return SkillTree()
-      ..hp = j['hp'] as int? ?? 0
-      ..speed = j['speed'] as int? ?? 0
-      ..attackSpeed = j['attackSpeed'] as int? ?? 0
-      ..defense = j['defense'] as int? ?? 0
-      ..damage = j['damage'] as int? ?? 0;
+    return SkillTree(
+      hp: j['hp'] as int? ?? 0,
+      speed: j['speed'] as int? ?? 0,
+      attackSpeed: j['attackSpeed'] as int? ?? 0,
+      defense: j['defense'] as int? ?? 0,
+      damage: j['damage'] as int? ?? 0,
+    );
   }
 }
 
-/// Cosmetic customization
 class Customization {
-  int armorHue = 210; // 0-360 blue-grey default
-  int capeHue = 0; // red
-  int weaponHue = 45; // gold
-  int trimHue = 45; // gold aquila
+  int armorHue;
+  int capeHue;
+  int weaponHue;
+  int trimHue;
+
+  Customization({
+    this.armorHue = 210,
+    this.capeHue = 0,
+    this.weaponHue = 45,
+    this.trimHue = 45,
+  });
 
   Color armorColor([double l = 0.28]) => HSLColor.fromAHSL(1, armorHue.toDouble(), 0.18, l).toColor();
   Color capeColor([double l = 0.28]) => HSLColor.fromAHSL(1, capeHue.toDouble(), 0.75, l).toColor();
@@ -134,11 +148,12 @@ class Customization {
 
   factory Customization.fromJson(Map<String, dynamic>? j) {
     if (j == null) return Customization();
-    return Customization()
-      ..armorHue = j['armorHue'] as int? ?? 210
-      ..capeHue = j['capeHue'] as int? ?? 0
-      ..weaponHue = j['weaponHue'] as int? ?? 45
-      ..trimHue = j['trimHue'] as int? ?? 45;
+    return Customization(
+      armorHue: j['armorHue'] as int? ?? 210,
+      capeHue: j['capeHue'] as int? ?? 0,
+      weaponHue: j['weaponHue'] as int? ?? 45,
+      trimHue: j['trimHue'] as int? ?? 45,
+    );
   }
 }
 
@@ -354,12 +369,62 @@ class DamageNumber extends PositionComponent {
   }
 }
 
-/// High-detail procedural Warhammer sprites + cosmetic colors
+/// Blood splash: red droplets at death position
+class BloodSplash extends PositionComponent {
+  final List<_Drop> drops = [];
+  double life = 1.4;
+
+  BloodSplash({required Vector2 position, int count = 14})
+      : super(position: position.clone(), priority: 8) {
+    final rnd = Random();
+    for (int i = 0; i < count; i++) {
+      final a = rnd.nextDouble() * 2 * pi;
+      final sp = 40 + rnd.nextDouble() * 120;
+      drops.add(_Drop(
+        offset: Vector2.zero(),
+        vel: Vector2(cos(a), sin(a)) * sp,
+        radius: 2.0 + rnd.nextDouble() * 4.5,
+        dark: rnd.nextBool(),
+      ));
+    }
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    life -= dt;
+    for (final d in drops) {
+      d.vel.y += 280 * dt; // gravity
+      d.offset += d.vel * dt;
+      d.vel *= 0.92;
+    }
+    if (life <= 0) removeFromParent();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final a = (life / 1.4).clamp(0.0, 1.0);
+    for (final d in drops) {
+      final col = d.dark
+          ? Color.fromRGBO(120, 0, 0, 0.85 * a)
+          : Color.fromRGBO(200, 16, 16, 0.9 * a);
+      canvas.drawCircle(Offset(d.offset.x, d.offset.y), d.radius * (0.6 + 0.4 * a), Paint()..color = col);
+    }
+  }
+}
+
+class _Drop {
+  Vector2 offset;
+  Vector2 vel;
+  double radius;
+  bool dark;
+  _Drop({required this.offset, required this.vel, required this.radius, required this.dark});
+}
+
 class WHDraw {
   static void _leg(Canvas c, double x, double y, double s, Color armor, Color dark) {
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, y), width: 13 * s, height: 24 * s), Radius.circular(2 * s)), Paint()..color = armor);
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, y + 10 * s), width: 15 * s, height: 8 * s), Radius.circular(1.5 * s)), Paint()..color = dark);
-    // knee plate
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, y - 2 * s), width: 11 * s, height: 7 * s), Radius.circular(1 * s)), Paint()..color = dark);
   }
 
@@ -367,23 +432,13 @@ class WHDraw {
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(x - 8 * s, y, 16 * s, 7 * s), Radius.circular(2 * s)), Paint()..color = dark);
   }
 
-  static void inquisitor(
-    Canvas c, {
-    required double cx,
-    required double cy,
-    double s = 1.25,
-    bool cape = true,
-    double flash = 0,
-    Customization? custom,
-  }) {
+  static void inquisitor(Canvas c, {required double cx, required double cy, double s = 1.28, bool cape = true, double flash = 0, Customization? custom}) {
     final armor = custom?.armorColor(0.30) ?? const Color(0xFF3A4A55);
     final armorLite = custom?.armorColor(0.42) ?? const Color(0xFF4A5A68);
     final dark = custom?.armorColor(0.16) ?? const Color(0xFF1E2830);
     final gold = custom?.trimColor(0.55) ?? const Color(0xFFC9A227);
     final capeCol = custom?.capeColor(0.28) ?? const Color(0xFF8B0000);
     final skin = const Color(0xFFC4A484);
-
-    // cape layers
     if (cape) {
       final back = Path()
         ..moveTo(cx - 16 * s, cy)
@@ -392,79 +447,44 @@ class WHDraw {
         ..quadraticBezierTo(cx + 48 * s, cy + 28 * s, cx + 16 * s, cy)
         ..close();
       c.drawPath(back, Paint()..color = capeCol.withOpacity(0.95));
-      // folds
       c.drawLine(Offset(cx - 8 * s, cy + 12 * s), Offset(cx - 16 * s, cy + 48 * s), Paint()..color = Colors.black26..strokeWidth = 2 * s);
       c.drawLine(Offset(cx + 8 * s, cy + 12 * s), Offset(cx + 16 * s, cy + 48 * s), Paint()..color = Colors.black26..strokeWidth = 2 * s);
-      // gold trim on cape edge
       c.drawPath(back, Paint()..color = gold.withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 1.5 * s);
     }
-
-    // legs
     _leg(c, cx - 10 * s, cy + 30 * s, s, armor, dark);
     _leg(c, cx + 10 * s, cy + 30 * s, s, armor, dark);
     _boot(c, cx - 10 * s, cy + 40 * s, s, dark);
     _boot(c, cx + 10 * s, cy + 40 * s, s, dark);
-
-    // torso power armor
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 36 * s, height: 34 * s), Radius.circular(5 * s)), Paint()..color = armor);
-    // chest plate
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 22 * s, height: 20 * s), Radius.circular(4 * s)), Paint()..color = armorLite);
-    // aquila
     c.drawCircle(Offset(cx, cy + 4 * s), 6 * s, Paint()..color = gold);
     c.drawCircle(Offset(cx, cy + 4 * s), 3 * s, Paint()..color = dark);
-    // wing strokes of aquila
     c.drawLine(Offset(cx - 2 * s, cy + 3 * s), Offset(cx - 10 * s, cy - 2 * s), Paint()..color = gold..strokeWidth = 2 * s);
     c.drawLine(Offset(cx + 2 * s, cy + 3 * s), Offset(cx + 10 * s, cy - 2 * s), Paint()..color = gold..strokeWidth = 2 * s);
-
-    // pauldron L/R with trim
     c.drawCircle(Offset(cx - 20 * s, cy - 4 * s), 13 * s, Paint()..color = armor);
     c.drawCircle(Offset(cx + 20 * s, cy - 4 * s), 13 * s, Paint()..color = armor);
     c.drawArc(Rect.fromCircle(center: Offset(cx - 20 * s, cy - 4 * s), radius: 13 * s), pi, pi, false, Paint()..color = gold..style = PaintingStyle.stroke..strokeWidth = 2 * s);
     c.drawArc(Rect.fromCircle(center: Offset(cx + 20 * s, cy - 4 * s), radius: 13 * s), pi, pi, false, Paint()..color = gold..style = PaintingStyle.stroke..strokeWidth = 2 * s);
-    c.drawCircle(Offset(cx - 20 * s, cy - 4 * s), 5 * s, Paint()..color = gold.withOpacity(0.5));
-    c.drawCircle(Offset(cx + 20 * s, cy - 4 * s), 5 * s, Paint()..color = gold.withOpacity(0.5));
-
-    // arms
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 24 * s, cy + 14 * s), width: 10 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = armor);
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 24 * s, cy + 14 * s), width: 10 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = armor);
-    // gloves
     c.drawCircle(Offset(cx - 24 * s, cy + 24 * s), 5 * s, Paint()..color = dark);
     c.drawCircle(Offset(cx + 24 * s, cy + 24 * s), 5 * s, Paint()..color = dark);
-
-    // head + helm visor
     c.drawCircle(Offset(cx, cy - 18 * s), 12 * s, Paint()..color = skin);
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 22 * s), width: 22 * s, height: 10 * s), Radius.circular(2 * s)), Paint()..color = dark);
-    // visor slit glow
     c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 19 * s), width: 14 * s, height: 3 * s), Paint()..color = const Color(0xFFFF1744).withOpacity(0.85));
-    c.drawCircle(Offset(cx - 4 * s, cy - 19 * s), 1.6 * s, Paint()..color = const Color(0xFFFF8A80));
-    c.drawCircle(Offset(cx + 4 * s, cy - 19 * s), 1.6 * s, Paint()..color = const Color(0xFFFF8A80));
-    // collar
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 8 * s), width: 20 * s, height: 6 * s), Radius.circular(2 * s)), Paint()..color = dark);
-
-    if (flash > 0) {
-      c.drawCircle(Offset(cx, cy), 44 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
-    }
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 44 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
 
   static void bolter(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final body = accent ?? const Color(0xFFC62828);
     final metal = const Color(0xFF546E7A);
-    final wood = const Color(0xFF6D4C41);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 2 * s, 11 * s, 15 * s), Radius.circular(2 * s)), Paint()..color = wood);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy + 11 * s, 9 * s, 12 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF5D4037));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 2 * s, 11 * s, 15 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF6D4C41));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy - 11 * s, 32 * s, 15 * s), Radius.circular(2 * s)), Paint()..color = body);
-    // magazine
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 18 * s, cy + 4 * s, 10 * s, 14 * s), Radius.circular(1 * s)), Paint()..color = metal);
-    // aquila plate
     c.drawCircle(Offset(cx + 26 * s, cy - 3 * s), 5 * s, Paint()..color = const Color(0xFFFFF8E1));
-    c.drawCircle(Offset(cx + 26 * s, cy - 3 * s), 2.2 * s, Paint()..color = const Color(0xFF37474F));
-    // barrel
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 38 * s, cy - 7 * s, 20 * s, 7 * s), Radius.circular(1 * s)), Paint()..color = metal);
     c.drawRect(Rect.fromLTWH(cx + 56 * s, cy - 5 * s, 12 * s, 4 * s), Paint()..color = const Color(0xFF37474F));
-    // muzzle brake vents
-    for (int i = 0; i < 3; i++) {
-      c.drawRect(Rect.fromLTWH(cx + 58 * s + i * 3 * s, cy - 7 * s, 1.5 * s, 8 * s), Paint()..color = const Color(0xFF212121));
-    }
   }
 
   static void rifle(Canvas c, double cx, double cy, double s, {Color? accent}) {
@@ -492,11 +512,8 @@ class WHDraw {
       ..lineTo(cx + 18 * s, cy - 2 * s)
       ..close();
     c.drawPath(p, Paint()..color = blade);
-    c.drawPath(p, Paint()..color = Colors.white.withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 1.2 * s);
     c.drawRect(Rect.fromCenter(center: Offset(cx + 10 * s, cy), width: 18 * s, height: 6 * s), Paint()..color = const Color(0xFFB8860B));
     c.drawCircle(Offset(cx + 10 * s, cy), 5 * s, Paint()..color = const Color(0xFFECEFF1));
-    // energy tip
-    c.drawCircle(Offset(cx + 14 * s, cy - 40 * s), 3 * s, Paint()..color = blade.withOpacity(0.7));
   }
 
   static void chainAxe(Canvas c, double cx, double cy, double s, {Color? accent}) {
@@ -517,10 +534,6 @@ class WHDraw {
       ..close();
     c.drawPath(top, Paint()..color = teeth);
     c.drawPath(bot, Paint()..color = teeth);
-    // teeth notches
-    for (int i = 0; i < 4; i++) {
-      c.drawLine(Offset(head.dx + 6 * s + i * 2.5 * s, head.dy - 8 * s - i * 3 * s), Offset(head.dx + 10 * s + i * 2.5 * s, head.dy - 12 * s - i * 3 * s), Paint()..color = const Color(0xFF37474F)..strokeWidth = 1.5 * s);
-    }
     c.drawCircle(head, 6 * s, Paint()..color = const Color(0xFF546E7A));
     c.drawCircle(head, 3.2 * s, Paint()..color = const Color(0xFFE53935));
   }
@@ -530,29 +543,18 @@ class WHDraw {
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 2 * s, 36 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF3E2723));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 48 * s, cy), width: 18 * s, height: 24 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF455A64));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 48 * s, cy), width: 12 * s, height: 16 * s), Radius.circular(1 * s)), Paint()..color = headCol);
-    c.drawCircle(Offset(cx + 48 * s, cy), 4 * s, Paint()..color = const Color(0xFF37474F));
-    // lightning arcs
-    c.drawLine(Offset(cx + 48 * s, cy - 14 * s), Offset(cx + 54 * s, cy - 22 * s), Paint()..color = const Color(0xFF00E5FF).withOpacity(0.7)..strokeWidth = 1.5 * s);
-    c.drawLine(Offset(cx + 48 * s, cy + 14 * s), Offset(cx + 54 * s, cy + 22 * s), Paint()..color = const Color(0xFF00E5FF).withOpacity(0.7)..strokeWidth = 1.5 * s);
   }
 
   static void chaosHound(Canvas c, double cx, double cy, {double flash = 0}) {
     c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 2), width: 52, height: 28), Paint()..color = const Color(0xFF2D1F14));
-    // ribs
     for (int i = 0; i < 5; i++) {
       c.drawLine(Offset(cx - 8.0 + i * 7, cy - 8), Offset(cx - 4.0 + i * 7, cy + 6), Paint()..color = const Color(0xFFD7CCC8)..strokeWidth = 1.8);
     }
     c.drawOval(Rect.fromCenter(center: Offset(cx + 22, cy - 8), width: 28, height: 22), Paint()..color = const Color(0xFF3E2723));
-    final jaw = Path()..moveTo(cx + 30, cy - 2)..lineTo(cx + 42, cy + 8)..lineTo(cx + 28, cy + 10)..close();
-    c.drawPath(jaw, Paint()..color = const Color(0xFF4A1C1C));
-    for (final fx in [32.0, 36.0, 40.0]) {
-      c.drawLine(Offset(cx + fx, cy), Offset(cx + fx + 1, cy + 8), Paint()..color = const Color(0xFFECEFF1)..strokeWidth = 1.8..strokeCap = StrokeCap.round);
-    }
     c.drawCircle(Offset(cx + 26, cy - 12), 4, Paint()..color = const Color(0xFFFFFDE7));
     c.drawCircle(Offset(cx + 26, cy - 12), 1.8, Paint()..color = const Color(0xFFB71C1C));
     for (final lx in [-18.0, -6.0, 8.0, 18.0]) {
-      c.drawLine(Offset(cx + lx, cy + 12), Offset(cx + lx - 3, cy + 26), Paint()..color = const Color(0xFF4E342E)..strokeWidth = 3.8..strokeCap = StrokeCap.round);
-      c.drawCircle(Offset(cx + lx - 3, cy + 27), 3.2, Paint()..color = const Color(0xFFB71C1C));
+      c.drawLine(Offset(cx + lx, cy + 12), Offset(cx + lx - 3, cy + 26), Paint()..color = const Color(0xFF4E342E)..strokeWidth = 3.8);
     }
     if (flash > 0) c.drawCircle(Offset(cx, cy), 30, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
@@ -565,78 +567,43 @@ class WHDraw {
       ..quadraticBezierTo(cx + 24 * s, cy + 22 * s, cx + 10 * s, cy)
       ..close();
     c.drawPath(cloak, Paint()..color = const Color(0xFF5D4037).withOpacity(0.92));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 8 * s, cy + 30 * s), width: 11 * s, height: 18 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 30 * s), width: 11 * s, height: 18 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 8 * s), width: 24 * s, height: 26 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF4E342E));
-    // gas mask
     c.drawCircle(Offset(cx, cy - 12 * s), 11 * s, Paint()..color = const Color(0xFF37474F));
     c.drawCircle(Offset(cx - 3.5 * s, cy - 13 * s), 3.2 * s, Paint()..color = const Color(0xFF1B5E20));
     c.drawCircle(Offset(cx + 3.5 * s, cy - 13 * s), 3.2 * s, Paint()..color = const Color(0xFF1B5E20));
-    c.drawOval(Rect.fromCenter(center: Offset(cx, cy - 5 * s), width: 12 * s, height: 6 * s), Paint()..color = const Color(0xFF546E7A));
     bolter(c, cx + 2 * s, cy + 2 * s, s * 0.78);
     if (flash > 0) c.drawCircle(Offset(cx, cy), 34 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void cultistMelee(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 8 * s, cy + 32 * s), width: 12 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4A1515));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 32 * s), width: 12 * s, height: 20 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4A1515));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 12 * s), width: 30 * s, height: 38 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF6B1B1B));
-    // apron
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 18 * s), width: 20 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 28 * s, height: 24 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF5D4037));
     c.drawCircle(Offset(cx, cy - 16 * s), 11 * s, Paint()..color = const Color(0xFF3E2723));
     c.drawCircle(Offset(cx - 3.5 * s, cy - 16 * s), 2 * s, Paint()..color = const Color(0xFFFF1744));
     c.drawCircle(Offset(cx + 3.5 * s, cy - 16 * s), 2 * s, Paint()..color = const Color(0xFFFF1744));
     for (int i = 0; i < 3; i++) {
-      final ox = (i - 1) * 9.0 * s;
-      c.drawCircle(Offset(cx + ox, cy - 30 * s), 5.5 * s, Paint()..color = const Color(0xFFECEFF1));
-      c.drawCircle(Offset(cx + ox - 1.5 * s, cy - 31 * s), 1.2 * s, Paint()..color = const Color(0xFF212121));
-      c.drawCircle(Offset(cx + ox + 1.5 * s, cy - 31 * s), 1.2 * s, Paint()..color = const Color(0xFF212121));
+      c.drawCircle(Offset(cx + (i - 1) * 9.0 * s, cy - 30 * s), 5.5 * s, Paint()..color = const Color(0xFFECEFF1));
     }
-    c.drawLine(Offset(cx + 16 * s, cy + 2 * s), Offset(cx + 34 * s, cy - 22 * s), Paint()..color = const Color(0xFFB0BEC5)..strokeWidth = 3.5 * s..strokeCap = StrokeCap.round);
-    c.drawLine(Offset(cx - 16 * s, cy + 2 * s), Offset(cx - 32 * s, cy - 16 * s), Paint()..color = const Color(0xFF90A4AE)..strokeWidth = 3.0 * s..strokeCap = StrokeCap.round);
+    c.drawLine(Offset(cx + 16 * s, cy + 2 * s), Offset(cx + 34 * s, cy - 22 * s), Paint()..color = const Color(0xFFB0BEC5)..strokeWidth = 3.5 * s);
+    c.drawLine(Offset(cx - 16 * s, cy + 2 * s), Offset(cx - 32 * s, cy - 16 * s), Paint()..color = const Color(0xFF90A4AE)..strokeWidth = 3.0 * s);
     if (flash > 0) c.drawCircle(Offset(cx, cy), 34 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void shieldedMarine(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFF2979FF), bool withGun = false, double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 9 * s, cy + 28 * s), width: 12 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF212121));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 9 * s, cy + 28 * s), width: 12 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF212121));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 32 * s, height: 30 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF2A2A2A));
-    c.drawCircle(Offset(cx - 18 * s, cy - 4 * s), 11 * s, Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx + 18 * s, cy - 4 * s), 11 * s, Paint()..color = const Color(0xFF1A1A1A));
     c.drawCircle(Offset(cx, cy - 16 * s), 12 * s, Paint()..color = const Color(0xFF1A1A1A));
     c.drawCircle(Offset(cx - 4 * s, cy - 16 * s), 2.6 * s, Paint()..color = const Color(0xFFFF1744));
     c.drawCircle(Offset(cx + 4 * s, cy - 16 * s), 2.6 * s, Paint()..color = const Color(0xFFFF1744));
-    // tower shield
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 6 * s), width: 40 * s, height: 52 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF37474F));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 6 * s), width: 34 * s, height: 46 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF263238));
-    final tri = Path()
-      ..moveTo(cx + 8 * s, cy - 8 * s)
-      ..lineTo(cx, cy + 4 * s)
-      ..lineTo(cx + 16 * s, cy + 4 * s)
-      ..close();
-    c.drawPath(tri, Paint()..color = accent.withOpacity(0.8)..style = PaintingStyle.stroke..strokeWidth = 2 * s);
-    c.drawLine(Offset(cx + 8 * s, cy + 6 * s), Offset(cx + 8 * s, cy + 22 * s), Paint()..color = accent.withOpacity(0.5)..strokeWidth = 2 * s);
     if (withGun) bolter(c, cx - 8 * s, cy + 2 * s, s * 0.72);
     if (flash > 0) c.drawCircle(Offset(cx, cy), 36 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void hereticBoss(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     c.drawCircle(Offset(cx, cy - 8 * s), 38 * s, Paint()..color = const Color(0xFF4A0000).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 3 * s);
-    for (int i = 0; i < 6; i++) {
-      final a = (i / 6) * 2 * pi - pi / 2;
-      final x = cx + cos(a) * 38 * s;
-      final y = cy - 8 * s + sin(a) * 38 * s;
-      c.drawLine(Offset(x, y), Offset(x + cos(a) * 12 * s, y + sin(a) * 12 * s), Paint()..color = const Color(0xFF78909C)..strokeWidth = 2.5 * s);
-      c.drawCircle(Offset(x + cos(a) * 14 * s, y + sin(a) * 14 * s), 4.5 * s, Paint()..color = const Color(0xFFECEFF1));
-    }
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 16 * s), width: 30 * s, height: 42 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx, cy + 14 * s), 7 * s, Paint()..color = const Color(0xFFB8860B));
     c.drawCircle(Offset(cx, cy - 14 * s), 12 * s, Paint()..color = const Color(0xFFC4A484));
-    for (int i = 0; i < 5; i++) {
-      final a = -2.2 + i * 0.35;
-      c.drawLine(Offset(cx, cy - 18 * s), Offset(cx + cos(a) * 18 * s, cy - 18 * s + sin(a) * 16 * s), Paint()..color = const Color(0xFF8B0000)..strokeWidth = 2.5 * s);
-    }
     c.drawCircle(Offset(cx - 4 * s, cy - 14 * s), 2.6 * s, Paint()..color = const Color(0xFFFF1744));
     c.drawCircle(Offset(cx + 4 * s, cy - 14 * s), 2.6 * s, Paint()..color = const Color(0xFFFF1744));
     c.drawLine(Offset(cx + 18 * s, cy + 8 * s), Offset(cx + 30 * s, cy - 30 * s), Paint()..color = const Color(0xFF5D4037)..strokeWidth = 4.5 * s);
@@ -645,14 +612,8 @@ class WHDraw {
   }
 
   static void knightBoss(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 52 * s, height: 38 * s), Paint()..color = const Color(0xFF4E342E).withOpacity(0.5));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 13 * s, cy + 34 * s), width: 17 * s, height: 28 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF2A2A2A));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 13 * s, cy + 34 * s), width: 17 * s, height: 28 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF2A2A2A));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 42 * s, height: 36 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
     c.drawCircle(Offset(cx, cy), 9 * s, Paint()..color = const Color(0xFFB71C1C));
-    c.drawCircle(Offset(cx, cy), 4.5 * s, Paint()..color = const Color(0xFFFFD700));
-    c.drawCircle(Offset(cx - 24 * s, cy - 8 * s), 15 * s, Paint()..color = const Color(0xFF3E2723));
-    c.drawCircle(Offset(cx + 24 * s, cy - 8 * s), 15 * s, Paint()..color = const Color(0xFF3E2723));
     c.drawCircle(Offset(cx, cy - 22 * s), 13 * s, Paint()..color = const Color(0xFF212121));
     c.drawCircle(Offset(cx - 3.5 * s, cy - 22 * s), 2.6 * s, Paint()..color = const Color(0xFFFF6D00));
     c.drawCircle(Offset(cx + 3.5 * s, cy - 22 * s), 2.6 * s, Paint()..color = const Color(0xFFFF6D00));
@@ -668,13 +629,8 @@ class WHDraw {
       ..quadraticBezierTo(cx + 32 * s, cy + 32 * s, cx + 18 * s, cy)
       ..close();
     c.drawPath(cape, Paint()..color = const Color(0xFF4A148C).withOpacity(0.88));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 13 * s, cy + 36 * s), width: 17 * s, height: 30 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF1A1A1A));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 13 * s, cy + 36 * s), width: 17 * s, height: 30 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF1A1A1A));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 46 * s, height: 38 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 46 * s, height: 38 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFFC9A227)..style = PaintingStyle.stroke..strokeWidth = 2.8 * s);
-    c.drawCircle(Offset(cx, cy - 4 * s), 5.5 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawCircle(Offset(cx - 26 * s, cy - 6 * s), 15 * s, Paint()..color = const Color(0xFF2A2A2A));
-    c.drawCircle(Offset(cx + 26 * s, cy - 6 * s), 15 * s, Paint()..color = const Color(0xFF2A2A2A));
     c.drawCircle(Offset(cx, cy - 22 * s), 12 * s, Paint()..color = const Color(0xFFC4A484));
     thunderHammer(c, cx + 8 * s, cy + 4 * s, s * 0.9);
     if (flash > 0) c.drawCircle(Offset(cx, cy), 58 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
@@ -738,7 +694,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int maxHealth = 6;
   double playerSpeed = 210;
   double defenseChance = 0.0;
-  double attackSpeedMult = 1.0; // lower = faster (cooldowns * this)
+  double attackSpeedMult = 1.0;
 
   RangedWeapon rangedWeapon = RangedWeapon.bolter;
   MeleeWeapon meleeWeapon = MeleeWeapon.sword;
@@ -789,8 +745,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool get unlockedShotgun => overallLevel >= 21 || _everReached21;
   bool get unlockedAxe => overallLevel >= 11 || _everReached11;
   bool get unlockedHammer => overallLevel >= 21 || _everReached21;
-
-  /// Enemy HP grows with level + skills pressure
   double get worldThreat => 1.0 + overallLevel * 0.06 + skills.totalSpent * 0.02;
 
   void recomputeStats() {
@@ -845,6 +799,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void spawnDamageNumber(Vector2 pos, int amount, {Color color = const Color(0xFFFFEB3B)}) {
     world.add(DamageNumber(position: pos + Vector2(0, -20), amount: amount, color: color));
+  }
+
+  void spawnBlood(Vector2 pos, {int count = 14}) {
+    world.add(BloodSplash(position: pos, count: count));
   }
 
   void triggerShake({double power = 6, double time = 0.18}) {
@@ -1323,7 +1281,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     cornerStandTimer = 0;
     _checkUnlocks();
     recomputeStats();
-
     world.add(Floor(size: Vector2(mapWidth, mapHeight))..priority = 0);
     _createWalls();
     _createObstacles();
@@ -1332,7 +1289,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
     world.add(PlayerSpawnPoint(position: playerSpawnPos.clone())..priority = 3);
     _addHud();
-
     if (isBossLevel) {
       _spawnBosses();
     } else if (isMiniBossLevel) {
@@ -1514,10 +1470,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void _createObstacles() {
-    final positions = <Vector2>[
-      Vector2(320, 700), Vector2(880, 1050), Vector2(600, 1300), Vector2(450, 480), Vector2(750, 780),
-    ];
-    for (final pos in positions) {
+    for (final pos in [Vector2(320, 700), Vector2(880, 1050), Vector2(600, 1300), Vector2(450, 480), Vector2(750, 780)]) {
       if (isInSafeZone(pos, extra: 30)) continue;
       world.add(Obstacle(position: pos)..priority = 5);
     }
@@ -1614,8 +1567,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
   }
 
-  void onEnemyKilled({bool isBoss = false}) {
+  void onEnemyKilled({bool isBoss = false, Vector2? at}) {
     enemiesAlive = max(0, enemiesAlive - 1);
+    if (at != null) {
+      spawnBlood(at, count: isBoss ? 28 : 14);
+    }
     if (arenaMode) {
       arenaKills++;
       score += isBoss ? 250 : (12 + arenaWave * 2);
@@ -1635,12 +1591,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
   }
 
-  /// After portal: award skill point(s), open skills, then continue
   void goToNextLevel() {
     isPlaying = false;
     hidePortalButton();
     nearPortal = false;
-    // skill points: 1 per level, +1 on boss levels
     skillPoints += isBossLevel ? 2 : 1;
     if (currentFloor == 5 && currentLevel == 5) {
       stopMusic();
@@ -1759,11 +1713,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     hudPaint.render(canvas, '${difficulty.labelRu} | $currentWeaponName', Vector2(14, 102));
     hudPaint.render(canvas, 'SP: $skillPoints', Vector2(14, 124));
     final sec = _currentPlaySeconds();
-    hudPaint.render(
-      canvas,
-      'Time ${(sec ~/ 60).toString().padLeft(2, '0')}:${(sec % 60).toString().padLeft(2, '0')}',
-      Vector2(14, 146),
-    );
+    hudPaint.render(canvas, 'Time ${(sec ~/ 60).toString().padLeft(2, '0')}:${(sec % 60).toString().padLeft(2, '0')}', Vector2(14, 146));
     if (hasDashAbility && dashCooldown > 0) {
       hudPaint.render(canvas, 'U CD ${dashCooldown.toStringAsFixed(1)}', Vector2(14, 168));
     }
@@ -1790,10 +1740,7 @@ class HudLabel extends PositionComponent with HasGameReference<InquisitorGame> {
   @override
   void render(Canvas canvas) {
     final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 4)]),
-      ),
+      text: TextSpan(text: text, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 4)])),
       textDirection: TextDirection.ltr,
     )..layout();
     tp.paint(canvas, Offset.zero);
@@ -2460,14 +2407,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
             const SizedBox(height: 12),
             const Text('КАСТОМИЗАЦИЯ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
-            // preview strip
             Container(
               height: 56,
-              decoration: BoxDecoration(
-                color: const Color(0xFF111111),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFB8860B)),
-              ),
+              decoration: BoxDecoration(color: const Color(0xFF111111), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFB8860B))),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -2484,7 +2426,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
             Slider(value: c.capeHue.toDouble(), min: 0, max: 360, activeColor: c.capeColor(0.4), onChanged: (v) => setState(() => c.capeHue = v.round())),
             Text('Оружие: ${c.weaponHue}°', style: const TextStyle(color: Colors.white70)),
             Slider(value: c.weaponHue.toDouble(), min: 0, max: 360, activeColor: c.weaponColor(0.45), onChanged: (v) => setState(() => c.weaponHue = v.round())),
-            Text('Отделка (золото/аквила): ${c.trimHue}°', style: const TextStyle(color: Colors.white70)),
+            Text('Отделка: ${c.trimHue}°', style: const TextStyle(color: Colors.white70)),
             Slider(value: c.trimHue.toDouble(), min: 0, max: 360, activeColor: c.trimColor(0.55), onChanged: (v) => setState(() => c.trimHue = v.round())),
             TextButton(
               onPressed: () => setState(() {
@@ -2733,7 +2675,6 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
     final d = aimDir.length2 < 0.01 ? Vector2(0, -1) : aimDir;
     if (game.usingMelee) {
-      // enlarged radii to match larger sprites
       switch (game.meleeWeapon) {
         case MeleeWeapon.sword:
           game.world.add(MeleeAttack(position: position + d * 48, direction: d, radius: 56, damage: game.swordDamage, color: const Color(0xFF00E5FF))..priority = 13);
@@ -2836,8 +2777,13 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
     if (other is Enemy || other is EnemyBullet || other is BossProjectile) {
       takeDamage(other is Enemy && other.type == EnemyType.dog ? 2 : 1);
-      other.removeFromParent();
-      if (other is Enemy) game.onEnemyKilled();
+      if (other is Enemy) {
+        final pos = other.position.clone();
+        other.removeFromParent();
+        game.onEnemyKilled(at: pos);
+      } else {
+        other.removeFromParent();
+      }
     }
     if (other is Boss || other is KnightBoss || other is KingBoss || other is MiniBoss || other is TentacleBoss) {
       takeDamage(1);
@@ -3054,8 +3000,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount);
     if (hp <= 0) {
+      final pos = position.clone();
       removeFromParent();
-      game.onEnemyKilled();
+      game.onEnemyKilled(at: pos);
     }
   }
 
@@ -3186,8 +3133,9 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       game.triggerShake(power: 8, time: 0.22);
     }
     if (currentHp <= 0) {
+      final pos = position.clone();
       removeFromParent();
-      game.onEnemyKilled(isBoss: true);
+      game.onEnemyKilled(isBoss: true, at: pos);
     }
   }
 
@@ -3284,8 +3232,9 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     game.spawnDamageNumber(position, amount, color: const Color(0xFFE53935));
     _checkPhase();
     if (currentHp <= 0) {
+      final pos = position.clone();
       removeFromParent();
-      game.onEnemyKilled(isBoss: true);
+      game.onEnemyKilled(isBoss: true, at: pos);
     }
   }
 
@@ -3373,8 +3322,9 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     game.spawnDamageNumber(position, amount, color: const Color(0xFF78909C));
     _checkPhase();
     if (currentHp <= 0) {
+      final pos = position.clone();
       removeFromParent();
-      game.onEnemyKilled(isBoss: true);
+      game.onEnemyKilled(isBoss: true, at: pos);
     }
   }
 
@@ -3497,8 +3447,9 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     }
     _checkHardPhase();
     if (currentHp <= 0) {
+      final pos = position.clone();
       removeFromParent();
-      game.onEnemyKilled(isBoss: true);
+      game.onEnemyKilled(isBoss: true, at: pos);
     }
   }
 
@@ -3612,7 +3563,9 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
     game.spawnDamageNumber(position, amount, color: const Color(0xFF9C27B0));
     if (currentHp <= 0) {
       currentHp = 0;
+      final pos = position.clone();
       removeFromParent();
+      game.spawnBlood(pos, count: 36);
       game.onSecretBossKilled();
     }
   }
@@ -3646,7 +3599,6 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
           ..strokeWidth = 12
           ..strokeCap = StrokeCap.round,
       );
-      // suckers
       for (int s = 2; s <= 5; s++) {
         final f = s / 6;
         final ang = baseA + sin(t * 2 + s * 0.4 + i) * 0.35;
