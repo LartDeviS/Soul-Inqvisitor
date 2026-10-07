@@ -51,13 +51,16 @@ enum MeleeWeapon {
 enum EnemyType { shooter, melee, shielded, dog, shieldedShooter, flamer, sniper, brute }
 enum Difficulty { easy, normal, hard }
 enum PlayerClass { xenos, malleus, hereticus }
-enum RelicId { crit, lifesteal, shieldPierce, killExplosion, haste }
+enum RelicId { crit, lifesteal, shieldPierce, killExplosion, haste, jediPath }
 
 enum StatusType { burn, bleed, slow, corruption }
 enum ActiveArtifact { fragGrenade, holyAura, servoTurret }
 enum BarrelMod { none, rapid, heavy }
 enum SightMod { none, precision, wide }
 enum AmmoMod { none, ricochet, explosive, pierce }
+
+/// For echo-boss on next floor
+enum EchoBossKind { none, mini, ranged, knight, king }
 
 enum CodexId {
   shooter, melee, shielded, dog, shieldedShooter, flamer, sniper, brute,
@@ -106,7 +109,7 @@ extension ClassLabel on PlayerClass {
   String get subtitle {
     switch (this) {
       case PlayerClass.xenos: return 'Охотник на ксеносов. Баланс HP/урона. Болтер и силовое оружие.';
-      case PlayerClass.malleus: return 'Псайкер. −1 HP, +пси-урон, медленнее. Посох-волна и варп.';
+      case PlayerClass.malleus: return 'Псайкер. −1 HP, +пси-урон, медленнее. Посох-волна и варп. Увеличенная дальность.';
       case PlayerClass.hereticus: return 'Ассасин. −1 HP, +скорость, рывок. Катана и кинжалы.';
     }
   }
@@ -141,6 +144,7 @@ extension RelicMeta on RelicId {
       case RelicId.shieldPierce: return 'Иглы веры';
       case RelicId.killExplosion: return 'Разряд очищения';
       case RelicId.haste: return 'Шаги святого';
+      case RelicId.jediPath: return 'Путь Джедая';
     }
   }
   String get desc {
@@ -150,6 +154,7 @@ extension RelicMeta on RelicId {
       case RelicId.shieldPierce: return 'Частичное пробитие щитов';
       case RelicId.killExplosion: return 'Взрыв при убийстве';
       case RelicId.haste: return '+12% скорость 3с после килла';
+      case RelicId.jediPath: return 'Клинок сбивает вражеские пули';
     }
   }
 }
@@ -166,7 +171,7 @@ extension ArtifactMeta on ActiveArtifact {
     switch (this) {
       case ActiveArtifact.fragGrenade: return 'Взрыв по направлению прицела. CD 14с';
       case ActiveArtifact.holyAura: return '8с: −30% входящего, лёгкий DoT вокруг. CD 18с';
-      case ActiveArtifact.servoTurret: return 'Турель 8с, стреляет по ближайшим. CD 16с';
+      case ActiveArtifact.servoTurret: return 'Турель 8с, стреляет по врагам и боссам. CD 16с';
     }
   }
   double get cooldown {
@@ -232,7 +237,6 @@ extension CodexMeta on CodexId {
         return 'Элита культа. Золотая печать над головой. Убей — и реликвия может пасть к ногам Инквизитора.';
     }
   }
-  /// weak passive when unlocked
   String get knowledgeBonus {
     switch (this) {
       case CodexId.shooter:
@@ -341,6 +345,7 @@ class GameSave {
   final bool arenaMode; final int arenaKills, skillPoints;
   final Map<String, dynamic> skills, custom; final String playerClass; final List<String> relics;
   final String artifact; final Map<String, dynamic> loadout; final List<String> codex;
+  final String lastEcho;
 
   GameSave({
     required this.name, required this.floor, required this.level, required this.score,
@@ -352,7 +357,7 @@ class GameSave {
     required this.playSeconds, required this.dateIso, this.difficulty = 'normal', this.arenaMode = false,
     this.arenaKills = 0, this.skillPoints = 0, this.skills = const {}, this.custom = const {},
     this.playerClass = 'xenos', this.relics = const [], this.artifact = 'fragGrenade',
-    this.loadout = const {}, this.codex = const [],
+    this.loadout = const {}, this.codex = const [], this.lastEcho = 'none',
   });
 
   Map<String, dynamic> toJson() => {
@@ -364,6 +369,7 @@ class GameSave {
     'playSeconds': playSeconds, 'dateIso': dateIso, 'difficulty': difficulty, 'arenaMode': arenaMode,
     'arenaKills': arenaKills, 'skillPoints': skillPoints, 'skills': skills, 'custom': custom,
     'playerClass': playerClass, 'relics': relics, 'artifact': artifact, 'loadout': loadout, 'codex': codex,
+    'lastEcho': lastEcho,
   };
 
   factory GameSave.fromJson(Map<String, dynamic> j) => GameSave(
@@ -384,6 +390,7 @@ class GameSave {
     artifact: j['artifact'] as String? ?? 'fragGrenade',
     loadout: Map<String, dynamic>.from(j['loadout'] as Map? ?? {}),
     codex: (j['codex'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+    lastEcho: j['lastEcho'] as String? ?? 'none',
   );
 
   String get dateStr {
@@ -396,13 +403,17 @@ class GameSave {
 
 class DamageNumber extends PositionComponent {
   final int amount; final Color color; double life = 0.85; double vy = -55;
-  DamageNumber({required Vector2 position, required this.amount, this.color = const Color(0xFFFFEB3B)}) : super(position: position.clone(), priority: 100);
+  final String? label;
+  DamageNumber({required Vector2 position, required this.amount, this.color = const Color(0xFFFFEB3B), this.label})
+      : super(position: position.clone(), priority: 100);
   @override
   void update(double dt) { super.update(dt); life -= dt; position.y += vy * dt; vy *= 0.98; if (life <= 0) removeFromParent(); }
   @override
   void render(Canvas canvas) {
     final a = (life / 0.85).clamp(0.0, 1.0);
-    final tp = TextPainter(text: TextSpan(text: '-$amount', style: TextStyle(color: color.withOpacity(a), fontSize: 18, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black.withOpacity(a), blurRadius: 3)])), textDirection: TextDirection.ltr)..layout();
+    final text = label ?? (amount > 0 ? '-$amount' : '');
+    if (text.isEmpty) return;
+    final tp = TextPainter(text: TextSpan(text: text, style: TextStyle(color: color.withOpacity(a), fontSize: label != null ? 14 : 18, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black.withOpacity(a), blurRadius: 3)])), textDirection: TextDirection.ltr)..layout();
     tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
   }
 }
@@ -458,11 +469,33 @@ class ComboBanner extends PositionComponent with HasGameReference<InquisitorGame
   }
 }
 
-/// Red warning zone before boss attacks
+/// Afterimage trail for dash / laser i-frame feedback
+class AfterImage extends PositionComponent {
+  double life = 0.28;
+  final double maxLife = 0.28;
+  final PlayerClass cls;
+  final Customization? custom;
+  AfterImage({required Vector2 position, required this.cls, this.custom})
+      : super(position: position.clone(), size: Vector2(76, 86), anchor: Anchor.center, priority: 14);
+  @override
+  void update(double dt) {
+    super.update(dt);
+    life -= dt;
+    if (life <= 0) removeFromParent();
+  }
+  @override
+  void render(Canvas canvas) {
+    final a = (life / maxLife).clamp(0.0, 1.0) * 0.45;
+    canvas.saveLayer(null, Paint()..color = Color.fromRGBO(255, 255, 255, a));
+    WHDraw.inquisitor(canvas, cx: size.x / 2, cy: size.y / 2, s: 1.25, custom: custom, cls: cls);
+    canvas.restore();
+  }
+}
+
 class TelegraphZone extends PositionComponent {
-  final String shape; // circle | cone | cross
+  final String shape;
   final double radius;
-  final double angle; // for cone direction
+  final double angle;
   double life;
   final double maxLife;
   TelegraphZone({
@@ -507,11 +540,32 @@ class TelegraphZone extends PositionComponent {
     }
   }
 }
-/// Procedural WH40k art — class silhouettes, weapons, enemies
+/// Procedural WH40k art — denser plates, rivets, glow, class silhouettes
 class WHDraw {
+  static void _rivets(Canvas c, double cx, double cy, double w, double h, Color col, double s) {
+    final p = Paint()..color = col;
+    for (final dx in [-w * 0.35, w * 0.35]) {
+      for (final dy in [-h * 0.3, h * 0.3]) {
+        c.drawCircle(Offset(cx + dx * s, cy + dy * s), 1.6 * s, p);
+      }
+    }
+  }
+
   static void _armorPlate(Canvas c, Rect r, Color col, Color edge) {
     c.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(3)), Paint()..color = col);
-    c.drawRRect(RRect.fromRectAndRadius(r.deflate(2), const Radius.circular(2)), Paint()..color = edge.withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 1.2);
+    c.drawRRect(
+      RRect.fromRectAndRadius(r.deflate(2), const Radius.circular(2)),
+      Paint()
+        ..color = edge.withOpacity(0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.3,
+    );
+    // inner highlight
+    c.drawLine(
+      Offset(r.left + 4, r.top + 3),
+      Offset(r.right - 4, r.top + 3),
+      Paint()..color = Colors.white.withOpacity(0.12)..strokeWidth = 1.2,
+    );
   }
 
   static void inquisitor(Canvas c, {required double cx, required double cy, double s = 1.32, double flash = 0, Customization? custom, PlayerClass cls = PlayerClass.xenos}) {
@@ -524,6 +578,8 @@ class WHDraw {
     switch (cls) {
       case PlayerClass.xenos:
         armor = custom?.armorColor(0.28) ?? const Color(0xFF37474F);
+        armorLite = custom?.armorColor(0.40) ?? const Color(0xFF546E7A);
+        dark = custom?.armorColor(0.14) ?? const Color(0xFF1C2830);
         capeCol = custom?.capeColor(0.30) ?? const Color(0xFFB71C1C);
         visor = const Color(0xFFFF1744);
         gold = custom?.trimColor(0.55) ?? const Color(0xFFFFD700);
@@ -545,6 +601,15 @@ class WHDraw {
         gold = const Color(0xFFCE93D8);
         break;
     }
+
+    // cape layers
+    final capeBack = Path()
+      ..moveTo(cx - 12 * s, cy + 2 * s)
+      ..quadraticBezierTo(cx - 56 * s, cy + 28 * s, cx - 20 * s, cy + 62 * s)
+      ..lineTo(cx + 20 * s, cy + 62 * s)
+      ..quadraticBezierTo(cx + 56 * s, cy + 28 * s, cx + 12 * s, cy + 2 * s)
+      ..close();
+    c.drawPath(capeBack, Paint()..color = capeCol.withOpacity(0.55));
     final cape = Path()
       ..moveTo(cx - 14 * s, cy)
       ..quadraticBezierTo(cx - 50 * s, cy + 30 * s, cx - 16 * s, cy + 56 * s)
@@ -552,234 +617,385 @@ class WHDraw {
       ..quadraticBezierTo(cx + 50 * s, cy + 30 * s, cx + 14 * s, cy)
       ..close();
     c.drawPath(cape, Paint()..color = capeCol.withOpacity(0.92));
-    c.drawPath(cape, Paint()..color = gold.withOpacity(0.25)..style = PaintingStyle.stroke..strokeWidth = 1.5 * s);
+    c.drawPath(cape, Paint()..color = gold.withOpacity(0.28)..style = PaintingStyle.stroke..strokeWidth = 1.6 * s);
+    // cape folds
+    c.drawLine(Offset(cx - 8 * s, cy + 12 * s), Offset(cx - 18 * s, cy + 48 * s), Paint()..color = Colors.black.withOpacity(0.2)..strokeWidth = 2 * s);
+    c.drawLine(Offset(cx + 8 * s, cy + 12 * s), Offset(cx + 18 * s, cy + 48 * s), Paint()..color = Colors.black.withOpacity(0.2)..strokeWidth = 2 * s);
+
+    // legs with knee plates
     for (final lx in [-11.0, 11.0]) {
-      c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + lx * s, cy + 32 * s), width: 14 * s, height: 26 * s), Radius.circular(2 * s)), Paint()..color = armor);
-      c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + lx * s, cy + 42 * s), width: 16 * s, height: 8 * s), Radius.circular(2 * s)), Paint()..color = dark);
+      c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + lx * s, cy + 32 * s), width: 14 * s, height: 28 * s), Radius.circular(2 * s)), Paint()..color = armor);
+      c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + lx * s, cy + 28 * s), width: 16 * s, height: 8 * s), Radius.circular(2 * s)), Paint()..color = armorLite);
+      c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + lx * s, cy + 44 * s), width: 16 * s, height: 8 * s), Radius.circular(2 * s)), Paint()..color = dark);
     }
-    _armorPlate(c, Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 38 * s, height: 36 * s), armor, gold);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 24 * s, height: 22 * s), Radius.circular(4 * s)), Paint()..color = armorLite);
-    c.drawCircle(Offset(cx, cy + 4 * s), 7 * s, Paint()..color = gold);
-    c.drawCircle(Offset(cx, cy + 4 * s), 3.5 * s, Paint()..color = dark);
+
+    // torso plates
+    _armorPlate(c, Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 40 * s, height: 38 * s), armor, gold);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 26 * s, height: 24 * s), Radius.circular(4 * s)), Paint()..color = armorLite);
+    _rivets(c, cx, cy + 4 * s, 36, 30, gold.withOpacity(0.7), s);
+
+    // aquila / purity seal
+    c.drawCircle(Offset(cx, cy + 4 * s), 8 * s, Paint()..color = gold);
+    c.drawCircle(Offset(cx, cy + 4 * s), 4 * s, Paint()..color = dark);
+    c.drawLine(Offset(cx - 5 * s, cy + 4 * s), Offset(cx + 5 * s, cy + 4 * s), Paint()..color = gold..strokeWidth = 1.5 * s);
+
+    // class ornaments
     if (cls == PlayerClass.malleus) {
-      c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 28 * s), width: 28 * s, height: 14 * s), Radius.circular(6 * s)), Paint()..color = const Color(0xFF4527A0));
-      c.drawCircle(Offset(cx, cy - 30 * s), 5 * s, Paint()..color = visor.withOpacity(0.7));
+      c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 30 * s), width: 30 * s, height: 16 * s), Radius.circular(6 * s)), Paint()..color = const Color(0xFF4527A0));
+      c.drawCircle(Offset(cx, cy - 32 * s), 6 * s, Paint()..color = visor.withOpacity(0.75));
+      c.drawCircle(Offset(cx, cy - 32 * s), 2.5 * s, Paint()..color = Colors.white70);
+      // psychic hood vents
+      for (final dx in [-10.0, 10.0]) {
+        c.drawRect(Rect.fromCenter(center: Offset(cx + dx * s, cy - 28 * s), width: 4 * s, height: 8 * s), Paint()..color = dark);
+      }
     }
     if (cls == PlayerClass.hereticus) {
-      c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 8 * s), width: 20 * s, height: 8 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF311B92));
+      c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 8 * s), width: 22 * s, height: 9 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF311B92));
+      // hood peak
+      final hood = Path()
+        ..moveTo(cx - 14 * s, cy - 14 * s)
+        ..lineTo(cx, cy - 28 * s)
+        ..lineTo(cx + 14 * s, cy - 14 * s)
+        ..close();
+      c.drawPath(hood, Paint()..color = dark);
     }
-    c.drawCircle(Offset(cx - 22 * s, cy - 4 * s), 14 * s, Paint()..color = armor);
-    c.drawCircle(Offset(cx + 22 * s, cy - 4 * s), 14 * s, Paint()..color = armor);
-    c.drawArc(Rect.fromCircle(center: Offset(cx - 22 * s, cy - 4 * s), radius: 14 * s), pi, pi, false, Paint()..color = gold..style = PaintingStyle.stroke..strokeWidth = 2 * s);
-    c.drawArc(Rect.fromCircle(center: Offset(cx + 22 * s, cy - 4 * s), radius: 14 * s), pi, pi, false, Paint()..color = gold..style = PaintingStyle.stroke..strokeWidth = 2 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 26 * s, cy + 16 * s), width: 11 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = armor);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 26 * s, cy + 16 * s), width: 11 * s, height: 22 * s), Radius.circular(2 * s)), Paint()..color = armor);
-    c.drawCircle(Offset(cx, cy - 18 * s), 12 * s, Paint()..color = const Color(0xFFC4A484));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 22 * s), width: 24 * s, height: 11 * s), Radius.circular(2 * s)), Paint()..color = dark);
-    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 19 * s), width: 15 * s, height: 3.5 * s), Paint()..color = visor.withOpacity(0.95));
-    c.drawLine(Offset(cx - 8 * s, cy + 18 * s), Offset(cx - 8 * s, cy + 28 * s), Paint()..color = const Color(0xFFFFF8E1)..strokeWidth = 2 * s);
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 46 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
+    if (cls == PlayerClass.xenos) {
+      // purity seals ribbons
+      c.drawLine(Offset(cx + 16 * s, cy + 10 * s), Offset(cx + 22 * s, cy + 28 * s), Paint()..color = const Color(0xFFFFF8E1)..strokeWidth = 2 * s);
+      c.drawCircle(Offset(cx + 16 * s, cy + 10 * s), 3 * s, Paint()..color = gold);
+    }
+
+    // pauldrons
+    c.drawCircle(Offset(cx - 24 * s, cy - 4 * s), 15 * s, Paint()..color = armor);
+    c.drawCircle(Offset(cx + 24 * s, cy - 4 * s), 15 * s, Paint()..color = armor);
+    c.drawArc(Rect.fromCircle(center: Offset(cx - 24 * s, cy - 4 * s), radius: 15 * s), pi, pi, false, Paint()..color = gold..style = PaintingStyle.stroke..strokeWidth = 2.2 * s);
+    c.drawArc(Rect.fromCircle(center: Offset(cx + 24 * s, cy - 4 * s), radius: 15 * s), pi, pi, false, Paint()..color = gold..style = PaintingStyle.stroke..strokeWidth = 2.2 * s);
+    c.drawCircle(Offset(cx - 24 * s, cy - 6 * s), 4 * s, Paint()..color = gold.withOpacity(0.5));
+    c.drawCircle(Offset(cx + 24 * s, cy - 6 * s), 4 * s, Paint()..color = gold.withOpacity(0.5));
+
+    // arms
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 28 * s, cy + 16 * s), width: 12 * s, height: 24 * s), Radius.circular(2 * s)), Paint()..color = armor);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 28 * s, cy + 16 * s), width: 12 * s, height: 24 * s), Radius.circular(2 * s)), Paint()..color = armor);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 28 * s, cy + 8 * s), width: 14 * s, height: 8 * s), Radius.circular(2 * s)), Paint()..color = armorLite);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 28 * s, cy + 8 * s), width: 14 * s, height: 8 * s), Radius.circular(2 * s)), Paint()..color = armorLite);
+
+    // head
+    c.drawCircle(Offset(cx, cy - 18 * s), 13 * s, Paint()..color = const Color(0xFFC4A484));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 22 * s), width: 26 * s, height: 12 * s), Radius.circular(2 * s)), Paint()..color = dark);
+    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 19 * s), width: 16 * s, height: 4 * s), Paint()..color = visor.withOpacity(0.95));
+    c.drawLine(Offset(cx - 8 * s, cy - 19 * s), Offset(cx + 8 * s, cy - 19 * s), Paint()..color = visor.withOpacity(0.5)..strokeWidth = 1);
+
+    // purity parchment
+    c.drawLine(Offset(cx - 8 * s, cy + 18 * s), Offset(cx - 8 * s, cy + 30 * s), Paint()..color = const Color(0xFFFFF8E1)..strokeWidth = 2.2 * s);
+
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 48 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
 
   static void bolter(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final body = accent ?? const Color(0xFFC62828);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 2 * s, 11 * s, 15 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF6D4C41));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy - 11 * s, 32 * s, 15 * s), Radius.circular(2 * s)), Paint()..color = body);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 18 * s, cy + 4 * s, 10 * s, 14 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
-    c.drawCircle(Offset(cx + 26 * s, cy - 3 * s), 5 * s, Paint()..color = const Color(0xFFFFF8E1));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 38 * s, cy - 7 * s, 20 * s, 7 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
+    // stock
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - 4 * s, cy - 3 * s, 14 * s, 12 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4E342E));
+    // grip
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 2 * s, 11 * s, 16 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF6D4C41));
+    // receiver
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy - 12 * s, 34 * s, 16 * s), Radius.circular(2 * s)), Paint()..color = body);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 12 * s, cy - 10 * s, 26 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = Colors.white.withOpacity(0.15));
+    // mag
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 18 * s, cy + 4 * s, 11 * s, 16 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
+    // vent holes
+    for (int i = 0; i < 3; i++) {
+      c.drawCircle(Offset(cx + 16 * s + i * 6 * s, cy - 4 * s), 2 * s, Paint()..color = const Color(0xFF212121));
+    }
+    // barrel
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 40 * s, cy - 7 * s, 22 * s, 7 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
+    c.drawCircle(Offset(cx + 28 * s, cy - 4 * s), 4 * s, Paint()..color = const Color(0xFFFFF8E1));
   }
 
   static void rifle(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final glow = accent ?? const Color(0xFF00E5FF);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 6 * s, 40 * s, 11 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFFA1887F));
-    for (int i = 0; i < 5; i++) c.drawCircle(Offset(cx + 26 * s + i * 5 * s, cy), 3.2 * s, Paint()..color = glow.withOpacity(0.85));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 4 * s, 12 * s, 10 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF5D4037));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 7 * s, 48 * s, 12 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFFA1887F));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 50 * s, cy - 5 * s, 18 * s, 6 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF78909C));
+    for (int i = 0; i < 6; i++) {
+      c.drawCircle(Offset(cx + 22 * s + i * 5.5 * s, cy), 2.8 * s, Paint()..color = glow.withOpacity(0.85));
+    }
+    c.drawCircle(Offset(cx + 20 * s, cy - 12 * s), 4 * s, Paint()..color = glow.withOpacity(0.5));
   }
 
   static void shotgun(Canvas c, double cx, double cy, double s, {Color? accent}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 12 * s, cy - 5 * s, 30 * s, 10 * s), Radius.circular(1 * s)), Paint()..color = accent ?? const Color(0xFF546E7A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 3 * s, 10 * s, 12 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF4E342E));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 10 * s, cy - 6 * s, 28 * s, 12 * s), Radius.circular(2 * s)), Paint()..color = accent ?? const Color(0xFF546E7A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 36 * s, cy - 5 * s, 14 * s, 10 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF78909C));
+    // dual barrels
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 48 * s, cy - 7 * s, 16 * s, 4 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF455A64));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 48 * s, cy - 1 * s, 16 * s, 4 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF455A64));
   }
 
   static void staff(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final glow = accent ?? const Color(0xFF7C4DFF);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 4 * s, 8 * s, 52 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4A148C));
-    c.drawCircle(Offset(cx + 10 * s, cy - 14 * s), 11 * s, Paint()..color = glow.withOpacity(0.9));
-    c.drawCircle(Offset(cx + 10 * s, cy - 14 * s), 5 * s, Paint()..color = Colors.white70);
+    // longer shaft for Malleus reach
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 6 * s, 9 * s, 64 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4A148C));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 5 * s, cy - 4 * s, 7 * s, 60 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF7E57C2).withOpacity(0.35));
+    // focus crystal
+    c.drawCircle(Offset(cx + 9 * s, cy - 18 * s), 13 * s, Paint()..color = glow.withOpacity(0.35));
+    c.drawCircle(Offset(cx + 9 * s, cy - 18 * s), 10 * s, Paint()..color = glow.withOpacity(0.9));
+    c.drawCircle(Offset(cx + 9 * s, cy - 18 * s), 4.5 * s, Paint()..color = Colors.white70);
+    // rings
+    c.drawCircle(Offset(cx + 9 * s, cy - 18 * s), 16 * s, Paint()..color = glow.withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 2 * s);
   }
 
   static void stormStaff(Canvas c, double cx, double cy, double s, {Color? accent}) {
-    staff(c, cx, cy, s, accent: accent ?? const Color(0xFFEA80FC));
-    c.drawCircle(Offset(cx + 10 * s, cy - 14 * s), 16 * s, Paint()..color = const Color(0xFFEA80FC).withOpacity(0.25)..style = PaintingStyle.stroke..strokeWidth = 2 * s);
+    staff(c, cx, cy, s * 1.05, accent: accent ?? const Color(0xFFEA80FC));
+    c.drawCircle(Offset(cx + 9 * s, cy - 18 * s), 20 * s, Paint()..color = const Color(0xFFEA80FC).withOpacity(0.22)..style = PaintingStyle.stroke..strokeWidth = 2.5 * s);
+    for (int i = 0; i < 4; i++) {
+      final a = i * pi / 2;
+      c.drawLine(Offset(cx + 9 * s + cos(a) * 12 * s, cy - 18 * s + sin(a) * 12 * s), Offset(cx + 9 * s + cos(a) * 22 * s, cy - 18 * s + sin(a) * 22 * s), Paint()..color = const Color(0xFFEA80FC).withOpacity(0.6)..strokeWidth = 1.5 * s);
+    }
   }
 
   static void warpBeamGun(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final g = accent ?? const Color(0xFF651FFF);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 8 * s, 36 * s, 14 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF311B92));
-    c.drawCircle(Offset(cx + 42 * s, cy), 8 * s, Paint()..color = g);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 10 * s, 40 * s, 16 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF311B92));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy - 7 * s, 28 * s, 10 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF5E35B1));
+    c.drawCircle(Offset(cx + 46 * s, cy), 10 * s, Paint()..color = g.withOpacity(0.5));
+    c.drawCircle(Offset(cx + 46 * s, cy), 7 * s, Paint()..color = g);
+    c.drawCircle(Offset(cx + 46 * s, cy), 3 * s, Paint()..color = Colors.white70);
   }
 
   static void daggers(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final blade = accent ?? const Color(0xFFE0E0E0);
-    for (final ox in [-6.0, 6.0]) {
-      final p = Path()..moveTo(cx + ox * s, cy + 4 * s)..lineTo(cx + ox * s + 4 * s, cy - 28 * s)..lineTo(cx + ox * s + 8 * s, cy + 4 * s)..close();
+    for (final ox in [-7.0, 7.0]) {
+      final p = Path()
+        ..moveTo(cx + ox * s, cy + 5 * s)
+        ..lineTo(cx + ox * s + 3 * s, cy - 30 * s)
+        ..lineTo(cx + ox * s + 7 * s, cy + 5 * s)
+        ..close();
       c.drawPath(p, Paint()..color = blade);
+      c.drawLine(Offset(cx + ox * s + 3.5 * s, cy + 5 * s), Offset(cx + ox * s + 3.5 * s, cy - 28 * s), Paint()..color = Colors.white54..strokeWidth = 1 * s);
+      c.drawRect(Rect.fromCenter(center: Offset(cx + ox * s + 3.5 * s, cy + 7 * s), width: 10 * s, height: 4 * s), Paint()..color = const Color(0xFF4A148C));
     }
   }
 
   static void needles(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final col = accent ?? const Color(0xFFCE93D8);
     for (int i = 0; i < 3; i++) {
-      c.drawLine(Offset(cx + 4 * s, cy - 2 * s + i * 4 * s), Offset(cx + 36 * s, cy - 18 * s + i * 4 * s), Paint()..color = col..strokeWidth = 2 * s);
+      c.drawLine(Offset(cx + 4 * s, cy - 2 * s + i * 5 * s), Offset(cx + 40 * s, cy - 20 * s + i * 5 * s), Paint()..color = col..strokeWidth = 2.2 * s);
+      c.drawCircle(Offset(cx + 40 * s, cy - 20 * s + i * 5 * s), 2 * s, Paint()..color = Colors.white70);
     }
   }
 
   static void sniperNeedle(Canvas c, double cx, double cy, double s, {Color? accent}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 4 * s, 48 * s, 6 * s), Radius.circular(1 * s)), Paint()..color = accent ?? const Color(0xFF9C27B0));
-    c.drawCircle(Offset(cx + 20 * s, cy - 10 * s), 4 * s, Paint()..color = const Color(0xFFE040FB));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 5 * s, 52 * s, 7 * s), Radius.circular(1 * s)), Paint()..color = accent ?? const Color(0xFF9C27B0));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 18 * s, cy - 14 * s, 10 * s, 8 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF6A1B9A));
+    c.drawCircle(Offset(cx + 23 * s, cy - 10 * s), 3.5 * s, Paint()..color = const Color(0xFFE040FB));
   }
 
   static void powerSword(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final blade = accent ?? const Color(0xFF4DD0E1);
-    final p = Path()..moveTo(cx + 10 * s, cy - 2 * s)..lineTo(cx + 14 * s, cy - 42 * s)..lineTo(cx + 18 * s, cy - 2 * s)..close();
+    final p = Path()
+      ..moveTo(cx + 10 * s, cy - 2 * s)
+      ..lineTo(cx + 14 * s, cy - 46 * s)
+      ..lineTo(cx + 18 * s, cy - 2 * s)
+      ..close();
+    c.drawPath(p, Paint()..color = blade.withOpacity(0.35));
     c.drawPath(p, Paint()..color = blade);
-    c.drawRect(Rect.fromCenter(center: Offset(cx + 10 * s, cy), width: 18 * s, height: 6 * s), Paint()..color = const Color(0xFFB8860B));
+    c.drawLine(Offset(cx + 14 * s, cy - 4 * s), Offset(cx + 14 * s, cy - 42 * s), Paint()..color = Colors.white54..strokeWidth = 1.5 * s);
+    c.drawRect(Rect.fromCenter(center: Offset(cx + 10 * s, cy), width: 18 * s, height: 7 * s), Paint()..color = const Color(0xFFB8860B));
+    c.drawCircle(Offset(cx + 10 * s, cy), 3 * s, Paint()..color = blade);
   }
 
   static void chainAxe(Canvas c, double cx, double cy, double s, {Color? accent}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 2.5 * s, 30 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF8D4E3A));
-    final head = Offset(cx + 38 * s, cy);
-    final top = Path()..moveTo(head.dx, head.dy - 3 * s)..lineTo(head.dx + 8 * s, head.dy - 24 * s)..lineTo(head.dx + 18 * s, head.dy - 8 * s)..close();
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 2.5 * s, 32 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF8D4E3A));
+    final head = Offset(cx + 40 * s, cy);
+    final top = Path()
+      ..moveTo(head.dx, head.dy - 3 * s)
+      ..lineTo(head.dx + 10 * s, head.dy - 26 * s)
+      ..lineTo(head.dx + 20 * s, head.dy - 8 * s)
+      ..close();
     c.drawPath(top, Paint()..color = accent ?? const Color(0xFF78909C));
-    c.drawCircle(head, 6 * s, Paint()..color = const Color(0xFF546E7A));
+    // teeth
+    for (int i = 0; i < 4; i++) {
+      c.drawLine(Offset(head.dx + 4 * s + i * 3 * s, head.dy - 8 * s - i * 4 * s), Offset(head.dx + 8 * s + i * 3 * s, head.dy - 14 * s - i * 4 * s), Paint()..color = const Color(0xFFB0BEC5)..strokeWidth = 1.5 * s);
+    }
+    c.drawCircle(head, 7 * s, Paint()..color = const Color(0xFF546E7A));
+    c.drawCircle(head, 3 * s, Paint()..color = const Color(0xFFFF6D00));
   }
 
   static void thunderHammer(Canvas c, double cx, double cy, double s, {Color? accent}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 2 * s, 36 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF3E2723));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 48 * s, cy), width: 18 * s, height: 24 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF455A64));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 48 * s, cy), width: 12 * s, height: 16 * s), Radius.circular(1 * s)), Paint()..color = accent ?? const Color(0xFFB8860B));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 2 * s, 38 * s, 5 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF3E2723));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 50 * s, cy), width: 20 * s, height: 26 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF455A64));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 50 * s, cy), width: 14 * s, height: 18 * s), Radius.circular(1 * s)), Paint()..color = accent ?? const Color(0xFFB8860B));
+    c.drawLine(Offset(cx + 50 * s, cy - 10 * s), Offset(cx + 50 * s, cy + 10 * s), Paint()..color = Colors.white24..strokeWidth = 2 * s);
   }
 
   static void forceBlade(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final blade = accent ?? const Color(0xFFB388FF);
-    final p = Path()..moveTo(cx + 8 * s, cy)..lineTo(cx + 16 * s, cy - 48 * s)..lineTo(cx + 24 * s, cy)..close();
+    // longer blade for Malleus
+    final p = Path()
+      ..moveTo(cx + 8 * s, cy)
+      ..lineTo(cx + 16 * s, cy - 56 * s)
+      ..lineTo(cx + 24 * s, cy)
+      ..close();
+    c.drawPath(p, Paint()..color = blade.withOpacity(0.3));
     c.drawPath(p, Paint()..color = blade);
-    c.drawCircle(Offset(cx + 16 * s, cy), 6 * s, Paint()..color = const Color(0xFF4A148C));
+    c.drawCircle(Offset(cx + 16 * s, cy), 7 * s, Paint()..color = const Color(0xFF4A148C));
+    c.drawCircle(Offset(cx + 16 * s, cy), 3 * s, Paint()..color = blade);
   }
 
   static void forceSword(Canvas c, double cx, double cy, double s, {Color? accent}) {
-    forceBlade(c, cx, cy, s * 1.1, accent: accent ?? const Color(0xFFEA80FC));
-    c.drawCircle(Offset(cx + 16 * s, cy - 20 * s), 4 * s, Paint()..color = Colors.white54);
+    forceBlade(c, cx, cy, s * 1.12, accent: accent ?? const Color(0xFFEA80FC));
+    c.drawCircle(Offset(cx + 16 * s, cy - 24 * s), 5 * s, Paint()..color = Colors.white54);
   }
 
   static void daemonHammer(Canvas c, double cx, double cy, double s, {Color? accent}) {
-    thunderHammer(c, cx, cy, s, accent: accent ?? const Color(0xFF7C4DFF));
-    c.drawCircle(Offset(cx + 48 * s, cy), 10 * s, Paint()..color = const Color(0xFF7C4DFF).withOpacity(0.35));
+    thunderHammer(c, cx, cy, s * 1.08, accent: accent ?? const Color(0xFF7C4DFF));
+    c.drawCircle(Offset(cx + 50 * s, cy), 12 * s, Paint()..color = const Color(0xFF7C4DFF).withOpacity(0.35));
   }
 
   static void katana(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final blade = accent ?? const Color(0xFFECEFF1);
-    c.drawLine(Offset(cx + 8 * s, cy + 2 * s), Offset(cx + 14 * s, cy - 50 * s), Paint()..color = blade..strokeWidth = 3.2 * s..strokeCap = StrokeCap.round);
+    c.drawLine(Offset(cx + 8 * s, cy + 2 * s), Offset(cx + 14 * s, cy - 52 * s), Paint()..color = blade.withOpacity(0.35)..strokeWidth = 5 * s..strokeCap = StrokeCap.round);
+    c.drawLine(Offset(cx + 8 * s, cy + 2 * s), Offset(cx + 14 * s, cy - 52 * s), Paint()..color = blade..strokeWidth = 3.2 * s..strokeCap = StrokeCap.round);
     c.drawRect(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 4 * s), width: 16 * s, height: 5 * s), Paint()..color = const Color(0xFF4A148C));
+    c.drawCircle(Offset(cx + 8 * s, cy + 4 * s), 3 * s, Paint()..color = const Color(0xFFE040FB).withOpacity(0.5));
   }
 
   static void powerKatana(Canvas c, double cx, double cy, double s, {Color? accent}) {
     katana(c, cx, cy, s, accent: accent ?? const Color(0xFFE040FB));
-    c.drawLine(Offset(cx + 10 * s, cy), Offset(cx + 12 * s, cy - 46 * s), Paint()..color = const Color(0xFFEA80FC).withOpacity(0.5)..strokeWidth = 5 * s);
+    c.drawLine(Offset(cx + 10 * s, cy), Offset(cx + 12 * s, cy - 48 * s), Paint()..color = const Color(0xFFEA80FC).withOpacity(0.5)..strokeWidth = 5 * s);
   }
 
   static void executioner(Canvas c, double cx, double cy, double s, {Color? accent}) {
     final blade = accent ?? const Color(0xFFF3E5F5);
-    c.drawLine(Offset(cx + 6 * s, cy + 4 * s), Offset(cx + 20 * s, cy - 56 * s), Paint()..color = blade..strokeWidth = 4.5 * s..strokeCap = StrokeCap.round);
-    c.drawRect(Rect.fromCenter(center: Offset(cx + 6 * s, cy + 6 * s), width: 20 * s, height: 7 * s), Paint()..color = const Color(0xFF6A1B9A));
-  }
-
-  static void chaosHound(Canvas c, double cx, double cy, {double flash = 0}) {
-    c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 2), width: 52, height: 28), Paint()..color = const Color(0xFF2D1F14));
-    c.drawOval(Rect.fromCenter(center: Offset(cx + 22, cy - 8), width: 28, height: 22), Paint()..color = const Color(0xFF3E2723));
-    c.drawCircle(Offset(cx + 26, cy - 12), 4, Paint()..color = const Color(0xFFFFFDE7));
-    c.drawCircle(Offset(cx + 26, cy - 12), 1.8, Paint()..color = const Color(0xFFB71C1C));
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 30, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
+    c.drawLine(Offset(cx + 6 * s, cy + 4 * s), Offset(cx + 20 * s, cy - 58 * s), Paint()..color = blade..strokeWidth = 4.8 * s..strokeCap = StrokeCap.round);
+    c.drawRect(.0 + i * 8, cy - 18), Paint()..color = const Color(0xFF5D4037)..strokeWidth = 2);
+    }
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 32, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void cultistShooter(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 8 * s), width: 24 * s, height: 26 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF4E342E));
-    c.drawCircle(Offset(cx, cy - 12 * s), 11 * s, Paint()..color = const Color(0xFF37474F));
-    c.drawCircle(Offset(cx - 3.5 * s, cy - 13 * s), 3.2 * s, Paint()..color = const Color(0xFF1B5E20));
-    c.drawCircle(Offset(cx + 3.5 * s, cy - 13 * s), 3.2 * s, Paint()..color = const Color(0xFF1B5E20));
+    // legs
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 7 * s, cy + 22 * s), width: 10 * s, height: 18 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 7 * s, cy + 22 * s), width: 10 * s, height: 18 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
+    // torso
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 26 * s, height: 28 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF4E342E));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 18 * s, height: 16 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF5D4037));
+    // head + hood
+    c.drawCircle(Offset(cx, cy - 14 * s), 11 * s, Paint()..color = const Color(0xFF37474F));
+    c.drawArc(Rect.fromCircle(center: Offset(cx, cy - 14 * s), radius: 12 * s), pi, pi, false, Paint()..color = const Color(0xFF2E7D32));
+    c.drawCircle(Offset(cx - 3.5 * s, cy - 14 * s), 3 * s, Paint()..color = const Color(0xFF1B5E20));
+    c.drawCircle(Offset(cx + 3.5 * s, cy - 14 * s), 3 * s, Paint()..color = const Color(0xFF1B5E20));
     bolter(c, cx + 2 * s, cy + 2 * s, s * 0.78);
     if (flash > 0) c.drawCircle(Offset(cx, cy), 34 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void cultistMelee(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 12 * s), width: 30 * s, height: 38 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF6B1B1B));
-    c.drawCircle(Offset(cx, cy - 16 * s), 11 * s, Paint()..color = const Color(0xFF3E2723));
-    c.drawCircle(Offset(cx - 3.5 * s, cy - 16 * s), 2 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawCircle(Offset(cx + 3.5 * s, cy - 16 * s), 2 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawLine(Offset(cx + 16 * s, cy + 2 * s), Offset(cx + 34 * s, cy - 22 * s), Paint()..color = const Color(0xFFB0BEC5)..strokeWidth = 3.5 * s);
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 8 * s, cy + 26 * s), width: 11 * s, height: 18 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4A1515));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 26 * s), width: 11 * s, height: 18 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF4A1515));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 10 * s), width: 32 * s, height: 40 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF6B1B1B));
+    // straps
+    c.drawLine(Offset(cx - 12 * s, cy), Offset(cx + 12 * s, cy + 16 * s), Paint()..color = const Color(0xFF3E2723)..strokeWidth = 2 * s);
+    c.drawCircle(Offset(cx, cy - 18 * s), 12 * s, Paint()..color = const Color(0xFF3E2723));
+    c.drawCircle(Offset(cx - 4 * s, cy - 18 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
+    c.drawCircle(Offset(cx + 4 * s, cy - 18 * s), 2.5 * s, Paint()..color = const Color(0xFFFF1744));
+    // blade
+    c.drawLine(Offset(cx + 16 * s, cy + 2 * s), Offset(cx + 36 * s, cy - 24 * s), Paint()..color = const Color(0xFFB0BEC5)..strokeWidth = 3.8 * s);
+    c.drawLine(Offset(cx + 16 * s, cy + 2 * s), Offset(cx + 36 * s, cy - 24 * s), Paint()..color = Colors.white24..strokeWidth = 1.5 * s);
     if (flash > 0) c.drawCircle(Offset(cx, cy), 34 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void shieldedMarine(Canvas c, double cx, double cy, double s, {bool withGun = false, double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 32 * s, height: 30 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF2A2A2A));
-    c.drawCircle(Offset(cx, cy - 16 * s), 12 * s, Paint()..color = const Color(0xFF1A1A1A));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 6 * s), width: 40 * s, height: 52 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF37474F));
-    if (withGun) bolter(c, cx - 8 * s, cy + 2 * s, s * 0.72);
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 36 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
-  }
-
-  static void flamerCultist(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 28 * s, height: 30 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFFBF360C));
-    c.drawCircle(Offset(cx, cy - 14 * s), 11 * s, Paint()..color = const Color(0xFF3E2723));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 34 * s, height: 32 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF2A2A2A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 24 * s, height: 20 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF424242));
+    c.drawCircle(Offset(cx, cy - 16 * s), 13 * s, Paint()..color = const Color(0xFF1A1A1A));
+    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 16 * s), width: 14 * s, height: 4 * s), Paint()..color = const Color(0xFF1565C0));
+    // tower shield
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 10 * s, cy + 6 * s), width: 42 * s, height: 56 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF37474F));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 10 * s, cy + 6 * s), width: 34 * s, height: 48 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF455A64));
+    c.drawLine(Offset(cx + 10.circular(3 * s)), Paint()..color = const Color(0xFF5D4037));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy - 4 * s, 28 * s, 12 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF5D4037));
-    c.drawCircle(Offset(cx + 36 * s, cy), 8 * s, Paint()..color = const Color(0xFFFF6D00).withOpacity(0.8));
+    c.drawCircle(Offset(cx + 36 * s, cy), 9 * s, Paint()..color = const Color(0xFFFF6D00).withOpacity(0.85));
+    c.drawCircle(Offset(cx + 36 * s, cy), 4 * s, Paint()..color = const Color(0xFFFFAB40));
     if (flash > 0) c.drawCircle(Offset(cx, cy), 34 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void sniperCultist(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 8 * s), width: 22 * s, height: 28 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF33691E));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 16 * s, height: 16 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF558B2F));
     c.drawCircle(Offset(cx, cy - 12 * s), 10 * s, Paint()..color = const Color(0xFF1B5E20));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 6 * s, 42 * s, 6 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF558B2F));
+    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 12 * s), width: 12 * s, height: 3 * s), Paint()..color = const Color(0xFF69F0AE).withOpacity(0.7));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 6 * s, 46 * s, 6 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF558B2F));
+    c.drawCircle(Offset(cx + 18 * s, cy - 12 * s), 4 * s, Paint()..color = const Color(0xFF1B5E20));
     if (flash > 0) c.drawCircle(Offset(cx, cy), 32 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void brute(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 44 * s, height: 40 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF4E342E));
-    c.drawCircle(Offset(cx, cy - 18 * s), 14 * s, Paint()..color = const Color(0xFF3E2723));
-    c.drawCircle(Offset(cx - 5 * s, cy - 18 * s), 3 * s, Paint()..color = const Color(0xFFFF6D00));
-    c.drawCircle(Offset(cx + 5 * s, cy - 18 * s), 3 * s, Paint()..color = const Color(0xFFFF6D00));
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 28 * s, cy + 4 * s), width: 16 * s, height: 28 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF5D4037));
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 40 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 48 * s, height: 44 * s), Radius.circular(6 * s)), Paint()..color = const Color(0xFF4E342E));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 36 * s, height: 30 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF6D4C41));
+    // muscle lines
+    c.drawLine(Offset(cx - 10 * s, cy - 4 * s), Offset(cx - 10 * s, cy + 16 * s), Paint()..color = const Color(0xFF3E2723)..strokeWidth = 2 * s);
+    c.drawLine(Offset(cx + 10 * s, cy - 4 * s), Offset(cx + 10 * s, cy + 16 * s), Paint()..color = const Color(0xFF3E2723)..strokeWidth = 2 * s);
+    c.drawCircle(Offset(cx, cy - 20 * s), 15 * s, Paint()..color = const Color(0xFF3E2723));
+    c.drawCircle(Offset(cx - 5 * s, cy - 20 * s), 3.5 * s, Paint()..color = const Color(0xFFFF6D00));
+    c.drawCircle(Offset(cx + 5 * s, cy - 20 * s), 3.5 * s, Paint()..color = const Color(0xFFFF6D00));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 30 * s, cy + 4 * s), width: 18 * s, height: 30 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF5D4037));
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 42 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void hereticBoss(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 16 * s), width: 30 * s, height: 42 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx, cy - 14 * s), 12 * s, Paint()..color = const Color(0xFFC4A484));
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 52 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 14 * s), width: 34 * s, height: 46 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 10 * s), width: 24 * s, height: 30 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF3E2723));
+    c.drawCircle(Offset(cx - 18 * s, cy), 12 * s, Paint()..color = const Color(0xFF212121));
+    c.drawCircle(Offset(cx + 18 * s, cy), 12 * s, Paint()..color = const Color(0xFF212121));
+    c.drawCircle(Offset(cx, cy - 16 * s), 13 * s, Paint()..color = const Color(0xFFC4A484));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 18 * s), width: 26 * s, height: 10 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 16 * s), width: 14 * s, height: 3.5 * s), Paint()..color = const Color(0xFFFF1744));
+    // crown spikes
+    for (final dx in [-10.0, 0.0, 10.0]) {
+      c.drawLine(Offset(cx + dx * s, cy - 24 * s), Offset(cx + dx * s, cy - 36 * s), Paint()..color = const Color(0xFFB71C1C)..strokeWidth = 3 * s);
+    }
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 54 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
 
   static void knightBoss(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 42 * s, height: 36 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx, cy - 22 * s), 13 * s, Paint()..color = const Color(0xFF212121));
-    powerSword(c, cx + 10 * s, cy + 4 * s, s * 1.05);
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 50 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 44 * s, height: 38 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 32 * s, height: 26 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF37474F));
+    c.drawCircle(Offset(cx - 22 * s, cy - 6 * s), 14 * s, Paint()..color = const Color(0xFF263238));
+    c.drawCircle(Offset(cx + 22 * s, cy - 6 * s), 14 * s, Paint()..color = const Color(0xFF263238));
+    c.drawCircle(Offset(cx, cy - 22 * s), 14 * s, Paint()..color = const Color(0xFF212121));
+    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 22 * s), width: 16 * s, height: 4 * s), Paint()..color = const Color(0xFF90CAF9));
+    powerSword(c, cx + 12 * s, cy + 4 * s, s * 1.1);
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 52 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
 
   static void kingBossDraw(Canvas c, double cx, double cy, double s, {double flash = 0}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 46 * s, height: 38 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx, cy - 22 * s), 12 * s, Paint()..color = const Color(0xFFC4A484));
-    thunderHammer(c, cx + 8 * s, cy + 4 * s, s * 0.9);
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 58 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 50 * s, height: 42 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1A1A1A));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 36 * s, height: 28 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF4A148C).withOpacity(0.5));
+    c.drawCircle(Offset(cx, cy - 22 * s), 13 * s, Paint()..color = const Color(0xFFC4A484));
+    // crown
+    for (final dx in [-12.0, -4.0, 4.0, 12.0]) {
+      c.drawLine(Offset(cx + dx * s, cy - 30 * s), Offset(cx + dx * s, cy - 42 * s), Paint()..color = const Color(0xFFFFD700)..strokeWidth = 3 * s);
+    }
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 28 * s), width: 28 * s, height: 8 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFFB8860B));
+    thunderHammer(c, cx + 10 * s, cy + 4 * s, s * 0.95);
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 60 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
 
   static void cyclops(Canvas c, double cx, double cy, double s, {double flash = 0, double charge = 0}) {
-    c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 10 * s), width: 70 * s, height: 80 * s), Paint()..color = const Color(0xFF3E2723));
-    c.drawCircle(Offset(cx, cy - 20 * s), 28 * s, Paint()..color = const Color(0xFF4E342E));
-    c.drawCircle(Offset(cx, cy - 22 * s), 14 * s, Paint()..color = const Color(0xFF1A1A1A));
-    c.drawCircle(Offset(cx, cy - 22 * s), 10 * s, Paint()..color = Color.lerp(const Color(0xFFFF6D00), const Color(0xFFFF1744), charge)!);
-    c.drawCircle(Offset(cx, cy - 22 * s), 4 * s, Paint()..color = Colors.white);
-    c.drawLine(Offset(cx - 16 * s, cy - 36 * s), Offset(cx - 28 * s, cy - 56 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 5 * s);
-    c.drawLine(Offset(cx + 16 * s, cy - 36 * s), Offset(cx + 28 * s, cy - 56 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 5 * s);
-    if (flash > 0) c.drawCircle(Offset(cx, cy), 60 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
+    c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 10 * s), width: 74 * s, height: 84 * s), Paint()..color = const Color(0xFF3E2723));
+    c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 56 * s, height: 64 * s), Paint()..color = const Color(0xFF5D4037));
+    // muscle bands
+    for (final dy in [-10.0, 8.0, 26.0]) {
+      c.drawArc(Rect.fromCenter(center: Offset(cx, cy + dy * s), width: 50 * s, height: 16 * s), 0, pi, false, Paint()..color = const Color(0xFF3E2723).withOpacity(0.5)..style = PaintingStyle.stroke..strokeWidth = 2 * s);
+    }
+    c.drawCircle(Offset(cx, cy - 22 * s), 30 * s, Paint()..color = const Color(0xFF4E342E));
+    c.drawCircle(Offset(cx, cy - 24 * s), 16 * s, Paint()..color = const Color(0xFF1A1A1A));
+    c.drawCircle(Offset(cx, cy - 24 * s), 12 * s, Paint()..color = Color.lerp(const Color(0xFFFF6D00), const Color(0xFFFF1744), charge)!);
+    c.drawCircle(Offset(cx, cy - 24 * s), 5 * s, Paint()..color = Colors.white);
+    // horns
+    c.drawLine(Offset(cx - 18 * s, cy - 38 * s), Offset(cx - 32 * s, cy - 60 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 6 * s);
+    c.drawLine(Offset(cx + 18 * s, cy - 38 * s), Offset(cx + 32 * s, cy - 60 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 6 * s);
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 62 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
 
   static void statusIcons(Canvas c, double cx, double topY, List<StatusEffect> effects) {
@@ -839,11 +1055,21 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int combo = 0;
   double comboTimer = 0;
   static const double comboWindow = 2.4;
+  final Set<int> _comboMilestonesClaimed = {};
 
   double tempDmgMult = 1.0;
   double tempDmgTimer = 0;
   double shieldTimer = 0;
   double _hasteTimer = 0;
+
+  /// i-frame after dash / laser (Dead Cells style)
+  double invulnTimer = 0;
+
+  /// Hereticus synergy: extended dash after katana kill
+  double hereticusDashBoost = 0;
+
+  /// Echo of last boss for next floor
+  EchoBossKind pendingEcho = EchoBossKind.none;
 
   bool arenaMode = false;
   int arenaKills = 0;
@@ -864,19 +1090,19 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   double spawnInterval = 1.2;
 
   int baseBolter = 8, baseRifle = 18, baseShotgun = 10;
-  int baseStaff = 11, baseStorm = 14, baseWarp = 22;
+  int baseStaff = 14, baseStorm = 18, baseWarp = 26; // buffed Malleus
   int baseDagger = 7, baseNeedle = 9, baseSniperNeedle = 20;
   int baseSword = 12, baseAxe = 14, baseHammer = 28;
-  int baseForce = 13, baseForceSword = 16, baseDaemon = 26;
+  int baseForce = 16, baseForceSword = 20, baseDaemon = 30; // buffed Malleus melee
   int baseKatana = 15, basePowerKatana = 18, baseExec = 24;
   int baseMaxHealth = 6;
   double baseSpeed = 210;
 
   int bolterDamage = 8, rifleDamage = 18, shotgunDamage = 10;
-  int staffDamage = 11, stormDamage = 14, warpDamage = 22;
+  int staffDamage = 14, stormDamage = 18, warpDamage = 26;
   int daggerDamage = 7, needleDamage = 9, sniperNeedleDamage = 20;
   int swordDamage = 12, axeDamage = 14, hammerDamage = 28;
-  int forceDamage = 13, forceSwordDamage = 16, daemonDamage = 26;
+  int forceDamage = 16, forceSwordDamage = 20, daemonDamage = 30;
   int katanaDamage = 15, powerKatanaDamage = 18, execDamage = 24;
   int maxHealth = 6;
   double playerSpeed = 210;
@@ -921,7 +1147,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool _everReached11 = false;
   bool _everReached21 = false;
 
-  // mod unlocks by floor
   bool get unlockedBarrelMods => currentFloor >= 2 || _everReached11;
   bool get unlockedSightMods => currentFloor >= 3 || _everReached11;
   bool get unlockedAmmoMods => currentFloor >= 4 || _everReached21;
@@ -956,21 +1181,37 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool get hasShieldPierce => relics.contains(RelicId.shieldPierce);
   bool get hasKillExplosion => relics.contains(RelicId.killExplosion);
   bool get hasHaste => relics.contains(RelicId.haste);
+  bool get hasJediPath => relics.contains(RelicId.jediPath);
 
   // ── Synergies ──
-  bool get synergyFireCrits => hasCrit && hasKillExplosion; // crit applies burn
-  bool get synergyBloodRush => hasLifesteal && hasHaste; // kill: +2 HP chance + longer haste
-  bool get synergyTrueFaith => hasShieldPierce && hasCrit; // shield hits can crit fully
+  bool get synergyFireCrits => hasCrit && hasKillExplosion;
+  bool get synergyBloodRush => hasLifesteal && hasHaste;
+  bool get synergyTrueFaith => hasShieldPierce && hasCrit;
+  /// Xenos + shotgun + explosive ammo
+  bool get synergyXenosBlast =>
+      playerClass == PlayerClass.xenos &&
+      rangedWeapon == RangedWeapon.shotgun &&
+      loadout.ammo == AmmoMod.explosive &&
+      !usingMelee;
+  /// Hereticus + katana (or power/exec) — dash extend on melee kill
+  bool get synergyHereticusBleedDash =>
+      playerClass == PlayerClass.hereticus &&
+      usingMelee &&
+      (meleeWeapon == MeleeWeapon.katana ||
+          meleeWeapon == MeleeWeapon.powerKatana ||
+          meleeWeapon == MeleeWeapon.executioner);
 
   String? get activeSynergyLabel {
     final parts = <String>[];
     if (synergyFireCrits) parts.add('Огненный крит');
     if (synergyBloodRush) parts.add('Кровавый рывок');
     if (synergyTrueFaith) parts.add('Истинная вера');
+    if (synergyXenosBlast) parts.add('Прометий-конус');
+    if (synergyHereticusBleedDash) parts.add('Кровавый след');
+    if (hasJediPath) parts.add('Путь Джедая');
     return parts.isEmpty ? null : parts.join(' • ');
   }
 
-  // Codex knowledge passives (stack lightly)
   double get codexRangedBonus =>
       (codexUnlocked.contains(CodexId.shooter) ? 0.02 : 0) + (codexUnlocked.contains(CodexId.sniper) ? 0.02 : 0);
   double get codexMeleeBonus =>
@@ -982,14 +1223,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   double get codexBossBonus =>
       [CodexId.miniBoss, CodexId.boss, CodexId.knight, CodexId.king].where(codexUnlocked.contains).length * 0.03;
   double get codexEliteScrapBonus => codexUnlocked.contains(CodexId.champion) ? 0.05 : 0;
-  double get codexBurnBonus => codexUnlocked.contains(CodexId.flamer) ? 1.0 : 0.0; // +1s burn
+  double get codexBurnBonus => codexUnlocked.contains(CodexId.flamer) ? 1.0 : 0.0;
 
   void unlockCodex(CodexId id) {
-    if (codexUnlocked.add(id)) {
-      // toast via damage number style
-      if (isPlaying) {
-        world.add(DamageNumber(position: player.position + Vector2(0, -40), amount: 0, color: const Color(0xFFFFD700)));
-      }
+    if (codexUnlocked.add(id) && isPlaying) {
+      world.add(DamageNumber(position: player.position + Vector2(0, -40), amount: 0, color: const Color(0xFFFFD700), label: 'CODEX'));
     }
   }
 
@@ -1083,9 +1321,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (overallLevel >= 21) _everReached21 = true;
   }
 
-  void spawnDamageNumber(Vector2 pos, int amount, {Color color = const Color(0xFFFFEB3B)}) {
-    if (amount <= 0) return;
-    world.add(DamageNumber(position: pos + Vector2(0, -20), amount: amount, color: color));
+  void spawnDamageNumber(Vector2 pos, int amount, {Color color = const Color(0xFFFFEB3B), String? label}) {
+    if (amount <= 0 && label == null) return;
+    world.add(DamageNumber(position: pos + Vector2(0, -20), amount: amount, color: color, label: label));
   }
 
   void spawnBlood(Vector2 pos, {int count = 14}) => world.add(BloodSplash(position: pos, count: count));
@@ -1095,9 +1333,36 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     shakeTime = max(shakeTime, time);
   }
 
-  void registerKill({Vector2? at, bool isBoss = false, bool isChampion = false}) {
+  void grantInvuln(double t) {
+    invulnTimer = max(invulnTimer, t);
+    // afterimages
+    if (isPlaying) {
+      for (int i = 0; i < 3; i++) {
+        final offset = player.aimDir * (-18.0 * (i + 1));
+        world.add(AfterImage(
+          position: player.position + offset,
+          cls: playerClass,
+          custom: custom,
+        )..priority = 14);
+      }
+    }
+  }
+
+  void registerKill({Vector2? at, bool isBoss = false, bool isChampion = false, bool meleeKill = false}) {
     combo++;
     comboTimer = comboWindow;
+
+    // combo milestone scraps
+    for (final m in [5, 10, 15]) {
+      if (combo >= m && !_comboMilestonesClaimed.contains(m)) {
+        _comboMilestonesClaimed.add(m);
+        scraps += 1;
+        if (at != null) {
+          spawnDamageNumber(at + Vector2(0, -36), 0, color: const Color(0xFFFFD700), label: 'COMBO +1');
+        }
+      }
+    }
+
     if (combo >= 3 && combo % 3 == 0) camera.viewport.add(ComboBanner(combo: combo));
     if (at != null) {
       spawnBlood(at, count: isBoss || isChampion ? 28 : 14);
@@ -1118,14 +1383,26 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
     }
     if (hasHaste) _hasteTimer = synergyBloodRush ? 4.5 : 3.0;
+
+    // Hereticus synergy: extend dash after melee katana kill
+    if (meleeKill && synergyHereticusBleedDash) {
+      hereticusDashBoost = 2.5;
+      hasDashAbility = true;
+      _ensureDashButton();
+      dashCooldown = min(dashCooldown, 1.0);
+    }
+
     var gain = isBoss ? (8 + Random().nextInt(8)) : (isChampion ? (5 + Random().nextInt(5)) : (1 + Random().nextInt(3)));
     if (isChampion) gain = (gain * (1 + codexEliteScrapBonus)).round();
     scraps += gain;
-    // champion relic chance
     if (isChampion && Random().nextDouble() < 0.22) {
       final missing = RelicId.values.where((r) => !relics.contains(r)).toList();
       if (missing.isNotEmpty) grantRelic(missing[Random().nextInt(missing.length)]);
     }
+  }
+
+  void rememberBossEcho(EchoBossKind kind) {
+    pendingEcho = kind;
   }
 
   @override
@@ -1262,6 +1539,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       playerClass: playerClass.name, relics: relics.map((e) => e.name).toList(),
       artifact: activeArtifact.name, loadout: loadout.toJson(),
       codex: codexUnlocked.map((e) => e.name).toList(),
+      lastEcho: pendingEcho.name,
     );
     saves.insert(0, save);
     if (saves.length > 8) saves = saves.take(8).toList();
@@ -1280,10 +1558,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     skillPoints = s.skillPoints;
     custom = Customization.fromJson(s.custom);
     playerClass = PlayerClass.values.firstWhere((e) => e.name == s.playerClass, orElse: () => PlayerClass.xenos);
-    relics..clear()..addAll(s.relics.map((n) => RelicId.values.firstWhere((e) => e.name == n, orElse: () => RelicId.crit)));
-    codexUnlocked..clear()..addAll(s.codex.map((n) => CodexId.values.firstWhere((e) => e.name == n, orElse: () => CodexId.shooter)));
+    relics
+      ..clear()
+      ..addAll(s.relics.map((n) => RelicId.values.firstWhere((e) => e.name == n, orElse: () => RelicId.crit)));
+    codexUnlocked
+      ..clear()
+      ..addAll(s.codex.map((n) => CodexId.values.firstWhere((e) => e.name == n, orElse: () => CodexId.shooter)));
     loadout = WeaponLoadout.fromJson(s.loadout);
     activeArtifact = ActiveArtifact.values.firstWhere((e) => e.name == s.artifact, orElse: () => ActiveArtifact.fragGrenade);
+    pendingEcho = EchoBossKind.values.firstWhere((e) => e.name == s.lastEcho, orElse: () => EchoBossKind.none);
     recomputeStats();
     rangedWeapon = RangedWeapon.values.firstWhere((e) => e.name == s.ranged, orElse: () => RangedWeapon.bolter);
     meleeWeapon = MeleeWeapon.values.firstWhere((e) => e.name == s.melee, orElse: () => MeleeWeapon.sword);
@@ -1309,8 +1592,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     laserCooldown = 0;
     artifactCooldown = 0;
     holyAuraTimer = 0;
+    invulnTimer = 0;
+    hereticusDashBoost = 0;
     combo = 0;
     comboTimer = 0;
+    _comboMilestonesClaimed.clear();
     tempDmgMult = 1.0;
     tempDmgTimer = 0;
     shieldTimer = 0;
@@ -1333,7 +1619,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (highScores.length > 15) highScores = highScores.take(15).toList();
     _persistScores();
   }
-    List<Vector2> getEnemySpawnPointsRaw() {
+   List<Vector2> getEnemySpawnPointsRaw() {
     switch (currentFloor) {
       case 1: return [Vector2(180, 280), Vector2(1020, 280), Vector2(180, 900), Vector2(1020, 900), Vector2(600, 550), Vector2(350, 1400), Vector2(850, 1400), Vector2(600, 1100)];
       case 2: return [Vector2(150, 220), Vector2(1050, 220), Vector2(150, 1000), Vector2(1050, 1000), Vector2(600, 450), Vector2(600, 1300), Vector2(400, 700), Vector2(800, 700)];
@@ -1371,11 +1657,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     isPlaying = true; isPaused = false; arenaMode = false; arenaKills = 0; arenaWave = 1;
     score = 0; scraps = 0; currentFloor = 1; currentLevel = 1;
     skills = SkillTree(); skillPoints = 0; relics.clear();
-    // keep codex across runs (meta) — do not clear codexUnlocked
     loadout = WeaponLoadout();
     activeArtifact = ActiveArtifact.fragGrenade;
     artifactCooldown = 0; holyAuraTimer = 0;
-    combo = 0; comboTimer = 0; tempDmgMult = 1.0; tempDmgTimer = 0; shieldTimer = 0; _hasteTimer = 0;
+    invulnTimer = 0; hereticusDashBoost = 0; pendingEcho = EchoBossKind.none;
+    combo = 0; comboTimer = 0; _comboMilestonesClaimed.clear();
+    tempDmgMult = 1.0; tempDmgTimer = 0; shieldTimer = 0; _hasteTimer = 0;
     baseMaxHealth = 6; baseSpeed = 210;
     applyClassDefaults(); recomputeStats();
     portalSpawned = false; isBossLevel = false; isMiniBossLevel = false; nearPortal = false;
@@ -1406,7 +1693,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     world.removeAll(world.children.toList());
     camera.viewport.children.whereType<JoystickComponent>().toList().forEach((c) => c.removeFromParent());
     camera.viewport.children.whereType<HudButtonComponent>().toList().forEach((c) => c.removeFromParent());
-    camera.viewport.children.whereType<HudLabel>().toList().forEach((c) => c.removeFromParent());
+    for (final c in camera.viewport.children.whereType<HudLabel>().toList()) {
+      c.removeFromParent();
+    }
     camera.viewport.children.whereType<ComboBanner>().toList().forEach((c) => c.removeFromParent());
     portalButton = null; dashButton = null; laserButton = null; artifactButton = null;
   }
@@ -1450,7 +1739,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       margin: const EdgeInsets.only(left: 28, top: 150),
       onPressed: () { currentZoom = (currentZoom - 0.12).clamp(0.55, 1.5); camera.viewfinder.zoom = currentZoom; playClick(); },
     );
-    // Artifact R
     artifactButton = HudButtonComponent(
       button: _btn(const Color(0xFFBF360C), br * 0.9), buttonDown: _btn(const Color(0xFFFF6D00), br * 0.9),
       margin: const EdgeInsets.only(left: 28, top: 330),
@@ -1492,12 +1780,41 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
   }
 
+  void _maybeSpawnEcho() {
+    if (pendingEcho == EchoBossKind.none) return;
+    if (Random().nextDouble() > 0.10) {
+      pendingEcho = EchoBossKind.none;
+      return;
+    }
+    final pos = Vector2(mapWidth / 2 + (Random().nextDouble() - 0.5) * 180, mapHeight / 2 - 280);
+    enemiesAlive++; enemiesToSpawn++; enemiesSpawned++;
+    switch (pendingEcho) {
+      case EchoBossKind.mini:
+        world.add(MiniBoss(floor: currentFloor, position: pos, echo: true)..priority = 24);
+        break;
+      case EchoBossKind.ranged:
+        world.add(Boss(floor: currentFloor, position: pos, echo: true)..priority = 25);
+        break;
+      case EchoBossKind.knight:
+        world.add(KnightBoss(floor: currentFloor, position: pos, echo: true)..priority = 25);
+        break;
+      case EchoBossKind.king:
+        world.add(KingBoss(position: pos, echo: true)..priority = 26);
+        break;
+      case EchoBossKind.none:
+        break;
+    }
+    spawnDamageNumber(pos, 0, color: const Color(0xFF9C27B0), label: 'ЭХО');
+    pendingEcho = EchoBossKind.none;
+  }
+
   void _startLevel() {
     enemiesSpawned = 0; enemiesAlive = 0; portalSpawned = false; nearPortal = false;
     isBossLevel = currentLevel == 5; isMiniBossLevel = currentLevel == 3;
     spawnTimer = 0; spawnInterval = max(0.40, 1.25 - (currentFloor * 0.1) - (currentLevel * 0.06));
     secretBossUnlockedThisLevel = false; secretBossSpawned = false; cornerStandTimer = 0;
-    combo = 0; comboTimer = 0;
+    combo = 0; comboTimer = 0; _comboMilestonesClaimed.clear();
+    invulnTimer = 0; hereticusDashBoost = 0;
     _checkUnlocks(); recomputeStats();
     world.add(Floor(size: Vector2(mapWidth, mapHeight))..priority = 0);
     _createWalls(); _createObstacles(); _spawnLoot();
@@ -1514,8 +1831,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       enemiesToSpawn = (enemiesToSpawn * worldThreat * 0.85).round();
       if (difficulty == Difficulty.hard) enemiesToSpawn = (enemiesToSpawn * 1.2).round();
       if (difficulty == Difficulty.easy) enemiesToSpawn = max(4, (enemiesToSpawn * 0.85).round());
-      // 1–2 champions planned among spawns
     }
+    _maybeSpawnEcho();
   }
 
   void _startArenaLevel() {
@@ -1523,6 +1840,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     portalSpawned = false; nearPortal = false; isBossLevel = false; isMiniBossLevel = false;
     spawnTimer = 0; spawnInterval = 0.85;
     secretBossUnlockedThisLevel = false; secretBossSpawned = false; cornerStandTimer = 0;
+    invulnTimer = 0;
     _checkUnlocks(); recomputeStats();
     world.add(Floor(size: Vector2(mapWidth, mapHeight))..priority = 0);
     _createWalls(); _createObstacles(); _spawnLoot();
@@ -1564,11 +1882,14 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void activateDash() {
     if (!hasDashAbility || dashCooldown > 0 || dashActive > 0 || !isPlaying || isPaused) return;
-    dashActive = playerClass == PlayerClass.hereticus ? 2.6 : 2.0;
-    dashCooldown = playerClass == PlayerClass.hereticus ? 5.0 : 6.0;
+    final boost = hereticusDashBoost > 0;
+    dashActive = (playerClass == PlayerClass.hereticus ? 2.6 : 2.0) + (boost ? 0.8 : 0);
+    dashCooldown = (playerClass == PlayerClass.hereticus ? 5.0 : 6.0) - (boost ? 1.5 : 0);
+    if (boost) hereticusDashBoost = 0;
+    grantInvuln(0.25);
     if (playerClass == PlayerClass.hereticus) {
       final d = player.aimDir.length2 < 0.01 ? Vector2(0, -1) : player.aimDir;
-      player.position += d * 90;
+      player.position += d * (boost ? 120 : 90);
     }
   }
 
@@ -1576,6 +1897,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (!hasLaserAbility || laserCooldown > 0 || !isPlaying || isPaused) return;
     laserCooldown = 20.0;
     playShoot();
+    grantInvuln(0.25);
     final d = player.aimDir.length2 < 0.01 ? Vector2(0, -1) : player.aimDir;
     world.add(CyclopsLaserBeam(position: player.position.clone(), direction: d, damage: scaleDamage(45 + overallLevel * 2))..priority = 14);
     triggerShake(power: 8, time: 0.2);
@@ -1692,7 +2014,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final points = getEnemySpawnPoints();
     if (points.isEmpty) return;
     enemiesSpawned++; enemiesAlive++;
-    // champions: ~18% after level 3, up to 2 per level
     final champsNow = world.children.whereType<Enemy>().where((e) => e.isChampion).length;
     final wantChamp = !isBossLevel && !isMiniBossLevel && champsNow < 2 && overallLevel >= 3 && Random().nextDouble() < 0.18;
     final enemy = Enemy(floor: arenaMode ? min(5, 1 + arenaWave ~/ 3) : currentFloor, type: _chooseEnemyType(), isChampion: wantChamp);
@@ -1744,17 +2065,18 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
     if (!isPlaying || isPaused) return;
 
-    if (comboTimer > 0) { comboTimer -= dt; if (comboTimer <= 0) combo = 0; }
+    if (comboTimer > 0) { comboTimer -= dt; if (comboTimer <= 0) { combo = 0; _comboMilestonesClaimed.clear(); } }
     if (tempDmgTimer > 0) { tempDmgTimer -= dt; if (tempDmgTimer <= 0) tempDmgMult = 1.0; }
     if (shieldTimer > 0) shieldTimer = max(0, shieldTimer - dt);
     if (_hasteTimer > 0) _hasteTimer = max(0, _hasteTimer - dt);
+    if (invulnTimer > 0) invulnTimer = max(0, invulnTimer - dt);
+    if (hereticusDashBoost > 0) hereticusDashBoost = max(0, hereticusDashBoost - dt);
     if (dashCooldown > 0) dashCooldown = max(0, dashCooldown - dt);
     if (dashActive > 0) dashActive = max(0, dashActive - dt);
     if (laserCooldown > 0) laserCooldown = max(0, laserCooldown - dt);
     if (artifactCooldown > 0) artifactCooldown = max(0, artifactCooldown - dt);
     if (holyAuraTimer > 0) {
       holyAuraTimer = max(0, holyAuraTimer - dt);
-      // damage nearby enemies lightly
       for (final e in world.children.whereType<Enemy>().toList()) {
         if (e.position.distanceTo(player.position) < 110) {
           e.applyStatus(StatusType.corruption, 0.6, tickDamage: 1);
@@ -1803,9 +2125,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
   }
 
-  void onEnemyKilled({bool isBoss = false, Vector2? at, bool isChampion = false, EnemyType? type}) {
+  void onEnemyKilled({bool isBoss = false, Vector2? at, bool isChampion = false, EnemyType? type, bool meleeKill = false, EchoBossKind? echoKind}) {
     enemiesAlive = max(0, enemiesAlive - 1);
-    registerKill(at: at, isBoss: isBoss, isChampion: isChampion);
+    registerKill(at: at, isBoss: isBoss, isChampion: isChampion, meleeKill: meleeKill);
     if (type != null) {
       final map = {
         EnemyType.shooter: CodexId.shooter,
@@ -1820,6 +2142,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       unlockCodex(map[type]!);
     }
     if (isChampion) unlockCodex(CodexId.champion);
+    if (echoKind != null && echoKind != EchoBossKind.none) {
+      rememberBossEcho(echoKind);
+    }
     final points = ((isBossLevel || isMiniBossLevel || isBoss) ? 180 + (currentFloor * 60) : 12 + (currentFloor * 6));
     final champBonus = isChampion ? 40 : 0;
     score += ((points + champBonus) * comboMult).round();
@@ -1843,7 +2168,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (missing.isNotEmpty) pool.add(RewardOption.relic(missing[rnd.nextInt(missing.length)]));
     else pool.add(RewardOption.coins(20 + rnd.nextInt(15)));
     pool.add(RewardOption.tempBuff());
-    // artifact unlock options
     pool.add(RewardOption.artifact(ActiveArtifact.values[rnd.nextInt(ActiveArtifact.values.length)]));
     pool.shuffle(rnd);
     return pool.take(3).toList();
@@ -1903,7 +2227,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   bool get areOtherBossesAlive =>
-      world.children.whereType<Boss>().isNotEmpty || world.children.whereType<KnightBoss>().isNotEmpty;
+      world.children.whereType<Boss>().where((b) => !b.isEcho).isNotEmpty ||
+      world.children.whereType<KnightBoss>().where((b) => !b.isEcho).isNotEmpty;
 
   String get currentWeaponName {
     if (usingMelee) return meleeWeapon.name.toUpperCase();
@@ -1926,12 +2251,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     hudPaint.render(canvas, '${playerClass.title} | $currentWeaponName', Vector2(14, 94));
     hudPaint.render(canvas, 'Scraps: $scraps  SP: $skillPoints', Vector2(14, 114));
     if (combo > 1) hudPaint.render(canvas, 'COMBO x$combo', Vector2(14, 134));
+    if (invulnTimer > 0) hudPaint.render(canvas, 'I-FRAME', Vector2(14, 154));
     if (artifactCooldown > 0) {
-      hudPaint.render(canvas, 'R ${artifactCooldown.toStringAsFixed(0)}s', Vector2(14, 154));
+      hudPaint.render(canvas, 'R ${artifactCooldown.toStringAsFixed(0)}s', Vector2(14, 174));
     } else {
-      hudPaint.render(canvas, 'R: ${activeArtifact.title}', Vector2(14, 154));
+      hudPaint.render(canvas, 'R: ${activeArtifact.title}', Vector2(14, 174));
     }
-    if (holyAuraTimer > 0) hudPaint.render(canvas, 'AURA ${holyAuraTimer.toStringAsFixed(1)}s', Vector2(14, 174));
     final syn = activeSynergyLabel;
     if (syn != null) hudPaint.render(canvas, syn, Vector2(14, 194));
   }
@@ -2174,7 +2499,6 @@ class ShieldPickup extends PositionComponent with HasGameReference<InquisitorGam
   }
 }
 
-/// Artifact: frag grenade
 class FragGrenade extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 velocity;
   final int damage;
@@ -2213,38 +2537,63 @@ class FragGrenade extends PositionComponent with HasGameReference<InquisitorGame
   }
 }
 
-/// Artifact: servo turret
+/// Fixed: targets Enemy + all boss types
 class ServoTurret extends PositionComponent with HasGameReference<InquisitorGame> {
   double life = 8.0;
   double shootTimer = 0;
   ServoTurret({required Vector2 position}) : super(position: position.clone(), size: Vector2(40, 40), anchor: Anchor.center, priority: 14);
+
+  PositionComponent? _nearestHostile() {
+    PositionComponent? best;
+    double bestD = 460;
+    void consider(PositionComponent c) {
+      final d = c.position.distanceTo(position);
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    for (final e in game.world.children.whereType<Enemy>()) consider(e);
+    for (final e in game.world.children.whereType<MiniBoss>()) consider(e);
+    for (final e in game.world.children.whereType<Boss>()) consider(e);
+    for (final e in game.world.children.whereType<KnightBoss>()) consider(e);
+    for (final e in game.world.children.whereType<KingBoss>()) consider(e);
+    for (final e in game.world.children.whereType<TentacleBoss>()) consider(e);
+    for (final e in game.world.children.whereType<CyclopsBoss>()) consider(e);
+    return best;
+  }
+
+  void _damageTarget(PositionComponent t, int dmg) {
+    if (t is Enemy) t.applyDamage(dmg);
+    else if (t is MiniBoss) t.takeDamage(dmg);
+    else if (t is Boss) t.takeDamage(dmg);
+    else if (t is KnightBoss) t.takeDamage(dmg);
+    else if (t is KingBoss) t.takeDamage(dmg);
+    else if (t is TentacleBoss) t.takeDamage(dmg);
+    else if (t is CyclopsBoss) t.takeDamage(dmg);
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
     life -= dt;
     if (life <= 0) { removeFromParent(); return; }
     shootTimer += dt;
-    if (shootTimer >= 0.45) {
+    if (shootTimer >= 0.42) {
       shootTimer = 0;
-      Enemy? nearest;
-      double best = 420;
-      for (final e in game.world.children.whereType<Enemy>()) {
-        final d = e.position.distanceTo(position);
-        if (d < best) { best = d; nearest = e; }
-      }
-      if (nearest != null) {
-        final dir = (nearest.position - position).normalized();
+      final target = _nearestHostile();
+      if (target != null) {
+        final dir = (target.position - position).normalized();
+        final dmg = game.scaleDamage(6 + game.overallLevel ~/ 2);
         game.world.add(Bullet(
           position: position.clone(),
           direction: dir,
-          damage: game.scaleDamage(6 + game.overallLevel ~/ 2),
+          damage: dmg,
           color: const Color(0xFFFFAB40),
-          speed: 480,
+          speed: 500,
           radius: 5,
         )..priority = 13);
       }
     }
   }
+
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
@@ -2254,7 +2603,7 @@ class ServoTurret extends PositionComponent with HasGameReference<InquisitorGame
   }
 }
 
-// ─── Menus ───────────────────────────────────────────────
+// ─── Menus (same structure as before) ────────────────────
 class ClassSelectMenu extends StatelessWidget {
   final InquisitorGame game;
   const ClassSelectMenu(this.game, {super.key});
@@ -2271,7 +2620,7 @@ class ClassSelectMenu extends StatelessWidget {
             const SizedBox(height: 12),
             Expanded(child: ListView(children: [
               _card(PlayerClass.xenos, const Color(0xFFB71C1C), 'HP 6 • Скорость норм • Болтер'),
-              _card(PlayerClass.malleus, const Color(0xFF1A237E), 'HP 5 • Медленнее • +12% пси-урон'),
+              _card(PlayerClass.malleus, const Color(0xFF1A237E), 'HP 5 • Медленнее • +12% пси • ДАЛЬНИЙ посох'),
               _card(PlayerClass.hereticus, const Color(0xFF4A148C), 'HP 5 • Быстрее • Рывок U'),
             ])),
           ]),
@@ -2456,8 +2805,16 @@ class _BackpackMenuState extends State<BackpackMenu> {
             _s('Обломки', '${g.scraps}'),
             _s('Скорость', '${g.playerSpeed.toInt()}'),
             if (g.hasLaserAbility) _s('Лазер L', 'CD ${g.laserCooldown.toStringAsFixed(0)}s'),
+            if (g.hasJediPath) const Text('✦ Путь Джедая: клинок сбивает пули', style: TextStyle(color: Color(0xFF81D4FA), fontSize: 12)),
             if (g.activeSynergyLabel != null)
               Text('Синергия: ${g.activeSynergyLabel}', style: const TextStyle(color: Color(0xFFFF8A65), fontSize: 12)),
+            // Hidden synergy hints
+            if (g.playerClass == PlayerClass.xenos)
+              const Text('Подсказка: Дробовик + взрывной боезапас = Прометий-конус', style: TextStyle(color: Colors.white38, fontSize: 11)),
+            if (g.playerClass == PlayerClass.hereticus)
+              const Text('Подсказка: Катана + убийство в ближнем = удлинённый рывок', style: TextStyle(color: Colors.white38, fontSize: 11)),
+            if (g.playerClass == PlayerClass.malleus)
+              const Text('Посох: увеличенная дальность волны и клинка', style: TextStyle(color: Colors.white38, fontSize: 11)),
             if (g.relics.isNotEmpty) ...[
               const Text('Реликвии', style: TextStyle(color: Color(0xFFFFD700))),
               ...g.relics.map((r) => Text('• ${r.title}', style: const TextStyle(color: Colors.white70, fontSize: 12))),
@@ -2876,31 +3233,30 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   late int health;
   late int maxHealth;
   double attackTimer = 0;
-  Vector2 aimDir = Vector2(0, -1);
   double hurtFlash = 0;
+  Vector2 aimDir = Vector2(0, -1);
   final List<StatusEffect> statuses = [];
 
-  Player(this.moveJoystick) : super(size: Vector2(76, 86), anchor: Anchor.center, priority: 15);
+  Player(this.moveJoystick) : super(size: Vector2(76, 86), anchor: Anchor.center, priority: 20);
 
   @override
   Future<void> onLoad() async {
     maxHealth = game.maxHealth;
     health = maxHealth;
     position = game.playerSpawnPos.clone();
-    add(CircleHitbox(radius: 30));
+    add(CircleHitbox(radius: 26));
   }
 
-  double get speedMul {
-    double m = 1.0;
-    for (final s in statuses) {
-      if (s.type == StatusType.slow) m *= 0.7;
-      if (s.type == StatusType.corruption) m *= 0.85;
-    }
-    return m;
+  double get effectiveSpeed {
+    var s = game.playerSpeed;
+    if (game.dashActive > 0) s *= 1.32;
+    if (game._hasteTimer > 0) s *= game.synergyBloodRush ? 1.18 : 1.12;
+    if (statuses.any((e) => e.type == StatusType.slow)) s *= 0.65;
+    return s;
   }
 
   void applyStatus(StatusType type, double duration, {int tickDamage = 1}) {
-    final existing = statuses.where((s) => s.type == type).toList();
+    final existing = statuses.where((e) => e.type == type).toList();
     if (existing.isNotEmpty) {
       existing.first.remaining = max(existing.first.remaining, duration);
     } else {
@@ -2909,679 +3265,713 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   }
 
   void _tickStatuses(double dt) {
-    for (final s in statuses.toList()) {
-      s.remaining -= dt;
-      s.tickAcc += dt;
-      if (s.tickAcc >= s.tickEvery) {
-        s.tickAcc = 0;
-        if (s.type == StatusType.burn || s.type == StatusType.bleed || s.type == StatusType.corruption) {
-          health = max(0, health - s.tickDamage);
-          game.spawnDamageNumber(position, s.tickDamage, color: s.color);
-          if (health <= 0) { health = 0; game.showGameOver(); return; }
+    for (final e in statuses.toList()) {
+      e.remaining -= dt;
+      e.tickAcc += dt;
+      if (e.tickAcc >= e.tickEvery) {
+        e.tickAcc = 0;
+        if (e.tickDamage > 0 && (e.type == StatusType.burn || e.type == StatusType.bleed || e.type == StatusType.corruption)) {
+          health = max(0, health - e.tickDamage);
+          hurtFlash = 0.12;
+          if (health <= 0) game.showGameOver();
         }
       }
-      if (s.remaining <= 0) statuses.remove(s);
+      if (e.remaining <= 0) statuses.remove(e);
     }
   }
 
   @override
   void update(double dt) {
     super.update(dt);
-    if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
     if (!game.isPlaying || game.isPaused) return;
+    if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
     _tickStatuses(dt);
-    var spd = game.playerSpeed * (game.dashActive > 0 ? 1.30 : 1.0) * speedMul;
-    if (game._hasteTimer > 0) spd *= 1.12;
-    if (moveJoystick.direction != JoystickDirection.idle) {
-      position.add(moveJoystick.relativeDelta * spd * dt);
+
+    if (moveJoystick.relativeDelta.length2 > 0.01) {
+      final next = position + moveJoystick.relativeDelta.normalized() * effectiveSpeed * dt;
+      if (_canMoveTo(next)) position = next;
+      position.x = position.x.clamp(70, game.mapWidth - 70);
+      position.y = position.y.clamp(70, game.mapHeight - 70);
     }
-    if (game.attackJoystick.direction != JoystickDirection.idle) {
-      final d = game.attackJoystick.relativeDelta;
-      if (d.length2 > 0.01) aimDir = d.normalized();
-    } else if (moveJoystick.direction != JoystickDirection.idle) {
-      final d = moveJoystick.relativeDelta;
-      if (d.length2 > 0.01) aimDir = d.normalized();
-    }
-    position.x = position.x.clamp(70, game.mapWidth - 70);
-    position.y = position.y.clamp(70, game.mapHeight - 70);
-    if (game.attackJoystick.direction != JoystickDirection.idle) {
-      attackTimer += dt;
-      if (attackTimer >= _cd()) {
-        attackTimer = 0;
-        _atk();
+
+    final atk = game.attackJoystick.relativeDelta;
+    if (atk.length2 > 0.02) {
+      aimDir = atk.normalized();
+      attackTimer -= dt;
+      if (attackTimer <= 0) {
+        _attack();
+        attackTimer = _interval();
       }
     } else {
-      attackTimer = 0;
+      attackTimer = max(0, attackTimer - dt * 0.5);
     }
   }
 
-  double _cd() {
-    double base = 0.4;
-    if (game.usingMelee) {
-      switch (game.meleeWeapon) {
-        case MeleeWeapon.sword: base = 0.42; break;
-        case MeleeWeapon.axe: base = 0.58; break;
-        case MeleeWeapon.hammer: base = 0.75; break;
-        case MeleeWeapon.forceBlade: base = 0.48; break;
-        case MeleeWeapon.forceSword: base = 0.44; break;
-        case MeleeWeapon.daemonHammer: base = 0.72; break;
-        case MeleeWeapon.katana: base = 0.36; break;
-        case MeleeWeapon.powerKatana: base = 0.34; break;
-        case MeleeWeapon.executioner: base = 0.55; break;
-      }
-    } else {
-      switch (game.rangedWeapon) {
-        case RangedWeapon.bolter: base = 0.30; break;
-        case RangedWeapon.rifle: base = 0.55; break;
-        case RangedWeapon.shotgun: base = 0.70; break;
-        case RangedWeapon.staff: base = 0.85; break;
-        case RangedWeapon.stormStaff: base = 0.70; break;
-        case RangedWeapon.warpBeam: base = 1.0; break;
-        case RangedWeapon.daggers: base = 0.28; break;
-        case RangedWeapon.needles: base = 0.32; break;
-        case RangedWeapon.sniperNeedle: base = 0.80; break;
-      }
-    }
+  double _interval() {
+    final base = game.usingMelee
+        ? (game.meleeWeapon == MeleeWeapon.hammer || game.meleeWeapon == MeleeWeapon.daemonHammer ? 0.78 : 0.42)
+        : switch (game.rangedWeapon) {
+            RangedWeapon.bolter => 0.28,
+            RangedWeapon.rifle => 0.55,
+            RangedWeapon.shotgun => 0.72,
+            RangedWeapon.staff => 0.48,
+            RangedWeapon.stormStaff => 0.55,
+            RangedWeapon.warpBeam => 0.70,
+            RangedWeapon.daggers => 0.22,
+            RangedWeapon.needles => 0.32,
+            RangedWeapon.sniperNeedle => 0.85,
+          };
     return base * game.attackSpeedMult;
   }
 
-  void _fireBullet(Vector2 d, int dmg, Color color, {double speed = 520, double radius = 7, bool isDagger = false}) {
-    final spread = game.loadout.sight == SightMod.wide ? [-0.1, 0.0, 0.1] : [0.0];
-    final baseAng = atan2(d.y, d.x);
-    for (final o in spread) {
-      final a = baseAng + o;
-      game.world.add(Bullet(
-        position: position.clone(),
-        direction: Vector2(cos(a), sin(a)),
-        damage: dmg,
-        color: color,
-        speed: speed,
-        radius: radius,
-        isDagger: isDagger,
-        ammoMod: game.loadout.ammo,
-      )..priority = 13);
+  bool _canMoveTo(Vector2 next) {
+    for (final w in game.world.children.whereType<Wall>()) {
+      if (w.toAbsoluteRect().inflate(20).contains(next.toOffset())) return false;
+    }
+    for (final o in game.world.children.whereType<Obstacle>()) {
+      if (next.distanceTo(o.position) < 40) return false;
+    }
+    return true;
+  }
+
+  void _attack() {
+    final dir = aimDir.length2 < 0.01 ? Vector2(0, -1) : aimDir;
+    if (game.usingMelee) {
+      game.playMelee();
+      final (reach, arc, dmg) = _meleeParams();
+      game.world.add(MeleeAttack(
+        position: position + dir * (reach * 0.4),
+        direction: dir,
+        damage: game.scaleDamage(dmg),
+        radius: reach,
+        arc: arc,
+        weapon: game.meleeWeapon,
+      )..priority = 15);
+    } else {
+      game.playShoot();
+      _ranged(dir);
     }
   }
 
-  void _atk() {
-    if (game.usingMelee) game.playMelee(); else game.playShoot();
-    final d = aimDir.length2 < 0.01 ? Vector2(0, -1) : aimDir;
-
-    if (game.usingMelee) {
-      switch (game.meleeWeapon) {
-        case MeleeWeapon.sword:
-          game.world.add(MeleeAttack(position: position + d * 48, direction: d, radius: 56, damage: game.scaleDamage(game.swordDamage), color: const Color(0xFF00E5FF), status: StatusType.bleed)..priority = 13);
-          break;
-        case MeleeWeapon.axe:
-          game.world.add(MeleeAttack(position: position.clone(), direction: d, radius: 108, damage: game.scaleDamage(game.axeDamage), color: const Color(0xFFFF6D00), status: StatusType.bleed)..priority = 13);
-          break;
-        case MeleeWeapon.hammer:
-          game.world.add(MeleeAttack(position: position + d * 28, direction: d, radius: 118, damage: game.scaleDamage(game.hammerDamage), color: const Color(0xFFFFD600))..priority = 13);
-          break;
-        case MeleeWeapon.forceBlade:
-          game.world.add(MeleeAttack(position: position + d * 50, direction: d, radius: 62, damage: game.scaleDamage(game.forceDamage), color: const Color(0xFFB388FF), status: StatusType.corruption)..priority = 13);
-          break;
-        case MeleeWeapon.forceSword:
-          game.world.add(MeleeAttack(position: position + d * 52, direction: d, radius: 70, damage: game.scaleDamage(game.forceSwordDamage), color: const Color(0xFFEA80FC), status: StatusType.corruption)..priority = 13);
-          break;
-        case MeleeWeapon.daemonHammer:
-          game.world.add(MeleeAttack(position: position + d * 30, direction: d, radius: 120, damage: game.scaleDamage(game.daemonDamage), color: const Color(0xFF7C4DFF), status: StatusType.corruption)..priority = 13);
-          break;
-        case MeleeWeapon.katana:
-          game.world.add(MeleeAttack(position: position + d * 52, direction: d, radius: 64, damage: game.scaleDamage(game.katanaDamage), color: const Color(0xFFE0E0E0), status: StatusType.bleed)..priority = 13);
-          break;
-        case MeleeWeapon.powerKatana:
-          game.world.add(MeleeAttack(position: position + d * 54, direction: d, radius: 72, damage: game.scaleDamage(game.powerKatanaDamage), color: const Color(0xFFE040FB), status: StatusType.bleed)..priority = 13);
-          break;
-        case MeleeWeapon.executioner:
-          game.world.add(MeleeAttack(position: position + d * 40, direction: d, radius: 100, damage: game.scaleDamage(game.execDamage), color: const Color(0xFFF3E5F5), status: StatusType.bleed)..priority = 13);
-          break;
-      }
-    } else {
-      switch (game.rangedWeapon) {
-        case RangedWeapon.bolter:
-          _fireBullet(d, game.scaleDamage(game.bolterDamage), const Color(0xFFFFD700));
-          break;
-        case RangedWeapon.rifle:
-          _fireBullet(d, game.scaleDamage(game.rifleDamage), const Color(0xFFFF8A65), speed: 680, radius: 5);
-          break;
-        case RangedWeapon.shotgun:
-          final base = atan2(d.y, d.x);
-          for (final o in [-0.28, 0.0, 0.28]) {
-            final a = base + o;
-            game.world.add(Bullet(position: position.clone(), direction: Vector2(cos(a), sin(a)), damage: game.scaleDamage(game.shotgunDamage), color: const Color(0xFFFFAB40), speed: 440, radius: 6, ammoMod: game.loadout.ammo)..priority = 13);
-          }
-          break;
-        case RangedWeapon.staff:
-          game.world.add(PsyWave(position: position.clone(), direction: d, damage: game.scaleDamage(game.staffDamage))..priority = 13);
-          break;
-        case RangedWeapon.stormStaff:
-          game.world.add(PsyWave(position: position.clone(), direction: d, damage: game.scaleDamage(game.stormDamage), wide: true)..priority = 13);
-          break;
-        case RangedWeapon.warpBeam:
-          _fireBullet(d, game.scaleDamage(game.warpDamage), const Color(0xFF651FFF), speed: 400, radius: 10);
-          break;
-        case RangedWeapon.daggers:
-          final base = atan2(d.y, d.x);
-          for (final o in [-0.12, 0.12]) {
-            final a = base + o;
-            game.world.add(Bullet(position: position.clone(), direction: Vector2(cos(a), sin(a)), damage: game.scaleDamage(game.daggerDamage), color: const Color(0xFFE0E0E0), speed: 560, radius: 5, isDagger: true, ammoMod: game.loadout.ammo)..priority = 13);
-          }
-          break;
-        case RangedWeapon.needles:
-          final base = atan2(d.y, d.x);
-          for (final o in [-0.18, 0.0, 0.18]) {
-            final a = base + o;
-            game.world.add(Bullet(position: position.clone(), direction: Vector2(cos(a), sin(a)), damage: game.scaleDamage(game.needleDamage), color: const Color(0xFFCE93D8), speed: 600, radius: 4, isDagger: true, ammoMod: game.loadout.ammo)..priority = 13);
-          }
-          break;
-        case RangedWeapon.sniperNeedle:
-          _fireBullet(d, game.scaleDamage(game.sniperNeedleDamage), const Color(0xFFE040FB), speed: 900, radius: 4, isDagger: true);
-          break;
-      }
+  (double, double, int) _meleeParams() {
+    // Malleus force weapons: longer reach
+    switch (game.meleeWeapon) {
+      case MeleeWeapon.sword: return (78.0, 1.2, game.swordDamage);
+      case MeleeWeapon.axe: return (100.0, 2.6, game.axeDamage);
+      case MeleeWeapon.hammer: return (115.0, 2.0, game.hammerDamage);
+      case MeleeWeapon.forceBlade: return (115.0, 1.5, game.forceDamage); // was short — buffed
+      case MeleeWeapon.forceSword: return (130.0, 1.7, game.forceSwordDamage);
+      case MeleeWeapon.daemonHammer: return (140.0, 2.2, game.daemonDamage);
+      case MeleeWeapon.katana: return (95.0, 1.4, game.katanaDamage);
+      case MeleeWeapon.powerKatana: return (105.0, 1.5, game.powerKatanaDamage);
+      case MeleeWeapon.executioner: return (120.0, 1.8, game.execDamage);
     }
+  }
+
+  void _ranged(Vector2 dir) {
+    final origin = position + dir * 32;
+    switch (game.rangedWeapon) {
+      case RangedWeapon.bolter:
+        _bullet(origin, dir, game.bolterDamage, const Color(0xFFFF6D00), 520, 5);
+        if (game.loadout.barrel == BarrelMod.rapid) {
+          Future.delayed(const Duration(milliseconds: 70), () {
+            if (isMounted) _bullet(origin, dir, game.bolterDamage, const Color(0xFFFF6D00), 520, 5);
+          });
+        }
+        break;
+      case RangedWeapon.rifle:
+        _bullet(origin, dir, game.rifleDamage, const Color(0xFF00E5FF), 680, 4);
+        break;
+      case RangedWeapon.shotgun:
+        final n = game.loadout.sight == SightMod.wide ? 5 : 3;
+        final spread = game.loadout.sight == SightMod.wide ? 0.32 : 0.22;
+        for (int i = 0; i < n; i++) {
+          final a = atan2(dir.y, dir.x) + (i - (n - 1) / 2) * spread;
+          _bullet(origin, Vector2(cos(a), sin(a)), game.shotgunDamage, const Color(0xFFFFAB40), 480, 5);
+        }
+        // Xenos synergy: explosive cone burn
+        if (game.synergyXenosBlast) {
+          for (int i = 0; i < 5; i++) {
+            final a = atan2(dir.y, dir.x) + (i - 2) * 0.28;
+            final d = Vector2(cos(a), sin(a));
+            game.world.add(Bullet(
+              position: origin.clone(),
+              direction: d,
+              damage: game.scaleDamage((game.shotgunDamage * 0.6).round()),
+              color: const Color(0xFFFF6D00),
+              speed: 400,
+              radius: 7,
+              explosive: true,
+              applyBurn: true,
+            )..priority = 13);
+          }
+        }
+        break;
+      case RangedWeapon.staff:
+        // Malleus: longer / stronger wave
+        game.world.add(PsyWave(
+          position: origin.clone(),
+          direction: dir,
+          damage: game.scaleDamage(game.staffDamage),
+          maxRadius: 160, // buffed from ~90
+        )..priority = 13);
+        break;
+      case RangedWeapon.stormStaff:
+        for (final o in [-0.35, 0.0, 0.35]) {
+          final a = atan2(dir.y, dir.x) + o;
+          game.world.add(PsyWave(
+            position: origin.clone(),
+            direction: Vector2(cos(a), sin(a)),
+            damage: game.scaleDamage((game.stormDamage * 0.7).round()),
+            maxRadius: 140,
+          )..priority = 13);
+        }
+        break;
+      case RangedWeapon.warpBeam:
+        _bullet(origin, dir, game.warpDamage, const Color(0xFFEA80FC), 720, 7, pierce: true);
+        break;
+      case RangedWeapon.daggers:
+        for (final o in [-0.18, 0.18]) {
+          final a = atan2(dir.y, dir.x) + o;
+          _bullet(origin, Vector2(cos(a), sin(a)), game.daggerDamage, const Color(0xFFE0E0E0), 560, 4);
+        }
+        break;
+      case RangedWeapon.needles:
+        for (int i = 0; i < 3; i++) {
+          final a = atan2(dir.y, dir.x) + (i - 1) * 0.12;
+          _bullet(origin, Vector2(cos(a), sin(a)), game.needleDamage, const Color(0xFFCE93D8), 600, 3);
+        }
+        break;
+      case RangedWeapon.sniperNeedle:
+        _bullet(origin, dir, game.sniperNeedleDamage, const Color(0xFFE040FB), 800, 3, pierce: true);
+        break;
+    }
+  }
+
+  void _bullet(Vector2 origin, Vector2 dir, int dmg, Color color, double speed, double radius, {bool pierce = false}) {
+    final exp = game.loadout.ammo == AmmoMod.explosive;
+    final ric = game.loadout.ammo == AmmoMod.ricochet;
+    final prc = pierce || game.loadout.ammo == AmmoMod.pierce;
+    game.world.add(Bullet(
+      position: origin.clone(),
+      direction: dir,
+      damage: game.scaleDamage(dmg),
+      color: color,
+      speed: speed,
+      radius: radius,
+      pierce: prc,
+      ricochet: ric,
+      explosive: exp,
+    )..priority = 13);
   }
 
   void takeDamage(int amount) {
-    if (game.dashActive > 1.5) return;
-    if (game.shieldTimer > 0) return;
+    if (game.invulnTimer > 0 || game.dashActive > 0) return;
+    if (game.shieldTimer > 0) { game.shieldTimer = 0; return; }
     if (game.holyAuraTimer > 0) amount = max(1, (amount * 0.7).round());
-    if (Random().nextDouble() < game.defenseChance) return;
-    final dmg = max(1, (amount * game.difficulty.dmgMult).round());
-    health -= dmg;
-    hurtFlash = 0.15;
-    game.triggerShake(power: 5, time: 0.15);
-    game.spawnDamageNumber(position, dmg, color: const Color(0xFFFF5252));
-    if (health <= 0) { health = 0; game.showGameOver(); }
-  }
-
-  @override
-  void render(Canvas canvas) {
-    final cx = size.x / 2, cy = size.y / 2;
-    if (game.dashActive > 0) canvas.drawCircle(Offset(cx, cy), 46, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.28));
-    if (game.shieldTimer > 0 || game.holyAuraTimer > 0) {
-      canvas.drawCircle(Offset(cx, cy), 42, Paint()..color = const Color(0xFF42A5F5).withOpacity(0.25)..style = PaintingStyle.stroke..strokeWidth = 3);
-    }
-    final facingLeft = aimDir.x < -0.15;
-    canvas.save();
-    if (facingLeft) { canvas.translate(cx, cy); canvas.scale(-1, 1); canvas.translate(-cx, -cy); }
-    WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.32, flash: hurtFlash / 0.15, custom: game.custom, cls: game.playerClass);
-    canvas.restore();
-    final ang = atan2(aimDir.y, aimDir.x);
-    final w = game.custom.weaponColor(0.45);
-    canvas.save();
-    canvas.translate(cx, cy);
-    canvas.rotate(ang);
-    if (game.usingMelee) {
-      switch (game.meleeWeapon) {
-        case MeleeWeapon.sword: WHDraw.powerSword(canvas, 0, 0, 1.25, accent: w); break;
-        case MeleeWeapon.axe: WHDraw.chainAxe(canvas, 0, 0, 1.25, accent: w); break;
-        case MeleeWeapon.hammer: WHDraw.thunderHammer(canvas, 0, 0, 1.25, accent: w); break;
-        case MeleeWeapon.forceBlade: WHDraw.forceBlade(canvas, 0, 0, 1.25, accent: w); break;
-        case MeleeWeapon.forceSword: WHDraw.forceSword(canvas, 0, 0, 1.25, accent: w); break;
-        case MeleeWeapon.daemonHammer: WHDraw.daemonHammer(canvas, 0, 0, 1.25, accent: w); break;
-        case MeleeWeapon.katana: WHDraw.katana(canvas, 0, 0, 1.25, accent: w); break;
-        case MeleeWeapon.powerKatana: WHDraw.powerKatana(canvas, 0, 0, 1.25, accent: w); break;
-        case MeleeWeapon.executioner: WHDraw.executioner(canvas, 0, 0, 1.25, accent: w); break;
-      }
-    } else {
-      switch (game.rangedWeapon) {
-        case RangedWeapon.bolter: WHDraw.bolter(canvas, 0, 0, 1.18, accent: w); break;
-        case RangedWeapon.rifle: WHDraw.rifle(canvas, 0, 0, 1.18, accent: w); break;
-        case RangedWeapon.shotgun: WHDraw.shotgun(canvas, 0, 0, 1.18, accent: w); break;
-        case RangedWeapon.staff: WHDraw.staff(canvas, 0, 0, 1.15, accent: w); break;
-        case RangedWeapon.stormStaff: WHDraw.stormStaff(canvas, 0, 0, 1.15, accent: w); break;
-        case RangedWeapon.warpBeam: WHDraw.warpBeamGun(canvas, 0, 0, 1.15, accent: w); break;
-        case RangedWeapon.daggers: WHDraw.daggers(canvas, 0, 0, 1.15, accent: w); break;
-        case RangedWeapon.needles: WHDraw.needles(canvas, 0, 0, 1.15, accent: w); break;
-        case RangedWeapon.sniperNeedle: WHDraw.sniperNeedle(canvas, 0, 0, 1.15, accent: w); break;
-      }
-    }
-    canvas.restore();
-    if (statuses.isNotEmpty) WHDraw.statusIcons(canvas, cx, -8, statuses);
-  }
-
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (!game.isPlaying || game.isPaused) return;
-    if (other is Wall || other is Obstacle) position -= (intersectionPoints.first - position).normalized() * 6;
-    if (other is Enemy || other is EnemyBullet || other is BossProjectile || other is FlamerCloud) {
-      takeDamage(other is Enemy && (other.type == EnemyType.dog || other.type == EnemyType.brute || other.isChampion) ? 2 : 1);
-      if (other is FlamerCloud) applyStatus(StatusType.burn, 2.0, tickDamage: 1);
-      if (other is Enemy) {
-        final pos = other.position.clone();
-        final t = other.type;
-        final champ = other.isChampion;
-        other.removeFromParent();
-        game.onEnemyKilled(at: pos, type: t, isChampion: champ);
-      } else if (other is! FlamerCloud) {
-        other.removeFromParent();
-      }
-    }
-    if (other is Boss || other is KnightBoss || other is KingBoss || other is MiniBoss || other is TentacleBoss || other is CyclopsBoss) {
-      takeDamage(1);
-    }
-  }
-}
-
-class PsyWave extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 direction; final int damage; final bool wide;
-  double life = 0.45; double radius = 30; final Set<int> _hit = {};
-  PsyWave({required Vector2 position, required this.direction, required this.damage, this.wide = false})
-      : super(position: position, size: Vector2(80, 80), anchor: Anchor.center, priority: 13);
-  @override Future<void> onLoad() async => add(CircleHitbox(radius: wide ? 50 : 40));
-  @override
-  void update(double dt) {
-    super.update(dt);
-    life -= dt;
-    radius += (wide ? 180 : 140) * dt;
-    position += direction * 220 * dt;
-    if (life <= 0) removeFromParent();
-  }
-  void _hitTarget(PositionComponent other, int dmg) {
-    final id = identityHashCode(other);
-    if (_hit.contains(id)) return;
-    _hit.add(id);
-    if (other is Enemy) {
-      other.applyDamage(dmg);
-      other.applyStatus(StatusType.corruption, 2.0, tickDamage: 1);
-    }
-    if (other is Boss) other.takeDamage(dmg);
-    if (other is KnightBoss) other.takeDamage(dmg);
-    if (other is KingBoss) other.takeDamage(dmg);
-    if (other is MiniBoss) other.takeDamage(dmg);
-    if (other is TentacleBoss) other.takeDamage(dmg);
-    if (other is CyclopsBoss) other.takeDamage(dmg);
-  }
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    _hitTarget(other, damage);
-  }
-  @override
-  void render(Canvas canvas) {
-    final a = (life / 0.45).clamp(0.0, 1.0);
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), radius * 0.5, Paint()..color = Color.fromRGBO(124, 77, 255, 0.35 * a)..style = PaintingStyle.stroke..strokeWidth = wide ? 8 : 6);
-  }
-}
-
-class CyclopsLaserBeam extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 direction; final int damage;
-  double life = 0.55; final Set<int> _hit = {};
-  CyclopsLaserBeam({required Vector2 position, required this.direction, required this.damage})
-      : super(position: position, size: Vector2(40, 40), anchor: Anchor.center, priority: 14);
-  @override Future<void> onLoad() async => add(CircleHitbox(radius: 20));
-  @override
-  void update(double dt) {
-    super.update(dt);
-    life -= dt;
-    position += direction * 900 * dt;
-    if (life <= 0 || position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) removeFromParent();
-  }
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    final id = identityHashCode(other);
-    if (_hit.contains(id)) return;
-    if (other is Enemy) { _hit.add(id); other.applyDamage(damage); other.applyStatus(StatusType.burn, 2.5, tickDamage: 2); }
-    if (other is Boss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is KnightBoss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is KingBoss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is MiniBoss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is TentacleBoss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is CyclopsBoss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is Wall || other is Obstacle) removeFromParent();
-  }
-  @override
-  void render(Canvas canvas) {
-    final a = (life / 0.55).clamp(0.0, 1.0);
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 12, Paint()..color = Color.fromRGBO(255, 109, 0, 0.9 * a));
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 6, Paint()..color = Colors.white.withOpacity(a));
-  }
-}
-
-class Bullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  Vector2 direction;
-  final int damage;
-  final double speed;
-  final bool isDagger;
-  final AmmoMod ammoMod;
-  int bounces = 0;
-  Bullet({
-    required super.position,
-    required this.direction,
-    required this.damage,
-    Color color = const Color(0xFFFFD700),
-    this.speed = 500,
-    double radius = 7,
-    this.isDagger = false,
-    this.ammoMod = AmmoMod.none,
-  }) : super(radius: radius, anchor: Anchor.center, paint: Paint()..color = color, priority: 13);
-
-  @override Future<void> onLoad() async => add(CircleHitbox());
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (!game.isPlaying) return;
-    position.add(direction * speed * dt);
-    if (position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) {
-      if (ammoMod == AmmoMod.ricochet && bounces < 2) {
-        bounces++;
-        if (position.x < 0 || position.x > game.mapWidth) direction = Vector2(-direction.x, direction.y);
-        if (position.y < 0 || position.y > game.mapHeight) direction = Vector2(direction.x, -direction.y);
-        position.x = position.x.clamp(10, game.mapWidth - 10);
-        position.y = position.y.clamp(10, game.mapHeight - 10);
-      } else {
-        removeFromParent();
-      }
-    }
-  }
-
-  void _dmgEnemy(Enemy e) {
-    final shielded = e.type == EnemyType.shielded || e.type == EnemyType.shieldedShooter;
-    final pierceShield = game.hasShieldPierce || isDagger || ammoMod == AmmoMod.pierce || game.codexShieldBonus > 0;
-    if (shielded && !pierceShield) {
-      game.spawnDamageNumber(e.position, 0, color: const Color(0xFF90CAF9));
-      if (ammoMod != AmmoMod.pierce) removeFromParent();
+    if (game.defenseChance > 0 && Random().nextDouble() < game.defenseChance) {
+      game.spawnDamageNumber(position, 0, color: const Color(0xFF90CAF9), label: 'BLOCK');
       return;
     }
-    var dmg = shielded && pierceShield ? max(1, (damage * (0.5 + game.codexShieldBonus)).round()) : damage;
-    e.applyDamage(dmg);
-    if (ammoMod == AmmoMod.explosive) {
-      e.applyStatus(StatusType.burn, 2.0 + game.codexBurnBonus, tickDamage: 1);
-      game.world.add(KillExplosion(position: e.position.clone(), radius: 40, damage: dmg ~/ 3)..priority = 12);
-    }
-    if (game.synergyFireCrits && game.tryCrit()) {
-      e.applyStatus(StatusType.burn, 2.5 + game.codexBurnBonus, tickDamage: 1);
-    }
-    if (isDagger) e.applyStatus(StatusType.bleed, 2.0, tickDamage: 1);
-    if (ammoMod != AmmoMod.pierce) removeFromParent();
+    health = max(0, health - amount);
+    hurtFlash = 0.15;
+    game.triggerShake(power: 5, time: 0.12);
+    game.spawnDamageNumber(position, amount, color: const Color(0xFFFF5252));
+    if (health <= 0) game.showGameOver();
   }
 
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is Wall || other is Obstacle) {
-      if (ammoMod == AmmoMod.ricochet && bounces < 2) {
-        bounces++;
-        direction = -direction;
-      } else {
-        removeFromParent();
+      position += (position - intersectionPoints.first).normalized() * 8;
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final cx = size.x / 2, cy = size.y / 2;
+    final ang = atan2(aimDir.y, aimDir.x);
+    WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.28, flash: hurtFlash / 0.15, custom: game.custom, cls: game.playerClass);
+    canvas.save();
+    canvas.translate(cx, cy);
+    canvas.rotate(ang);
+    final wc = game.custom.weaponColor(0.5);
+    if (game.usingMelee) {
+      switch (game.meleeWeapon) {
+        case MeleeWeapon.sword: WHDraw.powerSword(canvas, 0, 0, 1.05, accent: wc); break;
+        case MeleeWeapon.axe: WHDraw.chainAxe(canvas, 0, 0, 1.05, accent: wc); break;
+        case MeleeWeapon.hammer: WHDraw.thunderHammer(canvas, 0, 0, 1.0, accent: wc); break;
+        case MeleeWeapon.forceBlade: WHDraw.forceBlade(canvas, 0, 0, 1.15, accent: wc); break;
+        case MeleeWeapon.forceSword: WHDraw.forceSword(canvas, 0, 0, 1.15, accent: wc); break;
+        case MeleeWeapon.daemonHammer: WHDraw.daemonHammer(canvas, 0, 0, 1.1, accent: wc); break;
+        case MeleeWeapon.katana: WHDraw.katana(canvas, 0, 0, 1.05, accent: wc); break;
+        case MeleeWeapon.powerKatana: WHDraw.powerKatana(canvas, 0, 0, 1.05, accent: wc); break;
+        case MeleeWeapon.executioner: WHDraw.executioner(canvas, 0, 0, 1.05, accent: wc); break;
+      }
+    } else {
+      switch (game.rangedWeapon) {
+        case RangedWeapon.bolter: WHDraw.bolter(canvas, 0, 0, 1.0, accent: wc); break;
+        case RangedWeapon.rifle: WHDraw.rifle(canvas, 0, 0, 1.0, accent: wc); break;
+        case RangedWeapon.shotgun: WHDraw.shotgun(canvas, 0, 0, 1.0, accent: wc); break;
+        case RangedWeapon.staff: WHDraw.staff(canvas, 0, 0, 1.15, accent: wc); break;
+        case RangedWeapon.stormStaff: WHDraw.stormStaff(canvas, 0, 0, 1.15, accent: wc); break;
+        case RangedWeapon.warpBeam: WHDraw.warpBeamGun(canvas, 0, 0, 1.05, accent: wc); break;
+        case RangedWeapon.daggers: WHDraw.daggers(canvas, 0, 0, 1.0, accent: wc); break;
+        case RangedWeapon.needles: WHDraw.needles(canvas, 0, 0, 1.0, accent: wc); break;
+        case RangedWeapon.sniperNeedle: WHDraw.sniperNeedle(canvas, 0, 0, 1.0, accent: wc); break;
       }
     }
-    if (other is Enemy) _dmgEnemy(other);
-    if (other is Boss) { other.takeDamage(damage); if (ammoMod != AmmoMod.pierce) removeFromParent(); }
-    if (other is KnightBoss) { other.takeDamage(damage); if (ammoMod != AmmoMod.pierce) removeFromParent(); }
-    if (other is KingBoss) { other.takeDamage(damage); if (ammoMod != AmmoMod.pierce) removeFromParent(); }
-    if (other is MiniBoss) { other.takeDamage(damage); if (ammoMod != AmmoMod.pierce) removeFromParent(); }
-    if (other is TentacleBoss) { other.takeDamage(damage); if (ammoMod != AmmoMod.pierce) removeFromParent(); }
-    if (other is CyclopsBoss) { other.takeDamage(damage); if (ammoMod != AmmoMod.pierce) removeFromParent(); }
+    canvas.restore();
+    if (game.invulnTimer > 0) {
+      canvas.drawCircle(Offset(cx, cy), 40, Paint()
+        ..color = const Color(0xFF81D4FA).withOpacity(0.25)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3);
+    }
+    if (game.shieldTimer > 0 || game.holyAuraTimer > 0) {
+      canvas.drawCircle(Offset(cx, cy), 38, Paint()
+        ..color = (game.holyAuraTimer > 0 ? const Color(0xFFFFD700) : const Color(0xFF42A5F5)).withOpacity(0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3);
+    }
+    WHDraw.statusIcons(canvas, cx, -8, statuses);
   }
 }
 
-class MeleeAttack extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+class PsyWave extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
   final int damage;
-  final StatusType? status;
-  double life = 0.22;
-  final Set<int> _hit = {};
-  MeleeAttack({
-    required super.position,
-    required this.direction,
-    required double radius,
-    required this.damage,
-    required Color color,
-    this.status,
-  }) : super(radius: radius, anchor: Anchor.center, paint: Paint()..color = color.withOpacity(0.42), priority: 13);
-
+  double radius = 20;
+  final double maxRadius;
+  final Set<int> hit = {};
+  PsyWave({required Vector2 position, required this.direction, required this.damage, this.maxRadius = 160})
+      : super(position: position.clone(), size: Vector2(40, 40), anchor: Anchor.center, priority: 13);
   @override Future<void> onLoad() async => add(CircleHitbox());
-  @override void update(double dt) { super.update(dt); life -= dt; if (life <= 0) removeFromParent(); }
-
+  @override
+  void update(double dt) {
+    super.update(dt);
+    radius += 220 * dt;
+    position += direction * 160 * dt;
+    size = Vector2.all(radius * 2);
+    if (radius >= maxRadius) removeFromParent();
+  }
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    final id = identityHashCode(other);
-    if (_hit.contains(id)) return;
-    if (other is Enemy) {
-      _hit.add(id);
+    if (other is Enemy && hit.add(other.hashCode)) {
       other.applyDamage(damage);
-      if (status != null) other.applyStatus(status!, 2.2, tickDamage: 1);
+      other.applyStatus(StatusType.corruption, 1.5, tickDamage: 1);
     }
-    if (other is Obstacle) other.removeFromParent();
-    if (other is Boss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is KnightBoss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is KingBoss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is MiniBoss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is TentacleBoss) { _hit.add(id); other.takeDamage(damage); }
-    if (other is CyclopsBoss) { _hit.add(id); other.takeDamage(damage); }
+    if (other is MiniBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is Boss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is KnightBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is KingBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is TentacleBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is CyclopsBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+  }
+  @override
+  void render(Canvas canvas) {
+    final a = (1 - radius / maxRadius).clamp(0.0, 1.0);
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), radius, Paint()
+      ..color = Color.fromRGBO(124, 77, 255, 0.35 * a)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6);
   }
 }
 
-class EnemyBullet extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+class CyclopsLaserBeam extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   final Vector2 direction;
-  EnemyBullet({required super.position, required this.direction})
-      : super(radius: 9, anchor: Anchor.center, paint: Paint()..color = const Color(0xFF76FF03), priority: 22);
-  @override Future<void> onLoad() async => add(CircleHitbox());
+  final int damage;
+  double life = 0.45;
+  final Set<int> hit = {};
+  CyclopsLaserBeam({required Vector2 position, required this.direction, required this.damage})
+      : super(position: position.clone(), size: Vector2(400, 24), anchor: Anchor.centerLeft, priority: 14) {
+    angle = atan2(direction.y, direction.x);
+  }
+  @override Future<void> onLoad() async => add(RectangleHitbox());
   @override
   void update(double dt) {
     super.update(dt);
-    if (!game.isPlaying) return;
-    position.add(direction * 160 * dt);
-    if (position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) removeFromParent();
+    life -= dt;
+    if (life <= 0) removeFromParent();
   }
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle) removeFromParent();
+    if (other is Enemy && hit.add(other.hashCode)) other.applyDamage(damage);
+    if (other is MiniBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is Boss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is KnightBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is KingBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is TentacleBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is CyclopsBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+  }
+  @override
+  void render(Canvas canvas) {
+    final a = (life / 0.45).clamp(0.0, 1.0);
+    canvas.drawRect(Rect.fromLTWH(0, size.y * 0.25, size.x, size.y * 0.5), Paint()..color = Color.fromRGBO(255, 109, 0, 0.85 * a));
+    canvas.drawRect(Rect.fromLTWH(0, size.y * 0.35, size.x, size.y * 0.3), Paint()..color = Color.fromRGBO(255, 255, 200, 0.6 * a));
   }
 }
 
-class BossProjectile extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 direction;
-  BossProjectile({required super.position, required this.direction})
-      : super(radius: 12, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFFF1744), priority: 22);
-  @override Future<void> onLoad() async => add(CircleHitbox());
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (!game.isPlaying) return;
-    position.add(direction * 185 * dt);
-    if (position.x < -80 || position.x > game.mapWidth + 80 || position.y < -80 || position.y > game.mapHeight + 80) removeFromParent();
-  }
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle) removeFromParent();
-  }
-}
-
-class FlamerCloud extends CircleComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  double life = 1.8;
-  FlamerCloud({required Vector2 position})
-      : super(position: position, radius: 36, anchor: Anchor.center, paint: Paint()..color = const Color(0xFFFF6D00).withOpacity(0.4), priority: 11);
+class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final Vector2 velocity;
+  final int damage;
+  final Color color;
+  final bool pierce, ricochet, explosive, applyBurn;
+  double life = 2.2;
+  int bounces = 0;
+  final Set<int> hitIds = {};
+  Bullet({
+    required Vector2 position,
+    required Vector2 direction,
+    required this.damage,
+    required this.color,
+    double speed = 520,
+    double radius = 5,
+    this.pierce = false,
+    this.ricochet = false,
+    this.explosive = false,
+    this.applyBurn = false,
+  })  : velocity = direction.normalized() * speed,
+        super(position: position.clone(), size: Vector2.all(radius * 2), anchor: Anchor.center, priority: 13);
   @override Future<void> onLoad() async => add(CircleHitbox());
   @override
   void update(double dt) {
     super.update(dt);
     life -= dt;
-    paint.color = Color.fromRGBO(255, 109, 0, (life / 1.8 * 0.4).clamp(0.0, 0.4));
+    position += velocity * dt;
+    if (life <= 0 || position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) {
+      removeFromParent();
+    }
+  }
+  void _hitEnemy(Enemy e) {
+    if (!hitIds.add(e.hashCode)) return;
+    e.applyDamage(damage);
+    if (applyBurn || explosive) e.applyStatus(StatusType.burn, 2.0 + game.codexBurnBonus, tickDamage: 1);
+    if (explosive) {
+      game.world.add(KillExplosion(position: position.clone(), radius: 55, damage: damage ~/ 3)..priority = 12);
+    }
+    if (!pierce && !ricochet) removeFromParent();
+  }
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Enemy) _hitEnemy(other);
+    if (other is MiniBoss) { other.takeDamage(damage); if (!pierce) removeFromParent(); }
+    if (other is Boss) { other.takeDamage(damage); if (!pierce) removeFromParent(); }
+    if (other is KnightBoss) { other.takeDamage(damage); if (!pierce) removeFromParent(); }
+    if (other is KingBoss) { other.takeDamage(damage); if (!pierce) removeFromParent(); }
+    if (other is TentacleBoss) { other.takeDamage(damage); if (!pierce) removeFromParent(); }
+    if (other is CyclopsBoss) { other.takeDamage(damage); if (!pierce) removeFromParent(); }
+    if (other is Wall || other is Obstacle) {
+      if (ricochet && bounces < 2) {
+        bounces++;
+        velocity.x *= -1;
+      } else {
+        if (explosive) game.world.add(KillExplosion(position: position.clone(), radius: 50, damage: damage ~/ 3)..priority = 12);
+        removeFromParent();
+      }
+    }
+  }
+  @override
+  void render(Canvas canvas) {
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), size.x / 2, Paint()..color = color);
+  }
+}
+
+class MeleeAttack extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final Vector2 direction;
+  final int damage;
+  final double radius;
+  final double arc;
+  final MeleeWeapon weapon;
+  double life = 0.22;
+  final Set<int> hit = {};
+  MeleeAttack({
+    required Vector2 position,
+    required this.direction,
+    required this.damage,
+    required this.radius,
+    required this.arc,
+    required this.weapon,
+  }) : super(position: position.clone(), size: Vector2.all(radius * 2), anchor: Anchor.center, priority: 15);
+  @override Future<void> onLoad() async => add(CircleHitbox());
+  @override
+  void update(double dt) {
+    super.update(dt);
+    life -= dt;
     if (life <= 0) removeFromParent();
+  }
+  bool _inArc(Vector2 otherPos) {
+    final to = otherPos - position;
+    if (to.length > radius + 30) return false;
+    final a = atan2(direction.y, direction.x);
+    final b = atan2(to.y, to.x);
+    var d = (b - a).abs();
+    if (d > pi) d = 2 * pi - d;
+    return d <= arc / 2 + 0.15;
+  }
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    // Jedi Path: destroy enemy bullets
+    if (game.hasJediPath && (other is EnemyBullet || other is BossProjectile)) {
+      other.removeFromParent();
+      game.spawnDamageNumber(other.position, 0, color: const Color(0xFF81D4FA), label: '✦');
+      return;
+    }
+    if (other is Enemy && hit.add(other.hashCode) && _inArc(other.position)) {
+      other.applyDamage(damage);
+      if (game.synergyHereticusBleedDash) other.applyStatus(StatusType.bleed, 2.5, tickDamage: 1);
+      game.registerKill(at: other.position, meleeKill: true); // only if dies handled in enemy; call not here for damage only
+    }
+    if (other is MiniBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is Boss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is KnightBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is KingBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is TentacleBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is CyclopsBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is Obstacle && hit.add(other.hashCode)) other.removeFromParent();
+  }
+  @override
+  void render(Canvas canvas) {
+    final a = (life / 0.22).clamp(0.0, 1.0);
+    final ang = atan2(direction.y, direction.x);
+    final path = Path()..moveTo(size.x / 2, size.y / 2);
+    path.arcTo(Rect.fromCircle(center: Offset(size.x / 2, size.y / 2), radius: radius), ang - arc / 2, arc, false);
+    path.close();
+    canvas.drawPath(path, Paint()..color = Color.fromRGBO(0, 188, 212, 0.35 * a));
+  }
+}
+
+class EnemyBullet extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final Vector2 velocity;
+  final int damage;
+  double life = 3.5;
+  EnemyBullet({required Vector2 position, required Vector2 direction, required this.damage, double speed = 180})
+      : velocity = direction.normalized() * speed,
+        super(position: position.clone(), size: Vector2(14, 14), anchor: Anchor.center, priority: 16);
+  @override Future<void> onLoad() async => add(CircleHitbox());
+  @override
+  void update(double dt) {
+    super.update(dt);
+    life -= dt;
+    position += velocity * dt;
+    if (life <= 0) removeFromParent();
+  }
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Player) { other.takeDamage(damage); removeFromParent(); }
+    if (other is Wall || other is Obstacle) removeFromParent();
+    if (other is MeleeAttack && game.hasJediPath) removeFromParent();
+  }
+  @override
+  void render(Canvas canvas) {
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 6, Paint()..color = const Color(0xFF76FF03));
+  }
+}
+
+class BossProjectile extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final Vector2 velocity;
+  double life = 4.0;
+  BossProjectile({required Vector2 position, required Vector2 direction, double speed = 200})
+      : velocity = direction.normalized() * speed,
+        super(position: position.clone(), size: Vector2(18, 18), anchor: Anchor.center, priority: 22);
+  @override Future<void> onLoad() async => add(CircleHitbox());
+  @override
+  void update(double dt) {
+    super.update(dt);
+    life -= dt;
+    position += velocity * dt;
+    if (life <= 0) removeFromParent();
+  }
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Player) { other.takeDamage((1 * game.difficulty.dmgMult).ceil()); removeFromParent(); }
+    if (other is Wall) removeFromParent();
+    if (other is MeleeAttack && game.hasJediPath) removeFromParent();
+  }
+  @override
+  void render(Canvas canvas) {
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 8, Paint()..color = const Color(0xFFE53935));
+  }
+}
+
+class FlamerCloud extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  double life = 1.8;
+  FlamerCloud({required Vector2 position}) : super(position: position.clone(), size: Vector2(70, 70), anchor: Anchor.center, priority: 11);
+  @override Future<void> onLoad() async => add(CircleHitbox());
+  @override
+  void update(double dt) {
+    super.update(dt);
+    life -= dt;
+    if (life <= 0) removeFromParent();
+  }
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is Player) other.applyStatus(StatusType.burn, 1.5, tickDamage: 1);
+  }
+  @override
+  void render(Canvas canvas) {
+    final a = (life / 1.8).clamp(0.0, 1.0);
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 30, Paint()..color = Color.fromRGBO(255, 109, 0, 0.4 * a));
   }
 }
 class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   final EnemyType type;
   final bool isChampion;
-  late final double speed;
-  late int hp;
   late int maxHp;
-  double shootTimer = 0;
-  double meleeTimer = 0;
+  late int currentHp;
+  double attackTimer = 0;
   double hurtFlash = 0;
   final List<StatusEffect> statuses = [];
+  bool _dead = false;
 
   Enemy({required this.floor, required this.type, this.isChampion = false})
-      : super(size: Vector2(72, 82), anchor: Anchor.center, priority: 30);
+      : super(size: Vector2(type == EnemyType.brute ? 88 : 70, type == EnemyType.brute ? 88 : 70), anchor: Anchor.center, priority: 30);
 
   @override
   Future<void> onLoad() async {
-    final threat = game.worldThreat * game.difficulty.hpMult;
-    final champMul = isChampion ? 2.2 : 1.0;
-    switch (type) {
-      case EnemyType.shooter:
-        speed = 55 + floor * 6.0;
-        maxHp = ((22 + floor * 8 * threat) * champMul).round();
-        break;
-      case EnemyType.melee:
-        speed = 85 + floor * 9.0;
-        maxHp = ((26 + floor * 9 * threat) * champMul).round();
-        break;
-      case EnemyType.shielded:
-        speed = 42 + floor * 4.5;
-        maxHp = ((36 + floor * 10 * threat) * champMul).round();
-        break;
-      case EnemyType.dog:
-        speed = 145 + floor * 12.0;
-        size = Vector2(62, 48);
-        maxHp = ((16 + floor * 6 * threat) * champMul).round();
-        break;
-      case EnemyType.shieldedShooter:
-        speed = 48 + floor * 5.0;
-        maxHp = ((32 + floor * 10 * threat) * champMul).round();
-        break;
-      case EnemyType.flamer:
-        speed = 50 + floor * 5.0;
-        maxHp = ((28 + floor * 9 * threat) * champMul).round();
-        break;
-      case EnemyType.sniper:
-        speed = 40 + floor * 4.0;
-        maxHp = ((18 + floor * 7 * threat) * champMul).round();
-        break;
-      case EnemyType.brute:
-        speed = 38 + floor * 4.0;
-        size = Vector2(88, 92);
-        maxHp = ((50 + floor * 14 * threat) * champMul).round();
-        break;
-    }
-    if (isChampion) speed *= 1.08;
-    hp = maxHp;
-    add(CircleHitbox(radius: type == EnemyType.dog ? 22 : (type == EnemyType.brute ? 36 : 28)));
+    final base = switch (type) {
+      EnemyType.shooter => 18.0,
+      EnemyType.melee => 22.0,
+      EnemyType.shielded => 32.0,
+      EnemyType.dog => 16.0,
+      EnemyType.shieldedShooter => 36.0,
+      EnemyType.flamer => 24.0,
+      EnemyType.sniper => 20.0,
+      EnemyType.brute => 55.0,
+    };
+    maxHp = (base * game.difficulty.hpMult * game.worldThreat * (1 + floor * 0.12) * (isChampion ? 2.2 : 1.0)).round();
+    currentHp = maxHp;
+    add(CircleHitbox(radius: type == EnemyType.brute ? 36 : 28));
+    if (isChampion) game.unlockCodex(CodexId.champion);
   }
 
-  void applyStatus(StatusType type, double duration, {int tickDamage = 1}) {
-    final existing = statuses.where((s) => s.type == type).toList();
-    if (existing.isNotEmpty) {
-      existing.first.remaining = max(existing.first.remaining, duration);
+  bool get isShielded => type == EnemyType.shielded || type == EnemyType.shieldedShooter;
+  bool get isRanged =>
+      type == EnemyType.shooter ||
+      type == EnemyType.shieldedShooter ||
+      type == EnemyType.flamer ||
+      type == EnemyType.sniper;
+
+  void applyStatus(StatusType t, double dur, {int tickDamage = 1}) {
+    final ex = statuses.where((e) => e.type == t).toList();
+    if (ex.isNotEmpty) {
+      ex.first.remaining = max(ex.first.remaining, dur);
     } else {
-      statuses.add(StatusEffect(type, duration, tickDamage: tickDamage));
+      statuses.add(StatusEffect(t, dur, tickDamage: tickDamage));
     }
   }
 
   void _tickStatuses(double dt) {
-    for (final s in statuses.toList()) {
-      s.remaining -= dt;
-      s.tickAcc += dt;
-      if (s.tickAcc >= s.tickEvery) {
-        s.tickAcc = 0;
-        if (s.type == StatusType.burn || s.type == StatusType.bleed || s.type == StatusType.corruption) {
-          hp -= s.tickDamage;
-          game.spawnDamageNumber(position, s.tickDamage, color: s.color);
-          if (hp <= 0) {
-            final pos = position.clone();
-            final t = type;
-            final champ = isChampion;
-            removeFromParent();
-            game.onEnemyKilled(at: pos, type: t, isChampion: champ);
-            return;
-          }
-        }
+    for (final e in statuses.toList()) {
+      e.remaining -= dt;
+      e.tickAcc += dt;
+      if (e.tickAcc >= e.tickEvery) {
+        e.tickAcc = 0;
+        if (e.tickDamage > 0) applyDamage(e.tickDamage, fromStatus: true);
       }
-      if (s.remaining <= 0) statuses.remove(s);
+      if (e.remaining <= 0) statuses.remove(e);
     }
   }
 
-  double get _speedMul {
-    double m = 1.0;
-    for (final s in statuses) {
-      if (s.type == StatusType.slow) m *= 0.55;
-      if (s.type == StatusType.corruption) m *= 0.8;
+  void applyDamage(int amount, {bool fromStatus = false}) {
+    if (_dead) return;
+    var dmg = amount;
+    if (isShielded && !fromStatus) {
+      final pierce = game.hasShieldPierce || game.codexShieldBonus > 0;
+      if (!pierce && !game.player.usingMelee) {
+        dmg = max(1, (dmg * 0.15).round());
+      } else if (!game.player.usingMelee) {
+        dmg = max(1, (dmg * (0.45 + game.codexShieldBonus)).round());
+      }
     }
-    return m;
-  }
-
-  void applyDamage(int amount) {
-    hp -= amount;
+    currentHp -= dmg;
     hurtFlash = 0.12;
-    game.spawnDamageNumber(position, amount);
-    if (hp <= 0) {
+    game.spawnDamageNumber(position, dmg, color: isChampion ? const Color(0xFFFFD700) : const Color(0xFFFFEB3B));
+    if (currentHp <= 0) {
+      _dead = true;
       final pos = position.clone();
-      final t = type;
-      final champ = isChampion;
+      final meleeKill = game.player.usingMelee;
       removeFromParent();
-      game.onEnemyKilled(at: pos, type: t, isChampion: champ);
+      game.onEnemyKilled(at: pos, isChampion: isChampion, type: type, meleeKill: meleeKill);
     }
-  }
-
-  Vector2 _aimAtPlayer() {
-    final toP = game.player.position - position;
-    final dist = toP.length;
-    if (dist < 1) return Vector2(0, -1);
-    final lead = game.moveJoystick.relativeDelta * (dist / 280);
-    return (toP + lead).normalized();
   }
 
   @override
   void update(double dt) {
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
-    if (!game.isPlaying || game.isPaused) return;
+    if (!game.isPlaying || game.isPaused || _dead) return;
     _tickStatuses(dt);
-    final dist = position.distanceTo(game.player.position);
-    final isRanged = type == EnemyType.shooter || type == EnemyType.shieldedShooter || type == EnemyType.sniper || type == EnemyType.flamer;
-    final prefer = type == EnemyType.sniper ? 380.0 : (type == EnemyType.flamer ? 200.0 : 280.0);
-    final spd = speed * _speedMul * (isChampion ? 1.05 : 1.0);
-    smartMove(game.player.position, spd, dt, radius: type == EnemyType.brute ? 36 : 28, kite: isRanged, preferDist: isRanged ? prefer : 0.0);
+
+    final toP = game.player.position - position;
+    final dist = toP.length;
+    var spd = switch (type) {
+      EnemyType.dog => 165.0,
+      EnemyType.brute => 70.0,
+      EnemyType.sniper => 55.0,
+      EnemyType.flamer => 80.0,
+      EnemyType.shielded || EnemyType.shieldedShooter => 75.0,
+      EnemyType.shooter => 95.0,
+      EnemyType.melee => 110.0,
+    };
+    if (isChampion) spd *= 1.1;
+    if (statuses.any((e) => e.type == StatusType.slow)) spd *= 0.6;
+    spd *= (0.95 + game.difficulty.dmgMult * 0.05);
+
+    final prefer = switch (type) {
+      EnemyType.sniper => 320.0,
+      EnemyType.shooter || EnemyType.shieldedShooter => 240.0,
+      EnemyType.flamer => 160.0,
+      _ => 0.0,
+    };
+
+    smartMove(game.player.position, spd, dt, radius: type == EnemyType.brute ? 36 : 28, kite: isRanged, preferDist: prefer);
     pushOutOfWalls(type == EnemyType.brute ? 36 : 28);
 
-    if (type == EnemyType.shooter || type == EnemyType.shieldedShooter) {
-      final interval = (dist < 160 ? 0.55 : (dist < 320 ? 0.95 : 1.55)) * (isChampion ? 0.85 : 1.0);
-      shootTimer += dt;
-      if (shootTimer >= interval) {
-        shootTimer = 0;
-        game.world.add(EnemyBullet(position: position.clone(), direction: _aimAtPlayer())..priority = 22);
-        if (isChampion) {
-          final a = atan2(_aimAtPlayer().y, _aimAtPlayer().x);
-          game.world.add(EnemyBullet(position: position.clone(), direction: Vector2(cos(a + 0.2), sin(a + 0.2)))..priority = 22);
-        }
-      }
-    }
-    if (type == EnemyType.sniper) {
-      shootTimer += dt;
-      if (shootTimer >= (isChampion ? 1.4 : 1.8)) {
-        shootTimer = 0;
-        game.world.add(BossProjectile(position: position.clone(), direction: _aimAtPlayer())..priority = 22);
-      }
-    }
-    if (type == EnemyType.flamer) {
-      shootTimer += dt;
-      if (shootTimer >= (isChampion ? 1.1 : 1.4) && dist < 260) {
-        shootTimer = 0;
-        final dir = _aimAtPlayer();
-        game.world.add(FlamerCloud(position: position + dir * 50)..priority = 11);
-        game.world.add(FlamerCloud(position: position + dir * 90)..priority = 11);
-        if (isChampion) game.world.add(FlamerCloud(position: position + dir * 130)..priority = 11);
-      }
-    }
-    if (type == EnemyType.melee || type == EnemyType.dog || type == EnemyType.shielded || type == EnemyType.brute) {
-      final hitRange = type == EnemyType.dog ? 58.0 : (type == EnemyType.brute ? 90.0 : 74.0);
-      final interval = (dist < 100 ? 0.45 : 0.85) * (isChampion ? 0.8 : 1.0);
-      meleeTimer += dt;
-      if (meleeTimer >= interval && dist < hitRange) {
-        meleeTimer = 0;
-        game.player.takeDamage(type == EnemyType.brute || type == EnemyType.dog || isChampion ? 2 : 1);
-        if (type == EnemyType.brute) game.player.applyStatus(StatusType.slow, 1.5);
+    attackTimer += dt;
+    final closeBoost = dist < 140 ? 0.55 : 1.0;
+    final interval = switch (type) {
+      EnemyType.dog => 0.55,
+      EnemyType.melee => 0.7,
+      EnemyType.brute => 1.1,
+      EnemyType.flamer => 1.4,
+      EnemyType.sniper => 1.8,
+      EnemyType.shooter => 1.1,
+      EnemyType.shieldedShooter => 1.3,
+      EnemyType.shielded => 0.9,
+    } * closeBoost / (isChampion ? 1.15 : 1.0);
+
+    if (attackTimer >= interval) {
+      attackTimer = 0;
+      final dir = dist > 1 ? toP / dist : Vector2(0, 1);
+      final dmg = (1 * game.difficulty.dmgMult * (isChampion ? 1.4 : 1.0)).ceil();
+      switch (type) {
+        case EnemyType.melee:
+        case EnemyType.dog:
+        case EnemyType.brute:
+        case EnemyType.shielded:
+          if (dist < (type == EnemyType.brute ? 70 : 55)) game.player.takeDamage(dmg + (type == EnemyType.brute ? 1 : 0));
+          break;
+        case EnemyType.shooter:
+        case EnemyType.shieldedShooter:
+          game.world.add(EnemyBullet(position: position.clone(), direction: dir, damage: dmg)..priority = 16);
+          break;
+        case EnemyType.sniper:
+          game.world.add(EnemyBullet(position: position.clone(), direction: dir, damage: dmg + 1, speed: 260)..priority = 16);
+          break;
+        case EnemyType.flamer:
+          game.world.add(FlamerCloud(position: position + dir * 40)..priority = 11);
+          if (dist < 90) game.player.applyStatus(StatusType.burn, 1.2, tickDamage: 1);
+          break;
       }
     }
   }
@@ -3590,8 +3980,8 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is Wall || other is Obstacle) {
-      position += (position - intersectionPoints.first).normalized() * 12;
       final n = (position - intersectionPoints.first).normalized();
+      position += n * 12;
       avoidDir = Vector2(-n.y, n.x);
       stuckTimer = 0.55;
     }
@@ -3602,66 +3992,69 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     final cx = size.x / 2, cy = size.y / 2;
     final f = hurtFlash / 0.12;
     switch (type) {
-      case EnemyType.dog:
-        WHDraw.chaosHound(canvas, cx, cy, flash: f);
-        break;
-      case EnemyType.shooter:
-        WHDraw.cultistShooter(canvas, cx, cy, 1.2, flash: f);
-        break;
-      case EnemyType.melee:
-        WHDraw.cultistMelee(canvas, cx, cy, 1.2, flash: f);
-        break;
-      case EnemyType.shielded:
-        WHDraw.shieldedMarine(canvas, cx, cy, 1.2, flash: f);
-        break;
-      case EnemyType.shieldedShooter:
-        WHDraw.shieldedMarine(canvas, cx, cy, 1.15, withGun: true, flash: f);
-        break;
-      case EnemyType.flamer:
-        WHDraw.flamerCultist(canvas, cx, cy, 1.2, flash: f);
-        break;
-      case EnemyType.sniper:
-        WHDraw.sniperCultist(canvas, cx, cy, 1.2, flash: f);
-        break;
-      case EnemyType.brute:
-        WHDraw.brute(canvas, cx, cy, 1.25, flash: f);
-        break;
+      case EnemyType.shooter: WHDraw.cultistShooter(canvas, cx, cy, 1.05, flash: f); break;
+      case EnemyType.melee: WHDraw.cultistMelee(canvas, cx, cy, 1.05, flash: f); break;
+      case EnemyType.shielded: WHDraw.shieldedMarine(canvas, cx, cy, 1.0, flash: f); break;
+      case EnemyType.shieldedShooter: WHDraw.shieldedMarine(canvas, cx, cy, 1.0, withGun: true, flash: f); break;
+      case EnemyType.dog: WHDraw.chaosHound(canvas, cx, cy, flash: f); break;
+      case EnemyType.flamer: WHDraw.flamerCultist(canvas, cx, cy, 1.05, flash: f); break;
+      case EnemyType.sniper: WHDraw.sniperCultist(canvas, cx, cy, 1.05, flash: f); break;
+      case EnemyType.brute: WHDraw.brute(canvas, cx, cy, 1.15, flash: f); break;
     }
-    if (isChampion) {
-      WHDraw.championMark(canvas, cx, -18);
-      // mini HP bar
-      final ratio = (hp / maxHp).clamp(0.0, 1.0);
-      canvas.drawRect(Rect.fromLTWH(cx - 22, -28, 44, 5), Paint()..color = const Color(0xFF333333));
-      canvas.drawRect(Rect.fromLTWH(cx - 22, -28, 44 * ratio, 5), Paint()..color = const Color(0xFFFFD700));
-    }
-    if (statuses.isNotEmpty) WHDraw.statusIcons(canvas, cx, isChampion ? -36 : -14, statuses);
+    final barW = size.x * 0.7;
+    canvas.drawRect(Rect.fromLTWH(cx - barW / 2, -10, barW * (currentHp / maxHp), 5), Paint()..color = isChampion ? const Color(0xFFFFD700) : const Color(0xFFE53935));
+    if (isChampion) WHDraw.championMark(canvas, cx, -18);
+    WHDraw.statusIcons(canvas, cx, -26, statuses);
   }
 }
 
 class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
-  late int maxHp, currentHp;
-  double shootTimer = 0;
+  final bool isEcho;
+  late int maxHp;
+  late int currentHp;
+  double attackTimer = 0;
   double telegraphTimer = 0;
   bool telegraphing = false;
   double hurtFlash = 0;
-  int phase = 1;
+  final List<StatusEffect> statuses = [];
 
-  MiniBoss({required this.floor, required Vector2 position})
-      : super(position: position, size: Vector2(96, 106), anchor: Anchor.center, priority: 24);
+  MiniBoss({required this.floor, required Vector2 position, this.isEcho = false})
+      : super(position: position, size: Vector2(100, 100), anchor: Anchor.center, priority: 24);
 
   @override
   Future<void> onLoad() async {
-    final bars = game.difficulty == Difficulty.hard ? 2 : 1;
-    maxHp = (((240 + floor * 95) / 2) * game.difficulty.bossHpMult * game.worldThreat * bars).round();
+    final mult = isEcho ? 0.6 : 1.0;
+    maxHp = ((90 + floor * 25) * game.difficulty.bossHpMult * game.worldThreat * 0.5 * mult).round();
     currentHp = maxHp;
     add(CircleHitbox(radius: 42));
-    game.unlockCodex(CodexId.miniBoss);
+    if (!isEcho) game.unlockCodex(CodexId.miniBoss);
   }
 
-  int get _barHp {
-    final bars = game.difficulty == Difficulty.hard ? 2 : 1;
-    return max(1, maxHp ~/ bars);
+  void applyStatus(StatusType t, double dur, {int tickDamage = 1}) {
+    final ex = statuses.where((e) => e.type == t).toList();
+    if (ex.isNotEmpty) {
+      ex.first.remaining = max(ex.first.remaining, dur);
+    } else {
+      statuses.add(StatusEffect(t, dur, tickDamage: tickDamage));
+    }
+  }
+
+  void takeDamage(int amount) {
+    currentHp -= amount;
+    hurtFlash = 0.12;
+    game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF9800));
+    if (currentHp <= 0) {
+      final pos = position.clone();
+      removeFromParent();
+      game.spawnBlood(pos, count: 22);
+      game.onEnemyKilled(
+        isBoss: true,
+        at: pos,
+        meleeKill: game.player.usingMelee,
+        echoKind: isEcho ? EchoBossKind.none : EchoBossKind.mini,
+      );
+    }
   }
 
   void _startTelegraph() {
@@ -3669,14 +4062,13 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     telegraphTimer = 0.7;
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
-    game.world.add(TelegraphZone(position: position + toP * 80, shape: 'cone', radius: 160, angle: ang, life: 0.7)..priority = 6);
+    game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 200, angle: ang, life: 0.7)..priority = 6);
   }
 
-  void _fireVolley() {
+  void _fireShotgun() {
     final toP = (game.player.position - position).normalized();
     final base = atan2(toP.y, toP.x);
-    final spread = phase >= 2 ? [-0.4, -0.2, 0.0, 0.2, 0.4] : [-0.3, 0.0, 0.3];
-    for (final o in spread) {
+    for (final o in [-0.35, -0.15, 0.0, 0.15, 0.35]) {
       final a = base + o;
       game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
     }
@@ -3687,40 +4079,38 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
     if (!game.isPlaying || game.isPaused) return;
-    final dist = position.distanceTo(game.player.position);
-    final spd = (52 + floor * 4.0) * (phase >= 2 ? 1.15 : 1.0);
-    smartMove(game.player.position, spd, dt, radius: 42, kite: true, preferDist: 260);
-    pushOutOfWalls(42);
+    for (final e in statuses.toList()) {
+      e.remaining -= dt;
+      e.tickAcc += dt;
+      if (e.tickAcc >= e.tickEvery) {
+        e.tickAcc = 0;
+        if (e.tickDamage > 0) takeDamage(e.tickDamage);
+      }
+      if (e.remaining <= 0) statuses.remove(e);
+    }
 
     if (telegraphing) {
+      smartMove(game.player.position, 40, dt, radius: 42, kite: true, preferDist: 200);
+      pushOutOfWalls(42);
       telegraphTimer -= dt;
       if (telegraphTimer <= 0) {
         telegraphing = false;
-        _fireVolley();
+        _fireShotgun();
       }
       return;
     }
 
-    final interval = (dist < 200 ? 0.75 : 1.35) * (phase >= 2 ? 0.7 : 1.0);
-    shootTimer += dt;
-    if (shootTimer >= interval) {
-      shootTimer = 0;
-      _startTelegraph();
-    }
-  }
+    final dist = position.distanceTo(game.player.position);
+    var spd = 95.0 * (isEcho ? 0.85 : 1.0);
+    if (statuses.any((e) => e.type == StatusType.slow)) spd *= 0.6;
+    smartMove(game.player.position, spd, dt, radius: 42, kite: true, preferDist: 260);
+    pushOutOfWalls(42);
 
-  void takeDamage(int amount) {
-    currentHp -= amount;
-    hurtFlash = 0.12;
-    game.spawnDamageNumber(position, amount, color: const Color(0xFFFF8A65));
-    if (game.difficulty == Difficulty.hard && phase == 1 && currentHp <= _barHp) {
-      phase = 2;
-      game.triggerShake(power: 8, time: 0.22);
-    }
-    if (currentHp <= 0) {
-      final pos = position.clone();
-      removeFromParent();
-      game.onEnemyKilled(isBoss: true, at: pos);
+    attackTimer += dt;
+    final iv = (dist < 180 ? 1.0 : 1.5) * (isEcho ? 1.2 : 1.0);
+    if (attackTimer >= iv) {
+      attackTimer = 0;
+      _startTelegraph();
     }
   }
 
@@ -3728,7 +4118,7 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is Wall || other is Obstacle) {
-      position += (position - intersectionPoints.first).normalized() * 16;
+      position += (position - intersectionPoints.first).normalized() * 14;
       stuckTimer = 0.65;
     }
   }
@@ -3736,67 +4126,86 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
-    WHDraw.cultistShooter(canvas, cx, cy, 1.55, flash: hurtFlash / 0.12);
-    WHDraw.shotgun(canvas, cx + 4, cy, 1.35);
-    final bars = game.difficulty == Difficulty.hard ? 2 : 1;
-    for (int i = 0; i < bars; i++) {
-      final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
-      canvas.drawRect(Rect.fromLTWH(cx - 38, -30 - i * 12.0, 76 * remain, 9), Paint()..color = i == 0 ? const Color(0xFFFF8A65) : const Color(0xFFFF5722));
+    WHDraw.hereticBoss(canvas, cx, cy, 1.15, flash: hurtFlash / 0.12);
+    if (isEcho) {
+      canvas.drawCircle(Offset(cx, cy), 48, Paint()
+        ..color = const Color(0xFF9C27B0).withOpacity(0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3);
     }
+    canvas.drawRect(Rect.fromLTWH(cx - 40, -16, 80 * (currentHp / maxHp), 7), Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF9800));
+    WHDraw.statusIcons(canvas, cx, -28, statuses);
   }
 }
 class Boss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
-  late int maxHp, currentHp;
+  final bool isEcho;
+  late int maxHp;
+  late int currentHp;
+  int hardBars = 1;
   double attackTimer = 0;
   double telegraphTimer = 0;
   bool telegraphing = false;
-  int attackMode = 0; // 0 ring, 1 cone, 2 cross
+  int attackMode = 0;
   double hurtFlash = 0;
-  int phase = 1;
+  final List<StatusEffect> statuses = [];
 
-  Boss({required this.floor, required Vector2 position})
-      : super(position: position, size: Vector2(116, 126), anchor: Anchor.center, priority: 25);
+  Boss({required this.floor, required Vector2 position, this.isEcho = false})
+      : super(position: position, size: Vector2(120, 120), anchor: Anchor.center, priority: 25);
 
   @override
   Future<void> onLoad() async {
-    final bars = game.difficulty == Difficulty.hard ? 3 : 1;
-    maxHp = ((240 + floor * 95) * game.difficulty.bossHpMult * game.worldThreat * bars).round();
+    hardBars = (!isEcho && game.difficulty == Difficulty.hard) ? 2 : 1;
+    final mult = isEcho ? 0.6 : 1.0;
+    maxHp = ((160 + floor * 40) * game.difficulty.bossHpMult * game.worldThreat * mult).round();
     currentHp = maxHp;
     add(CircleHitbox(radius: 50));
-    game.unlockCodex(CodexId.boss);
+    if (!isEcho) game.unlockCodex(CodexId.boss);
   }
 
-  int get _barHp {
-    final bars = game.difficulty == Difficulty.hard ? 3 : 1;
-    return max(1, maxHp ~/ bars);
+  int get _barHp => max(1, maxHp ~/ hardBars);
+
+  void applyStatus(StatusType t, double dur, {int tickDamage = 1}) {
+    final ex = statuses.where((e) => e.type == t).toList();
+    if (ex.isNotEmpty) {
+      ex.first.remaining = max(ex.first.remaining, dur);
+    } else {
+      statuses.add(StatusEffect(t, dur, tickDamage: tickDamage));
+    }
   }
 
-  void _checkPhase() {
-    if (game.difficulty != Difficulty.hard) return;
-    final lost = ((maxHp - currentHp) / _barHp).floor() + 1;
-    final newPhase = lost.clamp(1, 3);
-    if (newPhase > phase) {
-      phase = newPhase;
-      game.triggerShake(power: 9, time: 0.25);
+  void takeDamage(int amount) {
+    currentHp -= amount;
+    hurtFlash = 0.12;
+    game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF5252));
+    if (currentHp <= 0) {
+      final pos = position.clone();
+      removeFromParent();
+      game.spawnBlood(pos, count: 28);
+      game.onEnemyKilled(
+        isBoss: true,
+        at: pos,
+        meleeKill: game.player.usingMelee,
+        echoKind: isEcho ? EchoBossKind.none : EchoBossKind.ranged,
+      );
     }
   }
 
   void _startTelegraph() {
     telegraphing = true;
-    telegraphTimer = 0.7 + (phase > 1 ? -0.1 : 0);
+    telegraphTimer = 0.75;
     attackMode = Random().nextInt(3);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
-      case 0: // ring
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 130 + phase * 15.0, life: telegraphTimer)..priority = 6);
+      case 0:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 130, life: 0.75)..priority = 6);
         break;
-      case 1: // cone toward player
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 200, angle: ang, life: telegraphTimer)..priority = 6);
+      case 1:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 220, angle: ang, life: 0.75)..priority = 6);
         break;
-      case 2: // cross
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 160, life: telegraphTimer)..priority = 6);
+      case 2:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 150, life: 0.75)..priority = 6);
         break;
     }
   }
@@ -3805,35 +4214,25 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     final toP = (game.player.position - position).normalized();
     final base = atan2(toP.y, toP.x);
     switch (attackMode) {
-      case 0: // full ring
-        final count = 8 + (phase - 1) * 4;
-        for (int i = 0; i < count; i++) {
-          final a = (i / count) * 2 * pi;
+      case 0:
+        final n = game.difficulty == Difficulty.hard ? 12 : 8;
+        for (int i = 0; i < n; i++) {
+          final a = (i / n) * 2 * pi;
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
         }
         break;
-      case 1: // dense cone
-        for (final o in [-0.5, -0.3, -0.15, 0.0, 0.15, 0.3, 0.5]) {
+      case 1:
+        for (final o in [-0.4, -0.2, 0.0, 0.2, 0.4]) {
           final a = base + o;
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
         }
-        if (phase >= 2) {
-          for (final o in [-0.4, 0.0, 0.4]) {
-            final a = base + o;
-            game.world.add(BossProjectile(position: position.clone() + Vector2(cos(a), sin(a)) * 30, direction: Vector2(cos(a), sin(a)))..priority = 22);
-          }
-        }
         break;
-      case 2: // cross (4 directions + diagonals in late phase)
-        final dirs = <double>[0, pi / 2, pi, 3 * pi / 2];
-        if (phase >= 2) dirs.addAll([pi / 4, 3 * pi / 4, 5 * pi / 4, 7 * pi / 4]);
-        for (final a in dirs) {
-          for (int k = 0; k < 3; k++) {
-            game.world.add(BossProjectile(
-              position: position.clone(),
-              direction: Vector2(cos(a), sin(a)),
-            )..priority = 22);
-          }
+      case 2:
+        for (final a in [0.0, pi / 2, pi, 3 * pi / 2]) {
+          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
+        }
+        for (final a in [pi / 4, 3 * pi / 4, 5 * pi / 4, 7 * pi / 4]) {
+          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 160)..priority = 22);
         }
         break;
     }
@@ -3844,13 +4243,23 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
     if (!game.isPlaying || game.isPaused) return;
+    for (final e in statuses.toList()) {
+      e.remaining -= dt;
+      e.tickAcc += dt;
+      if (e.tickAcc >= e.tickEvery) {
+        e.tickAcc = 0;
+        if (e.tickDamage > 0) takeDamage(e.tickDamage);
+      }
+      if (e.remaining <= 0) statuses.remove(e);
+    }
+
     final dist = position.distanceTo(game.player.position);
-    final spd = (42 + floor * 5.0) * (1 + (phase - 1) * 0.12);
-    // smarter: kite a bit when far, push when close
-    smartMove(game.player.position, spd, dt, radius: 50, kite: dist > 280, preferDist: 220);
-    pushOutOfWalls(50);
+    var spd = 85.0 * (isEcho ? 0.8 : 1.0);
+    if (statuses.any((e) => e.type == StatusType.slow)) spd *= 0.6;
 
     if (telegraphing) {
+      smartMove(game.player.position, spd * 0.45, dt, radius: 50, kite: true, preferDist: 200);
+      pushOutOfWalls(50);
       telegraphTimer -= dt;
       if (telegraphTimer <= 0) {
         telegraphing = false;
@@ -3859,23 +4268,14 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
       return;
     }
 
-    final interval = (dist < 220 ? 1.05 : 1.9) / (1 + (phase - 1) * 0.25);
+    smartMove(game.player.position, spd, dt, radius: 50, kite: dist > 280, preferDist: 220);
+    pushOutOfWalls(50);
+
     attackTimer += dt;
-    if (attackTimer >= interval) {
+    final iv = (dist < 160 ? 1.2 : 1.7) * (isEcho ? 1.25 : 1.0) / (game.difficulty == Difficulty.hard ? 1.15 : 1.0);
+    if (attackTimer >= iv) {
       attackTimer = 0;
       _startTelegraph();
-    }
-  }
-
-  void takeDamage(int amount) {
-    currentHp -= amount;
-    hurtFlash = 0.12;
-    game.spawnDamageNumber(position, amount, color: const Color(0xFFE53935));
-    _checkPhase();
-    if (currentHp <= 0) {
-      final pos = position.clone();
-      removeFromParent();
-      game.onEnemyKilled(isBoss: true, at: pos);
     }
   }
 
@@ -3883,7 +4283,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is Wall || other is Obstacle) {
-      position += (position - intersectionPoints.first).normalized() * 18;
+      position += (position - intersectionPoints.first).normalized() * 16;
       stuckTimer = 0.75;
     }
   }
@@ -3891,67 +4291,92 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
-    WHDraw.hereticBoss(canvas, cx, cy, 1.55, flash: hurtFlash / 0.12);
-    final bars = game.difficulty == Difficulty.hard ? 3 : 1;
-    for (int i = 0; i < bars; i++) {
-      final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
-      final colors = [const Color(0xFFE53935), const Color(0xFFFF9800), const Color(0xFFFFEB3B)];
-      canvas.drawRect(Rect.fromLTWH(cx - 46, -34 - i * 12.0, 92 * remain, 10), Paint()..color = colors[i % colors.length]);
+    WHDraw.hereticBoss(canvas, cx, cy, 1.35, flash: hurtFlash / 0.12);
+    if (isEcho) {
+      canvas.drawCircle(Offset(cx, cy), 55, Paint()
+        ..color = const Color(0xFF9C27B0).withOpacity(0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3);
     }
+    for (int i = 0; i < hardBars; i++) {
+      final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
+      canvas.drawRect(
+        Rect.fromLTWH(cx - 50, -22 - i * 10.0, 100 * remain, 8),
+        Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFE53935),
+      );
+    }
+    WHDraw.statusIcons(canvas, cx, -34, statuses);
   }
 }
 class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
-  late int maxHp, currentHp;
-  double meleeTimer = 0;
+  final bool isEcho;
+  late int maxHp;
+  late int currentHp;
+  int hardBars = 1;
+  double attackTimer = 0;
   double telegraphTimer = 0;
   bool telegraphing = false;
-  int attackMode = 0; // 0 charge slash, 1 ring slam, 2 cone dash
+  int attackMode = 0; // 0 charge, 1 slam, 2 cross
   double hurtFlash = 0;
-  int phase = 1;
+  final List<StatusEffect> statuses = [];
 
-  KnightBoss({required this.floor, required Vector2 position})
-      : super(position: position, size: Vector2(110, 120), anchor: Anchor.center, priority: 25);
+  KnightBoss({required this.floor, required Vector2 position, this.isEcho = false})
+      : super(position: position, size: Vector2(115, 115), anchor: Anchor.center, priority: 25);
 
   @override
   Future<void> onLoad() async {
-    final bars = game.difficulty == Difficulty.hard ? 3 : 1;
-    maxHp = ((300 + floor * 105) * game.difficulty.bossHpMult * game.worldThreat * bars).round();
+    hardBars = (!isEcho && game.difficulty == Difficulty.hard) ? 2 : 1;
+    final mult = isEcho ? 0.6 : 1.0;
+    maxHp = ((180 + floor * 45) * game.difficulty.bossHpMult * game.worldThreat * mult).round();
     currentHp = maxHp;
     add(CircleHitbox(radius: 48));
-    game.unlockCodex(CodexId.knight);
+    if (!isEcho) game.unlockCodex(CodexId.knight);
   }
 
-  int get _barHp {
-    final bars = game.difficulty == Difficulty.hard ? 3 : 1;
-    return max(1, maxHp ~/ bars);
+  int get _barHp => max(1, maxHp ~/ hardBars);
+
+  void applyStatus(StatusType t, double dur, {int tickDamage = 1}) {
+    final ex = statuses.where((e) => e.type == t).toList();
+    if (ex.isNotEmpty) {
+      ex.first.remaining = max(ex.first.remaining, dur);
+    } else {
+      statuses.add(StatusEffect(t, dur, tickDamage: tickDamage));
+    }
   }
 
-  void _checkPhase() {
-    if (game.difficulty != Difficulty.hard) return;
-    final lost = ((maxHp - currentHp) / _barHp).floor() + 1;
-    final newPhase = lost.clamp(1, 3);
-    if (newPhase > phase) {
-      phase = newPhase;
-      game.triggerShake(power: 9, time: 0.25);
+  void takeDamage(int amount) {
+    currentHp -= amount;
+    hurtFlash = 0.12;
+    game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFF90CAF9));
+    if (currentHp <= 0) {
+      final pos = position.clone();
+      removeFromParent();
+      game.spawnBlood(pos, count: 30);
+      game.onEnemyKilled(
+        isBoss: true,
+        at: pos,
+        meleeKill: game.player.usingMelee,
+        echoKind: isEcho ? EchoBossKind.none : EchoBossKind.knight,
+      );
     }
   }
 
   void _startTelegraph() {
     telegraphing = true;
-    telegraphTimer = 0.65;
-    attackMode = Random().nextInt(phase >= 2 ? 3 : 2);
+    telegraphTimer = 0.7;
+    attackMode = Random().nextInt(3);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
-      case 0:
-        game.world.add(TelegraphZone(position: position + toP * 70, shape: 'cone', radius: 140, angle: ang, life: 0.65)..priority = 6);
+      case 0: // charge cone
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 200, angle: ang, life: 0.7)..priority = 6);
         break;
-      case 1:
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 120 + phase * 12.0, life: 0.65)..priority = 6);
+      case 1: // slam circle
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 100, life: 0.7)..priority = 6);
         break;
-      case 2:
-        game.world.add(TelegraphZone(position: position + toP * 100, shape: 'cross', radius: 100, life: 0.65)..priority = 6);
+      case 2: // cross
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 140, life: 0.7)..priority = 6);
         break;
     }
   }
@@ -3960,29 +4385,21 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     final dist = position.distanceTo(game.player.position);
     final toP = (game.player.position - position).normalized();
     switch (attackMode) {
-      case 0: // slash + lunge
-        position += toP * 55;
-        if (dist < 130 + phase * 8) game.player.takeDamage(1 + phase);
-        for (final o in [-0.35, 0.0, 0.35]) {
-          final a = atan2(toP.y, toP.x) + o;
-          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
-        }
-        break;
-      case 1: // ring slam
-        final n = 6 + phase * 2;
-        for (int i = 0; i < n; i++) {
-          final a = (i / n) * 2 * pi;
-          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
-        }
-        if (dist < 130) game.player.takeDamage(2);
-        game.triggerShake(power: 6, time: 0.15);
-        break;
-      case 2: // dash cross
+      case 0:
         position += toP * 90;
+        if (dist < 120) game.player.takeDamage((2 * game.difficulty.dmgMult).ceil());
+        break;
+      case 1:
+        game.world.add(TentacleSlam(position: position.clone(), radius: game.cellSize * 1.8)..priority = 27);
+        if (dist < game.cellSize * 1.8 + 30) {
+          game.player.takeDamage((2 * game.difficulty.dmgMult).ceil());
+          game.player.applyStatus(StatusType.slow, 1.2);
+        }
+        break;
+      case 2:
         for (final a in [0.0, pi / 2, pi, 3 * pi / 2]) {
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
         }
-        if (position.distanceTo(game.player.position) < 100) game.player.takeDamage(2);
         break;
     }
   }
@@ -3992,11 +4409,21 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
     if (!game.isPlaying || game.isPaused) return;
+    for (final e in statuses.toList()) {
+      e.remaining -= dt;
+      e.tickAcc += dt;
+      if (e.tickAcc >= e.tickEvery) {
+        e.tickAcc = 0;
+        if (e.tickDamage > 0) takeDamage(e.tickDamage);
+      }
+      if (e.remaining <= 0) statuses.remove(e);
+    }
+
     final dist = position.distanceTo(game.player.position);
-    final spd = (78 + floor * 8.0) * (1 + (phase - 1) * 0.15);
+    var spd = 110.0 * (isEcho ? 0.85 : 1.0);
+    if (statuses.any((e) => e.type == StatusType.slow)) spd *= 0.6;
 
     if (telegraphing) {
-      // slow approach while telegraphing
       smartMove(game.player.position, spd * 0.4, dt, radius: 48);
       pushOutOfWalls(48);
       telegraphTimer -= dt;
@@ -4010,23 +4437,11 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     smartMove(game.player.position, spd, dt, radius: 48);
     pushOutOfWalls(48);
 
-    final interval = (dist < 130 ? 0.55 : 1.0) / (1 + (phase - 1) * 0.2);
-    meleeTimer += dt;
-    if (meleeTimer >= interval) {
-      meleeTimer = 0;
+    attackTimer += dt;
+    final iv = (dist < 120 ? 0.9 : 1.4) * (isEcho ? 1.2 : 1.0);
+    if (attackTimer >= iv) {
+      attackTimer = 0;
       _startTelegraph();
-    }
-  }
-
-  void takeDamage(int amount) {
-    currentHp -= amount;
-    hurtFlash = 0.12;
-    game.spawnDamageNumber(position, amount, color: const Color(0xFF78909C));
-    _checkPhase();
-    if (currentHp <= 0) {
-      final pos = position.clone();
-      removeFromParent();
-      game.onEnemyKilled(isBoss: true, at: pos);
     }
   }
 
@@ -4034,7 +4449,7 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is Wall || other is Obstacle) {
-      position += (position - intersectionPoints.first).normalized() * 18;
+      position += (position - intersectionPoints.first).normalized() * 16;
       stuckTimer = 0.75;
     }
   }
@@ -4042,59 +4457,71 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
-    WHDraw.knightBoss(canvas, cx, cy, 1.5, flash: hurtFlash / 0.12);
-    final bars = game.difficulty == Difficulty.hard ? 3 : 1;
-    for (int i = 0; i < bars; i++) {
-      final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
-      final colors = [const Color(0xFF78909C), const Color(0xFFFF6D00), const Color(0xFFFFD700)];
-      canvas.drawRect(Rect.fromLTWH(cx - 44, -32 - i * 12.0, 88 * remain, 10), Paint()..color = colors[i % colors.length]);
+    WHDraw.knightBoss(canvas, cx, cy, 1.35, flash: hurtFlash / 0.12);
+    if (isEcho) {
+      canvas.drawCircle(Offset(cx, cy), 52, Paint()
+        ..color = const Color(0xFF9C27B0).withOpacity(0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3);
     }
+    for (int i = 0; i < hardBars; i++) {
+      final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
+      canvas.drawRect(
+        Rect.fromLTWH(cx - 48, -20 - i * 10.0, 96 * remain, 8),
+        Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFF90CAF9),
+      );
+    }
+    WHDraw.statusIcons(canvas, cx, -32, statuses);
   }
 }
 
 class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
-  late int maxHp, currentHp, phaseHp;
+  final bool isEcho;
+  late int maxHp;
+  late int currentHp;
+  late int phaseHp;
   int phase = 1;
-  double meleeTimer = 0, phase2Timer = 0;
+  int hardBars = 1;
+  double meleeTimer = 0;
+  double phase2Timer = 0;
   int phase2VolleyCount = 0;
   double telegraphTimer = 0;
   bool telegraphing = false;
   int attackMode = 0;
   double hurtFlash = 0;
-  int hardBars = 2;
+  final List<StatusEffect> statuses = [];
 
-  KingBoss({required Vector2 position})
-      : super(position: position, size: Vector2(145, 155), anchor: Anchor.center, priority: 26);
+  KingBoss({required Vector2 position, this.isEcho = false})
+      : super(position: position, size: Vector2(140, 140), anchor: Anchor.center, priority: 26);
 
   @override
   Future<void> onLoad() async {
-    hardBars = game.difficulty == Difficulty.hard ? 4 : 2;
-    phaseHp = (420 * game.difficulty.bossHpMult * game.worldThreat).round();
-    maxHp = phaseHp * 2;
-    if (game.difficulty == Difficulty.hard) {
-      maxHp = (maxHp * 1.35).round();
-      phaseHp = maxHp ~/ 2;
-    }
+    hardBars = (!isEcho && game.difficulty == Difficulty.hard) ? 3 : 2;
+    final mult = isEcho ? 0.6 : 1.0;
+    maxHp = (420 * game.difficulty.bossHpMult * game.worldThreat * mult).round();
     currentHp = maxHp;
+    phaseHp = maxHp ~/ 2;
     add(CircleHitbox(radius: 60));
-    game.unlockCodex(CodexId.king);
+    if (!isEcho) game.unlockCodex(CodexId.king);
   }
 
   int get _barHp => max(1, maxHp ~/ hardBars);
 
-  void _checkHardPhase() {
-    if (game.difficulty != Difficulty.hard) return;
-    final barIndex = ((maxHp - currentHp) / _barHp).floor() + 1;
-    final want = barIndex >= 3 ? 2 : 1;
-    if (want != phase) {
-      phase = want;
-      phase2Timer = 0;
-      game.triggerShake(power: 11, time: 0.3);
+  void applyStatus(StatusType t, double dur, {int tickDamage = 1}) {
+    final ex = statuses.where((e) => e.type == t).toList();
+    if (ex.isNotEmpty) {
+      ex.first.remaining = max(ex.first.remaining, dur);
+    } else {
+      statuses.add(StatusEffect(t, dur, tickDamage: tickDamage));
     }
   }
 
+  void _checkHardPhase() {
+    if (game.difficulty != Difficulty.hard || isEcho) return;
+    // extra aggression as bars drop — handled via hardBoost in update
+  }
+
   void _startTelegraph() {
-    if (game.areOtherBossesAlive) return;
     telegraphing = true;
     telegraphTimer = 0.75;
     attackMode = phase == 1 ? Random().nextInt(2) : Random().nextInt(3);
@@ -4102,37 +4529,36 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
       case 0:
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 140, life: 0.75)..priority = 6);
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 120, life: 0.75)..priority = 6);
         break;
       case 1:
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 220, angle: ang, life: 0.75)..priority = 6);
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 240, angle: ang, life: 0.75)..priority = 6);
         break;
       case 2:
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 180, life: 0.75)..priority = 6);
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 160, life: 0.75)..priority = 6);
         break;
     }
   }
 
   void _executeAttack() {
-    final dist = position.distanceTo(game.player.position);
     final toP = (game.player.position - position).normalized();
     final base = atan2(toP.y, toP.x);
+    final dist = position.distanceTo(game.player.position);
     switch (attackMode) {
-      case 0: // slam ring
-        final n = game.difficulty == Difficulty.hard ? 16 : 12;
-        for (int i = 0; i < n; i++) {
-          final a = (i / n) * 2 * pi;
+      case 0:
+        if (dist < 130) game.player.takeDamage((2 * game.difficulty.dmgMult).ceil());
+        for (final o in [-0.25, 0.0, 0.25]) {
+          final a = base + o;
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
         }
-        if (dist < 140) game.player.takeDamage(3);
         break;
-      case 1: // cone barrage
+      case 1:
         for (final o in [-0.55, -0.35, -0.15, 0.0, 0.15, 0.35, 0.55]) {
           final a = base + o;
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
         }
         break;
-      case 2: // cross + diagonals
+      case 2:
         for (final a in [0.0, pi / 4, pi / 2, 3 * pi / 4, pi, 5 * pi / 4, 3 * pi / 2, 7 * pi / 4]) {
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
         }
@@ -4153,11 +4579,23 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
     if (!game.isPlaying || game.isPaused) return;
+    for (final e in statuses.toList()) {
+      e.remaining -= dt;
+      e.tickAcc += dt;
+      if (e.tickAcc >= e.tickEvery) {
+        e.tickAcc = 0;
+        if (e.tickDamage > 0) takeDamage(e.tickDamage);
+      }
+      if (e.remaining <= 0) statuses.remove(e);
+    }
+
     final dist = position.distanceTo(game.player.position);
-    final hardBoost = game.difficulty == Difficulty.hard ? 1.0 + ((maxHp - currentHp) / maxHp) * 0.4 : 1.0;
+    final hardBoost = game.difficulty == Difficulty.hard
+        ? 1.0 + ((maxHp - currentHp) / maxHp) * 0.4
+        : 1.0;
 
     if (telegraphing) {
-      smartMove(game.player.position, (phase == 1 ? 40.0 : 20.0) * hardBoost, dt, radius: 60);
+      smartMove(game.player.position, (phase == 1 ? 40.0 : 20.0) * hardBoost * (isEcho ? 0.85 : 1.0), dt, radius: 60);
       pushOutOfWalls(60);
       telegraphTimer -= dt;
       if (telegraphTimer <= 0) {
@@ -4167,11 +4605,16 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       return;
     }
 
-    smartMove(game.player.position, (phase == 1 ? 100.0 : 38.0) * hardBoost, dt, radius: 60);
+    smartMove(
+      game.player.position,
+      (phase == 1 ? 100.0 : 38.0) * hardBoost * (isEcho ? 0.85 : 1.0),
+      dt,
+      radius: 60,
+    );
     pushOutOfWalls(60);
 
     if (phase == 1) {
-      final interval = (dist < 140 ? 0.55 : 0.9) / hardBoost;
+      final interval = (dist < 140 ? 0.55 : 0.9) / hardBoost * (isEcho ? 1.2 : 1.0);
       meleeTimer += dt;
       if (meleeTimer >= interval) {
         meleeTimer = 0;
@@ -4184,7 +4627,6 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       if (phase2VolleyCount > 0) {
         if (phase2Timer >= volleyGap) {
           phase2Timer = 0;
-          // telegraph short before each volley in phase 2
           game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 100, life: 0.35)..priority = 6);
           _volley();
           phase2VolleyCount--;
@@ -4198,10 +4640,10 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   }
 
   void takeDamage(int amount) {
-    if (game.areOtherBossesAlive) return;
+    if (!isEcho && game.areOtherBossesAlive) return;
     currentHp -= amount;
     hurtFlash = 0.12;
-    game.spawnDamageNumber(position, amount, color: const Color(0xFFFFD700));
+    game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFFD700));
     if (phase == 1 && currentHp <= phaseHp) {
       phase = 2;
       phase2Timer = 0;
@@ -4211,7 +4653,13 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     if (currentHp <= 0) {
       final pos = position.clone();
       removeFromParent();
-      game.onEnemyKilled(isBoss: true, at: pos);
+      game.spawnBlood(pos, count: 36);
+      game.onEnemyKilled(
+        isBoss: true,
+        at: pos,
+        meleeKill: game.player.usingMelee,
+        echoKind: isEcho ? EchoBossKind.none : EchoBossKind.king,
+      );
     }
   }
 
@@ -4227,16 +4675,31 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
-    final inv = game.areOtherBossesAlive;
+    final inv = !isEcho && game.areOtherBossesAlive;
     WHDraw.kingBossDraw(canvas, cx, cy, 1.6, flash: hurtFlash / 0.12);
     if (inv) {
-      canvas.drawCircle(Offset(cx, cy), 68, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 4);
+      canvas.drawCircle(Offset(cx, cy), 68, Paint()
+        ..color = const Color(0xFF9C27B0).withOpacity(0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4);
+    }
+    if (isEcho) {
+      canvas.drawCircle(Offset(cx, cy), 62, Paint()
+        ..color = const Color(0xFF9C27B0).withOpacity(0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3);
     }
     for (int i = 0; i < hardBars; i++) {
       final remain = (currentHp - i * _barHp).clamp(0, _barHp) / _barHp;
-      final colors = [const Color(0xFFE53935), const Color(0xFFFF9800), const Color(0xFFFFEB3B), const Color(0xFFFFD700)];
-      canvas.drawRect(Rect.fromLTWH(cx - 55, -56 - i * 11.0, 110 * remain, 8), Paint()..color = colors[i % colors.length]);
+      final colors = isEcho
+          ? [const Color(0xFF9C27B0), const Color(0xFF7B1FA2)]
+          : [const Color(0xFFE53935), const Color(0xFFFF9800), const Color(0xFFFFEB3B), const Color(0xFFFFD700)];
+      canvas.drawRect(
+        Rect.fromLTWH(cx - 55, -56 - i * 11.0, 110 * remain, 8),
+        Paint()..color = colors[i % colors.length],
+      );
     }
+    WHDraw.statusIcons(canvas, cx, -68, statuses);
   }
 }
 class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
@@ -4323,7 +4786,6 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
         if (meleeGap >= (game.difficulty == Difficulty.hard ? 0.42 : 0.55)) {
           meleeGap = 0;
           meleeHitsLeft--;
-          // short telegraph before slam
           game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: game.cellSize * 2.4, life: 0.35)..priority = 6);
           game.world.add(TentacleSlam(position: position.clone(), radius: game.cellSize * 2.4)..priority = 27);
           if (dist < game.cellSize * 2.4 + 35) {
@@ -4401,7 +4863,6 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
   }
 }
 
-/// Secret boss on overall level 10 — single eye, laser charge, stomp, ring volleys
 class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   static const int maxHpConst = 6666;
   late int maxHp;
@@ -4454,20 +4915,20 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
     final base = atan2(toP.y, toP.x);
     final dist = position.distanceTo(game.player.position);
     switch (attackMode) {
-      case 0: // ring
+      case 0:
         final n = game.difficulty == Difficulty.hard ? 14 : 10;
         for (int i = 0; i < n; i++) {
           final a = (i / n) * 2 * pi;
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
         }
         break;
-      case 1: // cone laser-like projectiles
+      case 1:
         for (final o in [-0.35, -0.18, 0.0, 0.18, 0.35]) {
           final a = base + o;
           game.world.add(BossProjectile(position: position + Vector2(0, -30), direction: Vector2(cos(a), sin(a)))..priority = 22);
         }
         break;
-      case 2: // stomp cross
+      case 2:
         game.world.add(TentacleSlam(position: position.clone(), radius: game.cellSize * 2.6)..priority = 27);
         if (dist < game.cellSize * 2.6 + 40) {
           game.player.takeDamage(2);
@@ -4490,7 +4951,6 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
 
     if (chargingLaser) {
       charge = min(1.0, charge + dt * 0.7);
-      // telegraph cone while charging
       if (charge > 0.15 && charge < 0.2) {
         final toP = (game.player.position - position).normalized();
         final ang = atan2(toP.y, toP.x);
