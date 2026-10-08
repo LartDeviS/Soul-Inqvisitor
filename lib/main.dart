@@ -32,6 +32,9 @@ void main() {
           'codex': (c, g) => CodexMenu(g as InquisitorGame),
           'eventAltar': (c, g) => EventAltarMenu(g as InquisitorGame),
           'eventMerchant': (c, g) => EventMerchantMenu(g as InquisitorGame),
+          'pathSelect': (c, g) => PathSelectMenu(g as InquisitorGame),
+          'lorePopup': (c, g) => LorePopupMenu(g as InquisitorGame),
+          'challengeSelect': (c, g) => ChallengeSelectMenu(g as InquisitorGame),
         },
         initialActiveOverlays: const ['mainMenu'],
       ),
@@ -61,9 +64,19 @@ enum BarrelMod { none, rapid, heavy }
 enum SightMod { none, precision, wide }
 enum AmmoMod { none, ricochet, explosive, pierce }
 enum EchoBossKind { none, mini, ranged, knight, king }
-
-/// Room events every 2–3 levels (Hades/Isaac style)
 enum EventRoomType { none, altar, merchant, trap }
+
+/// Elite affixes (Diablo / Gungeon style)
+enum EliteAffix { none, swift, regenerating, explosive, reflect }
+
+/// Floor path nodes
+enum PathNodeKind { combat, event, elite, rest, boss }
+
+/// Rank challenge for the run
+enum RankChallenge { none, meleeBossOnly, noDash }
+
+/// Enemy bullet modifiers
+enum BulletMod { normal, slow, ricochet, split }
 
 enum CodexId {
   shooter, melee, shielded, dog, shieldedShooter, flamer, sniper, brute,
@@ -162,6 +175,36 @@ extension RelicMeta on RelicId {
   }
 }
 
+extension AffixMeta on EliteAffix {
+  String get letter {
+    switch (this) {
+      case EliteAffix.none: return '';
+      case EliteAffix.swift: return 'S';
+      case EliteAffix.regenerating: return 'R';
+      case EliteAffix.explosive: return 'E';
+      case EliteAffix.reflect: return 'F';
+    }
+  }
+  Color get color {
+    switch (this) {
+      case EliteAffix.none: return Colors.transparent;
+      case EliteAffix.swift: return const Color(0xFF00E5FF);
+      case EliteAffix.regenerating: return const Color(0xFF69F0AE);
+      case EliteAffix.explosive: return const Color(0xFFFF6D00);
+      case EliteAffix.reflect: return const Color(0xFFE040FB);
+    }
+  }
+  String get title {
+    switch (this) {
+      case EliteAffix.none: return '';
+      case EliteAffix.swift: return 'Swift';
+      case EliteAffix.regenerating: return 'Regenerating';
+      case EliteAffix.explosive: return 'Explosive';
+      case EliteAffix.reflect: return 'Reflect';
+    }
+  }
+}
+
 extension ArtifactMeta on ActiveArtifact {
   String get title {
     switch (this) {
@@ -170,18 +213,28 @@ extension ArtifactMeta on ActiveArtifact {
       case ActiveArtifact.servoTurret: return 'Серво-турель';
     }
   }
-  String get desc {
-    switch (this) {
-      case ActiveArtifact.fragGrenade: return 'Взрыв по направлению прицела. CD 14с';
-      case ActiveArtifact.holyAura: return '8с: −30% входящего, лёгкий DoT вокруг. CD 18с';
-      case ActiveArtifact.servoTurret: return 'Турель 8с, стреляет по врагам и боссам. CD 16с';
-    }
-  }
   double get cooldown {
     switch (this) {
       case ActiveArtifact.fragGrenade: return 14;
       case ActiveArtifact.holyAura: return 18;
       case ActiveArtifact.servoTurret: return 16;
+    }
+  }
+}
+
+extension ChallengeMeta on RankChallenge {
+  String get title {
+    switch (this) {
+      case RankChallenge.none: return 'Без испытания';
+      case RankChallenge.meleeBossOnly: return 'Клинок Императора';
+      case RankChallenge.noDash: return 'Стоять насмерть';
+    }
+  }
+  String get desc {
+    switch (this) {
+      case RankChallenge.none: return 'Обычный забег';
+      case RankChallenge.meleeBossOnly: return 'Боссов убивать только ближним. +1 ранг при победе.';
+      case RankChallenge.noDash: return 'Рывок U запрещён. +1 ранг при победе.';
     }
   }
 }
@@ -206,38 +259,55 @@ extension CodexMeta on CodexId {
       case CodexId.champion: return 'Чемпион-элита';
     }
   }
+  /// Expanded Warhammer 40k-flavoured lore
   String get lore {
     switch (this) {
       case CodexId.shooter:
-        return 'Бывшие гвардейцы, павшие в культ. Их «болтеры» кустарны, но яд на патронах разъедает броню веры.';
+        return 'В сегментуме Обскурус целые полки Астра Милитарум пали под шёпот Тёмных Богов. '
+            'Их «болтеры» — кустарные копии, смазанные кровью и прометием. Инквизиция помечает таких '
+            'в Кодексе красной печатью: один выстрел — одна душа, потерянная для Императора.';
       case CodexId.melee:
-        return 'Клинок — молитва Кхорну. Они идут в упор, не зная страха: смерть для них — дар.';
+        return 'Клинок для культиста — молитва Кхорну. Они идут в упор, не зная страха: смерть для них — дар. '
+            'Ордо Херетикус учит: не дай им коснуться — или сам станешь частью ритуала.';
       case CodexId.shielded:
-        return 'Щиты из обломков танков. Пуля рикошетит; только клинок Императора пробивает ересь насквозь.';
+        return 'Щиты из обломков танков Леман Русс. Пуля рикошетит; только клинок Адептус Астартес '
+            'или освящённое оружие Инквизитора пробивает ересь насквозь. Вера — лучшая броня, но металл тоже служит.';
       case CodexId.dog:
-        return 'Мутанты, вскормленные кровью рабов. Быстрее мысли, голоднее пустоты.';
+        return 'Мутанты, вскормленные кровью рабов в подземельях ульев. Быстрее мысли, голоднее Пустоты. '
+            'Ордо Ксенос иногда путает их с ксено-тварями — ошибка, за которую платят жизнями аколитов.';
       case CodexId.shieldedShooter:
-        return 'Дисциплина предавших Адептус. Щит и очередь — тактика, которую Инквизиция сама когда-то учила.';
+        return 'Дисциплина предавших Адептус. Щит и очередь — тактика, которую Инквизиция сама когда-то учила. '
+            'Теперь она обращена против Трона. Убей командира — строй рассыплется.';
       case CodexId.flamer:
-        return 'Прометий и молитвы Нурглу. Огонь очищает… или оскверняет. Разница — в имени, на которое молятся.';
+        return 'Прометий и молитвы Нурглу. Огонь очищает… или оскверняет. Разница — в имени, на которое молятся. '
+            'Инквизитор с огнемётом Империума знает: тот же огонь, другая молитва.';
       case CodexId.sniper:
-        return 'Один выстрел — один труп. Они ждут в руинах, как пауки Варпа.';
+        return 'Один выстрел — один труп. Они ждут в руинах ульев, как пауки Варпа. '
+            'Кодекс советует: не стой на открытом месте дольше трёх ударов сердца.';
       case CodexId.brute:
-        return 'Плоть, раздутая варп-энергией. Удары крушат стены. Убить — значит раздавить гору.';
+        return 'Плоть, раздутая варп-энергией. Удары крушат стены и силовую броню. '
+            'Убить — значит раздавить гору. Ордо Маллеус видит в них зачатки демонхостов.';
       case CodexId.miniBoss:
-        return 'Лейтенант культа. Дробовик — приговор. Инквизиция помечает таких в Кодексе красной печатью.';
+        return 'Лейтенант культа. Дробовик — приговор для отрядов аколитов. '
+            'Инквизиция помечает таких в Кодексе: приоритет ликвидации — выше, чем у десятка стрелков.';
       case CodexId.boss:
-        return 'Чемпион ереси. Залпы во все стороны — ритуал. Пока он жив, вера слабеет в радиусе крика.';
+        return 'Чемпион ереси. Залпы во все стороны — ритуал, а не тактика. '
+            'Пока он жив, вера слабеет в радиусе его крика. Император защищает — но клинок должен довершить.';
       case CodexId.knight:
-        return 'Когда-то — Адептус Астартес. Теперь клинок служит Хаосу. Сближение смертельно.';
+        return 'Когда-то — Адептус Астартес или элита гвардии. Теперь клинок служит Хаосу. '
+            'Сближение смертельно. Ордо Маллеус знает: падший брат — страшнее ксеноса.';
       case CodexId.king:
-        return 'Владыка этажа. Пока живы его чемпионы — он неуязвим. Сломай свиту — сломай короля.';
+        return 'Владыка этажа ереси. Пока живы его чемпионы — он неуязвим, словно защищён варп-пактом. '
+            'Сломай свиту — сломай короля. Так учит Кодекс Инквизиции.';
       case CodexId.tentacle:
-        return 'Порождение Варпа из-за печати. Тысячи щупалец, один глаз. Император не смотрит сюда.';
+        return 'Порождение Варпа из-за сорванной печати. Тысячи щупалец, один глаз. '
+            'Император не смотрит сюда — смотри ты. Стой в углу тридцать три секунды — и вызови его сам.';
       case CodexId.cyclops:
-        return 'Древний демон с одним оком. Луч из глаза прожигает танк. Стоять в углу — вызвать его.';
+        return 'Древний демон с одним оком. Луч из глаза прожигает танк и душу. '
+            'В мифах Калибана и старых миров его звали по-разному. Кодекс даёт одно имя: цель для уничтожения.';
       case CodexId.champion:
-        return 'Элита культа. Золотая печать над головой. Убей — и реликвия может пасть к ногам Инквизитора.';
+        return 'Элита культа. Золотая печать над головой — знак избранности Тёмными Богами. '
+            'Убей — и реликвия может пасть к ногам Инквизитора. Или проклятие. Выбор — твой.';
     }
   }
   String get knowledgeBonus {
@@ -263,18 +333,18 @@ extension CodexMeta on CodexId {
         return '+3% урон боссам';
       case CodexId.tentacle:
       case CodexId.cyclops:
-        return '+1 SP при убийстве секрета (уже учтено)';
+        return '+1 SP при убийстве секрета';
     }
   }
 }
 
 /// Meta rank between runs
 class InquisitionRank {
-  int wins; // completed runs (victory or arena milestone)
+  int wins;
   InquisitionRank({this.wins = 0});
-  int get rank => (wins ~/ 2).clamp(0, 20); // rank 0–20
-  double get critBonus => rank * 0.01; // +1% crit per rank
-  int get startScraps => rank * 3; // +3 scraps per rank at run start
+  int get rank => (wins ~/ 2).clamp(0, 20);
+  double get critBonus => rank * 0.01;
+  int get startScraps => rank * 3;
   String get title {
     if (rank <= 0) return 'Новичок';
     if (rank <= 3) return 'Адепт';
@@ -290,6 +360,39 @@ class InquisitionRank {
   }
 }
 
+/// Weapon mastery counters
+class WeaponMastery {
+  final Map<String, int> kills = {};
+  int getCount(String key) => kills[key] ?? 0;
+  void addKill(String key) => kills[key] = getCount(key) + 1;
+
+  /// Bolter: +1 projectile every 50 kills
+  int bolterExtraShots(int base) {
+    final k = getCount('bolter');
+    return base + (k ~/ 50).clamp(0, 3);
+  }
+  /// Staff: +10% wave radius every 40 kills
+  double staffRadiusMult() => 1.0 + (getCount('staff') ~/ 40) * 0.10;
+  /// Sword/katana: +5% melee dmg every 40 kills
+  double meleeMasteryMult(String key) => 1.0 + (getCount(key) ~/ 40) * 0.05;
+
+  Map<String, dynamic> toJson() => Map<String, dynamic>.from(kills);
+  factory WeaponMastery.fromJson(Map<String, dynamic>? j) {
+    final m = WeaponMastery();
+    if (j != null) {
+      j.forEach((k, v) => m.kills[k] = (v as num?)?.toInt() ?? 0);
+    }
+    return m;
+  }
+}
+
+/// Path node for floor chain
+class PathNode {
+  final PathNodeKind kind;
+  final String label;
+  PathNode(this.kind, this.label);
+}
+
 class StatusEffect {
   final StatusType type;
   double remaining;
@@ -297,7 +400,6 @@ class StatusEffect {
   double tickAcc;
   final int tickDamage;
   StatusEffect(this.type, this.remaining, {this.tickEvery = 0.5, this.tickDamage = 1}) : tickAcc = 0;
-
   Color get color {
     switch (type) {
       case StatusType.burn: return const Color(0xFFFF6D00);
@@ -309,18 +411,24 @@ class StatusEffect {
 }
 
 class SkillTree {
-  int hp; int speed; int attackSpeed; int defense; int damage;
+  int hp, speed, attackSpeed, defense, damage;
   SkillTree({this.hp = 0, this.speed = 0, this.attackSpeed = 0, this.defense = 0, this.damage = 0});
   int get totalSpent => hp + speed + attackSpeed + defense + damage;
   Map<String, dynamic> toJson() => {'hp': hp, 'speed': speed, 'attackSpeed': attackSpeed, 'defense': defense, 'damage': damage};
   factory SkillTree.fromJson(Map<String, dynamic>? j) {
     if (j == null) return SkillTree();
-    return SkillTree(hp: j['hp'] as int? ?? 0, speed: j['speed'] as int? ?? 0, attackSpeed: j['attackSpeed'] as int? ?? 0, defense: j['defense'] as int? ?? 0, damage: j['damage'] as int? ?? 0);
+    return SkillTree(
+      hp: j['hp'] as int? ?? 0,
+      speed: j['speed'] as int? ?? 0,
+      attackSpeed: j['attackSpeed'] as int? ?? 0,
+      defense: j['defense'] as int? ?? 0,
+      damage: j['damage'] as int? ?? 0,
+    );
   }
 }
 
 class Customization {
-  int armorHue; int capeHue; int weaponHue; int trimHue;
+  int armorHue, capeHue, weaponHue, trimHue;
   Customization({this.armorHue = 210, this.capeHue = 0, this.weaponHue = 45, this.trimHue = 45});
   Color armorColor([double l = 0.28]) => HSLColor.fromAHSL(1, armorHue.toDouble(), 0.18, l).toColor();
   Color capeColor([double l = 0.28]) => HSLColor.fromAHSL(1, capeHue.toDouble(), 0.75, l).toColor();
@@ -329,12 +437,19 @@ class Customization {
   Map<String, dynamic> toJson() => {'armorHue': armorHue, 'capeHue': capeHue, 'weaponHue': weaponHue, 'trimHue': trimHue};
   factory Customization.fromJson(Map<String, dynamic>? j) {
     if (j == null) return Customization();
-    return Customization(armorHue: j['armorHue'] as int? ?? 210, capeHue: j['capeHue'] as int? ?? 0, weaponHue: j['weaponHue'] as int? ?? 45, trimHue: j['trimHue'] as int? ?? 45);
+    return Customization(
+      armorHue: j['armorHue'] as int? ?? 210,
+      capeHue: j['capeHue'] as int? ?? 0,
+      weaponHue: j['weaponHue'] as int? ?? 45,
+      trimHue: j['trimHue'] as int? ?? 45,
+    );
   }
 }
 
 class WeaponLoadout {
-  BarrelMod barrel; SightMod sight; AmmoMod ammo;
+  BarrelMod barrel;
+  SightMod sight;
+  AmmoMod ammo;
   WeaponLoadout({this.barrel = BarrelMod.none, this.sight = SightMod.none, this.ammo = AmmoMod.none});
   Map<String, dynamic> toJson() => {'barrel': barrel.name, 'sight': sight.name, 'ammo': ammo.name};
   factory WeaponLoadout.fromJson(Map<String, dynamic>? j) {
@@ -348,75 +463,188 @@ class WeaponLoadout {
 }
 
 class HighScoreEntry {
-  final String name; final int score; final int seconds; final int floor; final int level;
-  final bool completed; final String difficulty; final bool arena; final String playerClass;
-  HighScoreEntry(this.name, this.score, this.seconds, {this.floor = 1, this.level = 1, this.completed = false, this.difficulty = 'normal', this.arena = false, this.playerClass = 'xenos'});
+  final String name;
+  final int score, seconds, floor, level;
+  final bool completed, arena;
+  final String difficulty, playerClass;
+  HighScoreEntry(
+    this.name,
+    this.score,
+    this.seconds, {
+    this.floor = 1,
+    this.level = 1,
+    this.completed = false,
+    this.difficulty = 'normal',
+    this.arena = false,
+    this.playerClass = 'xenos',
+  });
   String get timeStr => '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
   String get progressStr {
     if (arena) return 'АРЕНА • ${difficulty.toUpperCase()} • $playerClass';
     if (completed) return 'ВСЁ • ${difficulty.toUpperCase()} • $playerClass';
     return 'Этаж $floor / Ур. $level';
   }
-  Map<String, dynamic> toJson() => {'name': name, 'score': score, 'seconds': seconds, 'floor': floor, 'level': level, 'completed': completed, 'difficulty': difficulty, 'arena': arena, 'playerClass': playerClass};
-  factory HighScoreEntry.fromJson(Map<String, dynamic> j) => HighScoreEntry(j['name'] as String? ?? '?', j['score'] as int? ?? 0, j['seconds'] as int? ?? 0, floor: j['floor'] as int? ?? 1, level: j['level'] as int? ?? 1, completed: j['completed'] as bool? ?? false, difficulty: j['difficulty'] as String? ?? 'normal', arena: j['arena'] as bool? ?? false, playerClass: j['playerClass'] as String? ?? 'xenos');
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'score': score,
+        'seconds': seconds,
+        'floor': floor,
+        'level': level,
+        'completed': completed,
+        'difficulty': difficulty,
+        'arena': arena,
+        'playerClass': playerClass,
+      };
+  factory HighScoreEntry.fromJson(Map<String, dynamic> j) => HighScoreEntry(
+        j['name'] as String? ?? '?',
+        j['score'] as int? ?? 0,
+        j['seconds'] as int? ?? 0,
+        floor: j['floor'] as int? ?? 1,
+        level: j['level'] as int? ?? 1,
+        completed: j['completed'] as bool? ?? false,
+        difficulty: j['difficulty'] as String? ?? 'normal',
+        arena: j['arena'] as bool? ?? false,
+        playerClass: j['playerClass'] as String? ?? 'xenos',
+      );
 }
 
 class GameSave {
-  final String name; final int floor, level, score, health, maxHealth, scraps;
+  final String name;
+  final int floor, level, score, health, maxHealth, scraps;
   final int bolterDamage, rifleDamage, shotgunDamage, swordDamage, axeDamage, hammerDamage;
   final double playerSpeed, defenseChance;
-  final String ranged, melee; final bool usingMelee, hasDash, hasLaser, ever11, ever21;
-  final int playSeconds; final String dateIso; final String difficulty;
-  final bool arenaMode; final int arenaKills, skillPoints;
-  final Map<String, dynamic> skills, custom; final String playerClass; final List<String> relics;
-  final String artifact; final Map<String, dynamic> loadout; final List<String> codex;
-  final String lastEcho;
+  final String ranged, melee;
+  final bool usingMelee, hasDash, hasLaser, ever11, ever21;
+  final int playSeconds;
+  final String dateIso, difficulty, playerClass, artifact, lastEcho;
+  final bool arenaMode;
+  final int arenaKills, skillPoints;
+  final Map<String, dynamic> skills, custom, loadout, mastery;
+  final List<String> relics, codex;
+  final String challenge;
 
   GameSave({
-    required this.name, required this.floor, required this.level, required this.score,
-    required this.health, required this.maxHealth, required this.scraps,
-    required this.bolterDamage, required this.rifleDamage, required this.shotgunDamage,
-    required this.swordDamage, required this.axeDamage, required this.hammerDamage,
-    required this.playerSpeed, required this.defenseChance, required this.ranged, required this.melee,
-    required this.usingMelee, required this.hasDash, required this.hasLaser, required this.ever11, required this.ever21,
-    required this.playSeconds, required this.dateIso, this.difficulty = 'normal', this.arenaMode = false,
-    this.arenaKills = 0, this.skillPoints = 0, this.skills = const {}, this.custom = const {},
-    this.playerClass = 'xenos', this.relics = const [], this.artifact = 'fragGrenade',
-    this.loadout = const {}, this.codex = const [], this.lastEcho = 'none',
+    required this.name,
+    required this.floor,
+    required this.level,
+    required this.score,
+    required this.health,
+    required this.maxHealth,
+    required this.scraps,
+    required this.bolterDamage,
+    required this.rifleDamage,
+    required this.shotgunDamage,
+    required this.swordDamage,
+    required this.axeDamage,
+    required this.hammerDamage,
+    required this.playerSpeed,
+    required this.defenseChance,
+    required this.ranged,
+    required this.melee,
+    required this.usingMelee,
+    required this.hasDash,
+    required this.hasLaser,
+    required this.ever11,
+    required this.ever21,
+    required this.playSeconds,
+    required this.dateIso,
+    this.difficulty = 'normal',
+    this.arenaMode = false,
+    this.arenaKills = 0,
+    this.skillPoints = 0,
+    this.skills = const {},
+    this.custom = const {},
+    this.playerClass = 'xenos',
+    this.relics = const [],
+    this.artifact = 'fragGrenade',
+    this.loadout = const {},
+    this.codex = const [],
+    this.lastEcho = 'none',
+    this.mastery = const {},
+    this.challenge = 'none',
   });
 
   Map<String, dynamic> toJson() => {
-    'name': name, 'floor': floor, 'level': level, 'score': score, 'health': health, 'maxHealth': maxHealth, 'scraps': scraps,
-    'bolterDamage': bolterDamage, 'rifleDamage': rifleDamage, 'shotgunDamage': shotgunDamage,
-    'swordDamage': swordDamage, 'axeDamage': axeDamage, 'hammerDamage': hammerDamage,
-    'playerSpeed': playerSpeed, 'defenseChance': defenseChance, 'ranged': ranged, 'melee': melee,
-    'usingMelee': usingMelee, 'hasDash': hasDash, 'hasLaser': hasLaser, 'ever11': ever11, 'ever21': ever21,
-    'playSeconds': playSeconds, 'dateIso': dateIso, 'difficulty': difficulty, 'arenaMode': arenaMode,
-    'arenaKills': arenaKills, 'skillPoints': skillPoints, 'skills': skills, 'custom': custom,
-    'playerClass': playerClass, 'relics': relics, 'artifact': artifact, 'loadout': loadout, 'codex': codex,
-    'lastEcho': lastEcho,
-  };
+        'name': name,
+        'floor': floor,
+        'level': level,
+        'score': score,
+        'health': health,
+        'maxHealth': maxHealth,
+        'scraps': scraps,
+        'bolterDamage': bolterDamage,
+        'rifleDamage': rifleDamage,
+        'shotgunDamage': shotgunDamage,
+        'swordDamage': swordDamage,
+        'axeDamage': axeDamage,
+        'hammerDamage': hammerDamage,
+        'playerSpeed': playerSpeed,
+        'defenseChance': defenseChance,
+        'ranged': ranged,
+        'melee': melee,
+        'usingMelee': usingMelee,
+        'hasDash': hasDash,
+        'hasLaser': hasLaser,
+        'ever11': ever11,
+        'ever21': ever21,
+        'playSeconds': playSeconds,
+        'dateIso': dateIso,
+        'difficulty': difficulty,
+        'arenaMode': arenaMode,
+        'arenaKills': arenaKills,
+        'skillPoints': skillPoints,
+        'skills': skills,
+        'custom': custom,
+        'playerClass': playerClass,
+        'relics': relics,
+        'artifact': artifact,
+        'loadout': loadout,
+        'codex': codex,
+        'lastEcho': lastEcho,
+        'mastery': mastery,
+        'challenge': challenge,
+      };
 
   factory GameSave.fromJson(Map<String, dynamic> j) => GameSave(
-    name: j['name'] as String? ?? 'Inquisitor', floor: j['floor'] as int? ?? 1, level: j['level'] as int? ?? 1,
-    score: j['score'] as int? ?? 0, health: j['health'] as int? ?? 6, maxHealth: j['maxHealth'] as int? ?? 6,
-    scraps: j['scraps'] as int? ?? 0, bolterDamage: j['bolterDamage'] as int? ?? 8, rifleDamage: j['rifleDamage'] as int? ?? 18,
-    shotgunDamage: j['shotgunDamage'] as int? ?? 10, swordDamage: j['swordDamage'] as int? ?? 12, axeDamage: j['axeDamage'] as int? ?? 14,
-    hammerDamage: j['hammerDamage'] as int? ?? 28, playerSpeed: (j['playerSpeed'] as num?)?.toDouble() ?? 210,
-    defenseChance: (j['defenseChance'] as num?)?.toDouble() ?? 0, ranged: j['ranged'] as String? ?? 'bolter',
-    melee: j['melee'] as String? ?? 'sword', usingMelee: j['usingMelee'] as bool? ?? false,
-    hasDash: j['hasDash'] as bool? ?? false, hasLaser: j['hasLaser'] as bool? ?? false,
-    ever11: j['ever11'] as bool? ?? false, ever21: j['ever21'] as bool? ?? false,
-    playSeconds: j['playSeconds'] as int? ?? 0, dateIso: j['dateIso'] as String? ?? '',
-    difficulty: j['difficulty'] as String? ?? 'normal', arenaMode: j['arenaMode'] as bool? ?? false,
-    arenaKills: j['arenaKills'] as int? ?? 0, skillPoints: j['skillPoints'] as int? ?? 0,
-    skills: Map<String, dynamic>.from(j['skills'] as Map? ?? {}), custom: Map<String, dynamic>.from(j['custom'] as Map? ?? {}),
-    playerClass: j['playerClass'] as String? ?? 'xenos', relics: (j['relics'] as List?)?.map((e) => e.toString()).toList() ?? const [],
-    artifact: j['artifact'] as String? ?? 'fragGrenade',
-    loadout: Map<String, dynamic>.from(j['loadout'] as Map? ?? {}),
-    codex: (j['codex'] as List?)?.map((e) => e.toString()).toList() ?? const [],
-    lastEcho: j['lastEcho'] as String? ?? 'none',
-  );
+        name: j['name'] as String? ?? 'Inquisitor',
+        floor: j['floor'] as int? ?? 1,
+        level: j['level'] as int? ?? 1,
+        score: j['score'] as int? ?? 0,
+        health: j['health'] as int? ?? 6,
+        maxHealth: j['maxHealth'] as int? ?? 6,
+        scraps: j['scraps'] as int? ?? 0,
+        bolterDamage: j['bolterDamage'] as int? ?? 8,
+        rifleDamage: j['rifleDamage'] as int? ?? 18,
+        shotgunDamage: j['shotgunDamage'] as int? ?? 10,
+        swordDamage: j['swordDamage'] as int? ?? 12,
+        axeDamage: j['axeDamage'] as int? ?? 14,
+        hammerDamage: j['hammerDamage'] as int? ?? 28,
+        playerSpeed: (j['playerSpeed'] as num?)?.toDouble() ?? 210,
+        defenseChance: (j['defenseChance'] as num?)?.toDouble() ?? 0,
+        ranged: j['ranged'] as String? ?? 'bolter',
+        melee: j['melee'] as String? ?? 'sword',
+        usingMelee: j['usingMelee'] as bool? ?? false,
+        hasDash: j['hasDash'] as bool? ?? false,
+        hasLaser: j['hasLaser'] as bool? ?? false,
+        ever11: j['ever11'] as bool? ?? false,
+        ever21: j['ever21'] as bool? ?? false,
+        playSeconds: j['playSeconds'] as int? ?? 0,
+        dateIso: j['dateIso'] as String? ?? '',
+        difficulty: j['difficulty'] as String? ?? 'normal',
+        arenaMode: j['arenaMode'] as bool? ?? false,
+        arenaKills: j['arenaKills'] as int? ?? 0,
+        skillPoints: j['skillPoints'] as int? ?? 0,
+        skills: Map<String, dynamic>.from(j['skills'] as Map? ?? {}),
+        custom: Map<String, dynamic>.from(j['custom'] as Map? ?? {}),
+        playerClass: j['playerClass'] as String? ?? 'xenos',
+        relics: (j['relics'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+        artifact: j['artifact'] as String? ?? 'fragGrenade',
+        loadout: Map<String, dynamic>.from(j['loadout'] as Map? ?? {}),
+        codex: (j['codex'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+        lastEcho: j['lastEcho'] as String? ?? 'none',
+        mastery: Map<String, dynamic>.from(j['mastery'] as Map? ?? {}),
+        challenge: j['challenge'] as String? ?? 'none',
+      );
 
   String get dateStr {
     try {
@@ -429,7 +657,10 @@ class GameSave {
 }
 
 class DamageNumber extends PositionComponent {
-  final int amount; final Color color; double life = 0.85; double vy = -55;
+  final int amount;
+  final Color color;
+  double life = 0.85;
+  double vy = -55;
   final String? label;
   DamageNumber({required Vector2 position, required this.amount, this.color = const Color(0xFFFFEB3B), this.label})
       : super(position: position.clone(), priority: 100);
@@ -497,7 +728,9 @@ class BloodSplash extends PositionComponent {
   }
 }
 class _Drop {
-  Vector2 offset; Vector2 vel; double radius; bool dark;
+  Vector2 offset, vel;
+  double radius;
+  bool dark;
   _Drop({required this.offset, required this.vel, required this.radius, required this.dark});
 }
 
@@ -579,22 +812,15 @@ class TelegraphZone extends PositionComponent {
   final double angle;
   double life;
   final double maxLife;
-  TelegraphZone({
-    required Vector2 position,
-    required this.shape,
-    required this.radius,
-    this.angle = 0,
-    this.life = 0.75,
-  })  : maxLife = life,
+  TelegraphZone({required Vector2 position, required this.shape, required this.radius, this.angle = 0, this.life = 0.75})
+      : maxLife = life,
         super(position: position.clone(), anchor: Anchor.center, priority: 6);
-
   @override
   void update(double dt) {
     super.update(dt);
     life -= dt;
     if (life <= 0) removeFromParent();
   }
-
   @override
   void render(Canvas canvas) {
     final t = (1 - life / maxLife).clamp(0.0, 1.0);
@@ -622,7 +848,6 @@ class TelegraphZone extends PositionComponent {
   }
 }
 
-/// Purple DoT puddle left by bosses — clean with Jedi Path melee
 class CorruptionZone extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   double life = 12.0;
   double tickAcc = 0;
@@ -641,11 +866,9 @@ class CorruptionZone extends PositionComponent with HasGameReference<InquisitorG
     tickAcc += dt;
     if (tickAcc >= 0.6) {
       tickAcc = 0;
-      if (game.isPlaying && !game.isPaused) {
-        if (position.distanceTo(game.player.position) < 48) {
-          game.player.applyStatus(StatusType.corruption, 1.2, tickDamage: 1);
-          game.player.takeDamage(1);
-        }
+      if (game.isPlaying && !game.isPaused && position.distanceTo(game.player.position) < 48) {
+        game.player.applyStatus(StatusType.corruption, 1.2, tickDamage: 1);
+        game.player.takeDamage(1);
       }
     }
   }
@@ -724,7 +947,6 @@ class WHDraw {
         gold = const Color(0xFFCE93D8);
         break;
     }
-
     final capeBack = Path()
       ..moveTo(cx - 12 * s, cy + 2 * s)
       ..quadraticBezierTo(cx - 56 * s, cy + 28 * s, cx - 20 * s, cy + 62 * s)
@@ -740,20 +962,16 @@ class WHDraw {
       ..close();
     c.drawPath(cape, Paint()..color = capeCol.withOpacity(0.92));
     c.drawPath(cape, Paint()..color = gold.withOpacity(0.28)..style = PaintingStyle.stroke..strokeWidth = 1.6 * s);
-
     for (final lx in [-11.0, 11.0]) {
       c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + lx * s, cy + 32 * s), width: 14 * s, height: 28 * s), Radius.circular(2 * s)), Paint()..color = armor);
       c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + lx * s, cy + 28 * s), width: 16 * s, height: 8 * s), Radius.circular(2 * s)), Paint()..color = armorLite);
       c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + lx * s, cy + 44 * s), width: 16 * s, height: 8 * s), Radius.circular(2 * s)), Paint()..color = dark);
     }
-
     _armorPlate(c, Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 40 * s, height: 38 * s), armor, gold);
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2 * s), width: 26 * s, height: 24 * s), Radius.circular(4 * s)), Paint()..color = armorLite);
     _rivets(c, cx, cy + 4 * s, 36, 30, gold.withOpacity(0.7), s);
-
     c.drawCircle(Offset(cx, cy + 4 * s), 8 * s, Paint()..color = gold);
     c.drawCircle(Offset(cx, cy + 4 * s), 4 * s, Paint()..color = dark);
-
     if (cls == PlayerClass.malleus) {
       c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 30 * s), width: 30 * s, height: 16 * s), Radius.circular(6 * s)), Paint()..color = const Color(0xFF4527A0));
       c.drawCircle(Offset(cx, cy - 32 * s), 6 * s, Paint()..color = visor.withOpacity(0.75));
@@ -770,19 +988,13 @@ class WHDraw {
       c.drawLine(Offset(cx + 16 * s, cy + 10 * s), Offset(cx + 22 * s, cy + 28 * s), Paint()..color = const Color(0xFFFFF8E1)..strokeWidth = 2 * s);
       c.drawCircle(Offset(cx + 16 * s, cy + 10 * s), 3 * s, Paint()..color = gold);
     }
-
     c.drawCircle(Offset(cx - 24 * s, cy - 4 * s), 15 * s, Paint()..color = armor);
     c.drawCircle(Offset(cx + 24 * s, cy - 4 * s), 15 * s, Paint()..color = armor);
-    c.drawArc(Rect.fromCircle(center: Offset(cx - 24 * s, cy - 4 * s), radius: 15 * s), pi, pi, false, Paint()..color = gold..style = PaintingStyle.stroke..strokeWidth = 2.2 * s);
-    c.drawArc(Rect.fromCircle(center: Offset(cx + 24 * s, cy - 4 * s), radius: 15 * s), pi, pi, false, Paint()..color = gold..style = PaintingStyle.stroke..strokeWidth = 2.2 * s);
-
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 28 * s, cy + 16 * s), width: 12 * s, height: 24 * s), Radius.circular(2 * s)), Paint()..color = armor);
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 28 * s, cy + 16 * s), width: 12 * s, height: 24 * s), Radius.circular(2 * s)), Paint()..color = armor);
-
     c.drawCircle(Offset(cx, cy - 18 * s), 13 * s, Paint()..color = const Color(0xFFC4A484));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 22 * s), width: 26 * s, height: 12 * s), Radius.circular(2 * s)), Paint()..color = dark);
     c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 19 * s), width: 16 * s, height: 4 * s), Paint()..color = visor.withOpacity(0.95));
-
     if (flash > 0) c.drawCircle(Offset(cx, cy), 48 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
 
@@ -927,21 +1139,12 @@ class WHDraw {
     c.drawCircle(Offset(cx + 28, cy - 12), 4.5, Paint()..color = const Color(0xFFFFFDE7));
     c.drawCircle(Offset(cx + 28, cy - 12), 2, Paint()..color = const Color(0xFFB71C1C));
     for (final lx in [-16.0, -4.0, 8.0, 18.0]) {
-      c.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + lx, cy + 16), width: 6, height: 14), const Radius.circular(2)),
-        Paint()..color = const Color(0xFF2D1F14),
-      );
+      c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + lx, cy + 16), width: 6, height: 14), const Radius.circular(2)), Paint()..color = const Color(0xFF2D1F14));
     }
     for (int i = 0; i < 4; i++) {
-      c.drawLine(
-        Offset(cx - 12.0 + i * 8, cy - 8),
-        Offset(cx - 10.0 + i * 8, cy - 18),
-        Paint()..color = const Color(0xFF5D4037)..strokeWidth = 2,
-      );
+      c.drawLine(Offset(cx - 12.0 + i * 8, cy - 8), Offset(cx - 10.0 + i * 8, cy - 18), Paint()..color = const Color(0xFF5D4037)..strokeWidth = 2);
     }
-    if (flash > 0) {
-      c.drawCircle(Offset(cx, cy), 32, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
-    }
+    if (flash > 0) c.drawCircle(Offset(cx, cy), 32, Paint()..color = Color.fromRGBO(255, 0, 0, 0.4 * flash));
   }
 
   static void cultistShooter(Canvas c, double cx, double cy, double s, {double flash = 0}) {
@@ -1032,7 +1235,7 @@ class WHDraw {
     c.drawCircle(Offset(cx, cy - 24 * s), 16 * s, Paint()..color = const Color(0xFF1A1A1A));
     c.drawCircle(Offset(cx, cy - 24 * s), 12 * s, Paint()..color = Color.lerp(const Color(0xFFFF6D00), const Color(0xFFFF1744), charge)!);
     c.drawCircle(Offset(cx, cy - 24 * s), 5 * s, Paint()..color = Colors.white);
-    c.drawLine(Offset(cx - 18 * s, cy - 38 * s), Offset(cx - 32 * s, cy - 60 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 6 * s);
+    c.drawLine(Offset(cx - 18 * s, cy - 38 * s), Offset(cx + 32 * s, cy - 60 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 6 * s);
     c.drawLine(Offset(cx + 18 * s, cy - 38 * s), Offset(cx + 32 * s, cy - 60 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 6 * s);
     if (flash > 0) c.drawCircle(Offset(cx, cy), 62 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
   }
@@ -1045,7 +1248,7 @@ class WHDraw {
     }
   }
 
-  static void championMark(Canvas c, double cx, double topY) {
+  static void championMark(Canvas c, double cx, double topY, {EliteAffix affix = EliteAffix.none}) {
     final path = Path()
       ..moveTo(cx, topY - 10)
       ..lineTo(cx + 7, topY)
@@ -1054,9 +1257,16 @@ class WHDraw {
       ..close();
     c.drawPath(path, Paint()..color = const Color(0xFFFFD700));
     c.drawPath(path, Paint()..color = const Color(0xFFFF8F00)..style = PaintingStyle.stroke..strokeWidth = 1.5);
+    if (affix != EliteAffix.none) {
+      final tp = TextPainter(
+        text: TextSpan(text: affix.letter, style: TextStyle(color: affix.color, fontSize: 11, fontWeight: FontWeight.w900)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(c, Offset(cx - tp.width / 2, topY - 24));
+      c.drawCircle(Offset(cx, topY - 4), 22, Paint()..color = affix.color.withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 2);
+    }
   }
 
-  /// Visual marker for event props
   static void altar(Canvas c, double cx, double cy) {
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 10), width: 50, height: 28), const Radius.circular(4)), Paint()..color = const Color(0xFF5D4037));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 4), width: 36, height: 20), const Radius.circular(3)), Paint()..color = const Color(0xFF8D6E63));
@@ -1068,6 +1278,12 @@ class WHDraw {
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 10), width: 48, height: 16), const Radius.circular(2)), Paint()..color = const Color(0xFFB8860B));
     c.drawCircle(Offset(cx - 10, cy + 4), 5, Paint()..color = const Color(0xFFFFD700));
     c.drawCircle(Offset(cx + 10, cy + 4), 5, Paint()..color = const Color(0xFF90CAF9));
+  }
+
+  static void barrel(Canvas c, double cx, double cy) {
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 36, height: 44), const Radius.circular(4)), Paint()..color = const Color(0xFF6D4C41));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 4), width: 30, height: 8), const Radius.circular(2)), Paint()..color = const Color(0xFF8D6E63));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 10), width: 30, height: 8), const Radius.circular(2)), Paint()..color = const Color(0xFF5D4037));
   }
 }
 class InquisitorGame extends FlameGame with HasCollisionDetection {
@@ -1100,15 +1316,34 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   Customization custom = Customization();
   final Set<RelicId> relics = {};
   final Set<CodexId> codexUnlocked = {};
+  final Set<CodexId> loreAccepted = {}; // knowledge bonus claimed
   WeaponLoadout loadout = WeaponLoadout();
   ActiveArtifact activeArtifact = ActiveArtifact.fragGrenade;
   double artifactCooldown = 0;
   double holyAuraTimer = 0;
 
-  /// Meta rank (persisted between runs)
   InquisitionRank inquisitionRank = InquisitionRank();
+  WeaponMastery mastery = WeaponMastery();
+  RankChallenge activeChallenge = RankChallenge.none;
+  bool challengeBossMeleeOk = true; // set false if boss damaged by ranged under meleeBossOnly
 
-  /// Event room for current level
+  // Floor path chain
+  List<PathNode> floorPath = [];
+  int pathIndex = 0;
+  List<PathNode> pendingPathChoices = [];
+
+  // Overheat
+  double bolterHeat = 0; // 0..1
+  double staffWarpStress = 0; // 0..1
+
+  // Cinematic zoom
+  double cinemaZoomTimer = 0;
+  double cinemaZoomFrom = 0.85;
+  double cinemaZoomTo = 1.1;
+
+  // Lore popup queue
+  CodexId? pendingLoreId;
+
   EventRoomType currentEvent = EventRoomType.none;
   bool eventResolved = false;
   int levelsSinceEvent = 0;
@@ -1139,6 +1374,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool portalSpawned = false;
   bool isBossLevel = false;
   bool isMiniBossLevel = false;
+  bool isEliteNode = false;
   bool nearPortal = false;
 
   double spawnTimer = 0;
@@ -1238,6 +1474,19 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool get hasHaste => relics.contains(RelicId.haste);
   bool get hasJediPath => relics.contains(RelicId.jediPath);
 
+  // Relic set synergies (3-piece style: need 2+ for partial, specific pairs)
+  bool get setEmperorEye => hasCrit && hasShieldPierce; // True Faith already
+  bool get setBloodSaint => hasLifesteal && hasHaste;
+  bool get setPurge => hasKillExplosion && hasJediPath;
+  bool get setFullInquisitor => hasCrit && hasLifesteal && hasKillExplosion; // 3-set
+
+  double get setBonusDmg {
+    var m = 1.0;
+    if (setFullInquisitor) m += 0.12;
+    if (setPurge) m += 0.06;
+    return m;
+  }
+
   bool get synergyFireCrits => hasCrit && hasKillExplosion;
   bool get synergyBloodRush => hasLifesteal && hasHaste;
   bool get synergyTrueFaith => hasShieldPierce && hasCrit;
@@ -1255,32 +1504,83 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   String? get activeSynergyLabel {
     final parts = <String>[];
+    if (setFullInquisitor) parts.add('Сет Инквизитора +12%');
     if (synergyFireCrits) parts.add('Огненный крит');
     if (synergyBloodRush) parts.add('Кровавый рывок');
     if (synergyTrueFaith) parts.add('Истинная вера');
+    if (setPurge) parts.add('Очищение');
     if (synergyXenosBlast) parts.add('Прометий-конус');
     if (synergyHereticusBleedDash) parts.add('Кровавый след');
     if (hasJediPath) parts.add('Путь Джедая');
     return parts.isEmpty ? null : parts.join(' • ');
   }
 
-  double get codexRangedBonus =>
-      (codexUnlocked.contains(CodexId.shooter) ? 0.02 : 0) + (codexUnlocked.contains(CodexId.sniper) ? 0.02 : 0);
-  double get codexMeleeBonus =>
-      (codexUnlocked.contains(CodexId.melee) ? 0.02 : 0) +
-      (codexUnlocked.contains(CodexId.dog) ? 0.02 : 0) +
-      (codexUnlocked.contains(CodexId.brute) ? 0.02 : 0);
-  double get codexShieldBonus =>
-      (codexUnlocked.contains(CodexId.shielded) ? 0.03 : 0) + (codexUnlocked.contains(CodexId.shieldedShooter) ? 0.03 : 0);
-  double get codexBossBonus =>
-      [CodexId.miniBoss, CodexId.boss, CodexId.knight, CodexId.king].where(codexUnlocked.contains).length * 0.03;
-  double get codexEliteScrapBonus => codexUnlocked.contains(CodexId.champion) ? 0.05 : 0;
-  double get codexBurnBonus => codexUnlocked.contains(CodexId.flamer) ? 1.0 : 0.0;
+  String get setProgressHint {
+    final lines = <String>[];
+    final need = <RelicId, String>{
+      RelicId.crit: 'Око',
+      RelicId.lifesteal: 'Печать',
+      RelicId.killExplosion: 'Разряд',
+    };
+    final have = need.keys.where(relics.contains).length;
+    if (have > 0 && have < 3) lines.add('Сет Инквизитора: $have/3');
+    if (hasKillExplosion && !hasJediPath) lines.add('Очищение: 1/2 (нужен Джедай)');
+    if (hasJediPath && !hasKillExplosion) lines.add('Очищение: 1/2 (нужен Разряд)');
+    return lines.join('\n');
+  }
+
+  double get codexRangedBonus {
+    var b = (codexUnlocked.contains(CodexId.shooter) ? 0.02 : 0) + (codexUnlocked.contains(CodexId.sniper) ? 0.02 : 0);
+    if (loreAccepted.contains(CodexId.shooter)) b += 0.01;
+    if (loreAccepted.contains(CodexId.sniper)) b += 0.01;
+    return b;
+  }
+  double get codexMeleeBonus {
+    var b = [CodexId.melee, CodexId.dog, CodexId.brute].where(codexUnlocked.contains).length * 0.02;
+    for (final id in [CodexId.melee, CodexId.dog, CodexId.brute]) {
+      if (loreAccepted.contains(id)) b += 0.01;
+    }
+    return b;
+  }
+  double get codexShieldBonus {
+    var b = [CodexId.shielded, CodexId.shieldedShooter].where(codexUnlocked.contains).length * 0.03;
+    if (loreAccepted.contains(CodexId.shielded)) b += 0.01;
+    if (loreAccepted.contains(CodexId.shieldedShooter)) b += 0.01;
+    return b;
+  }
+  double get codexBossBonus {
+    var b = [CodexId.miniBoss, CodexId.boss, CodexId.knight, CodexId.king].where(codexUnlocked.contains).length * 0.03;
+    for (final id in [CodexId.miniBoss, CodexId.boss, CodexId.knight, CodexId.king]) {
+      if (loreAccepted.contains(id)) b += 0.01;
+    }
+    return b;
+  }
+  double get codexEliteScrapBonus =>
+      (codexUnlocked.contains(CodexId.champion) ? 0.05 : 0) + (loreAccepted.contains(CodexId.champion) ? 0.02 : 0);
+  double get codexBurnBonus =>
+      (codexUnlocked.contains(CodexId.flamer) ? 1.0 : 0.0) + (loreAccepted.contains(CodexId.flamer) ? 0.5 : 0);
 
   void unlockCodex(CodexId id) {
     if (codexUnlocked.add(id) && isPlaying) {
       world.add(DamageNumber(position: player.position + Vector2(0, -40), amount: 0, color: const Color(0xFFFFD700), label: 'CODEX'));
+      pendingLoreId = id;
+      isPaused = true;
+      overlays.add('lorePopup');
     }
+  }
+
+  void acceptLore(CodexId id) {
+    loreAccepted.add(id);
+    pendingLoreId = null;
+    overlays.remove('lorePopup');
+    isPaused = false;
+    playClick();
+  }
+
+  void skipLore() {
+    pendingLoreId = null;
+    overlays.remove('lorePopup');
+    isPaused = false;
   }
 
   void applyClassDefaults() {
@@ -1311,8 +1611,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     var aspd = max(0.55, 1.0 - skills.attackSpeed * 0.04);
     if (loadout.barrel == BarrelMod.rapid) aspd *= 0.88;
     if (loadout.barrel == BarrelMod.heavy) aspd *= 1.12;
+    // Overheat slows attack when hot
+    if (bolterHeat > 0.7 && !usingMelee && rangedWeapon == RangedWeapon.bolter) aspd *= 1.0 + bolterHeat * 0.5;
     attackSpeedMult = aspd;
-    final dmgM = (1.0 + skills.damage * 0.06) * playerClass.dmgMod;
+    final dmgM = (1.0 + skills.damage * 0.06) * playerClass.dmgMod * setBonusDmg;
     double rangedM = dmgM * (1 + codexRangedBonus);
     double meleeM = dmgM * (1 + codexMeleeBonus);
     if (loadout.barrel == BarrelMod.heavy) rangedM *= 1.18;
@@ -1326,14 +1628,18 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     daggerDamage = (baseDagger * rangedM).round();
     needleDamage = (baseNeedle * rangedM).round();
     sniperNeedleDamage = (baseSniperNeedle * rangedM).round();
-    swordDamage = (baseSword * meleeM).round();
-    axeDamage = (baseAxe * meleeM).round();
-    hammerDamage = (baseHammer * meleeM).round();
+    final swordM = meleeM * mastery.meleeMasteryMult('sword');
+    final axeM = meleeM * mastery.meleeMasteryMult('axe');
+    final hammerM = meleeM * mastery.meleeMasteryMult('hammer');
+    final katanaM = meleeM * mastery.meleeMasteryMult('katana');
+    swordDamage = (baseSword * swordM).round();
+    axeDamage = (baseAxe * axeM).round();
+    hammerDamage = (baseHammer * hammerM).round();
     forceDamage = (baseForce * meleeM).round();
     forceSwordDamage = (baseForceSword * meleeM).round();
     daemonDamage = (baseDaemon * meleeM).round();
-    katanaDamage = (baseKatana * meleeM).round();
-    powerKatanaDamage = (basePowerKatana * meleeM).round();
+    katanaDamage = (baseKatana * katanaM).round();
+    powerKatanaDamage = (basePowerKatana * katanaM).round();
     execDamage = (baseExec * meleeM).round();
   }
 
@@ -1380,7 +1686,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void spawnBlood(Vector2 pos, {int count = 14}) => world.add(BloodSplash(position: pos, count: count));
-
   void spawnCorruptionZone(Vector2 pos) {
     if (arenaMode) return;
     world.add(CorruptionZone(position: pos.clone())..priority = 4);
@@ -1389,6 +1694,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void triggerShake({double power = 6, double time = 0.18}) {
     shakePower = max(shakePower, power);
     shakeTime = max(shakeTime, time);
+  }
+
+  void triggerCinemaZoom() {
+    cinemaZoomFrom = currentZoom;
+    cinemaZoomTo = (currentZoom + 0.22).clamp(0.7, 1.35);
+    cinemaZoomTimer = 0.45;
+    triggerShake(power: 14, time: 0.35);
   }
 
   void grantInvuln(double t) {
@@ -1401,9 +1713,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
   }
 
+  String _masteryKeyForKill() {
+    if (usingMelee) return meleeWeapon.name;
+    return rangedWeapon.name;
+  }
+
   void registerKill({Vector2? at, bool isBoss = false, bool isChampion = false, bool meleeKill = false}) {
     combo++;
     comboTimer = comboWindow;
+    mastery.addKill(_masteryKeyForKill());
     for (final m in [5, 10, 15]) {
       if (combo >= m && !_comboMilestonesClaimed.contains(m)) {
         _comboMilestonesClaimed.add(m);
@@ -1434,8 +1752,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (hasHaste) _hasteTimer = synergyBloodRush ? 4.5 : 3.0;
     if (meleeKill && synergyHereticusBleedDash) {
       hereticusDashBoost = 2.5;
-      hasDashAbility = true;
-      _ensureDashButton();
+      if (activeChallenge != RankChallenge.noDash) {
+        hasDashAbility = true;
+        _ensureDashButton();
+      }
       dashCooldown = min(dashCooldown, 1.0);
     }
     var gain = isBoss ? (8 + Random().nextInt(8)) : (isChampion ? (5 + Random().nextInt(5)) : (1 + Random().nextInt(3)));
@@ -1447,11 +1767,56 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
   }
 
-  void rememberBossEcho(EchoBossKind kind) {
-    pendingEcho = kind;
+  void rememberBossEcho(EchoBossKind kind) => pendingEcho = kind;
+
+  void noteBossDamagedByRanged() {
+    if (activeChallenge == RankChallenge.meleeBossOnly) {
+      challengeBossMeleeOk = false;
+    }
   }
 
-  /// Pick event every 2–3 combat levels (not boss/mini)
+  EliteAffix rollAffix() {
+    final r = Random().nextDouble();
+    if (r < 0.25) return EliteAffix.swift;
+    if (r < 0.50) return EliteAffix.regenerating;
+    if (r < 0.75) return EliteAffix.explosive;
+    return EliteAffix.reflect;
+  }
+
+  BulletMod rollBulletMod() {
+    if (overallLevel < 6) return BulletMod.normal;
+    final r = Random().nextDouble();
+    if (r < 0.08) return BulletMod.slow;
+    if (r < 0.14) return BulletMod.ricochet;
+    if (r < 0.18 && overallLevel >= 12) return BulletMod.split;
+    return BulletMod.normal;
+  }
+
+  /// Build path for current floor (3–5 nodes ending with boss on level 5 flow)
+  void generateFloorPath() {
+    floorPath = [];
+    pathIndex = 0;
+    final n = 3 + Random().nextInt(3); // 3–5
+    for (int i = 0; i < n; i++) {
+      if (i == n - 1) {
+        floorPath.add(PathNode(PathNodeKind.boss, 'Босс'));
+      } else if (i == 0) {
+        floorPath.add(PathNode(PathNodeKind.combat, 'Бой'));
+      } else {
+        final r = Random().nextDouble();
+        if (r < 0.35) {
+          floorPath.add(PathNode(PathNodeKind.event, 'Событие'));
+        } else if (r < 0.55) {
+          floorPath.add(PathNode(PathNodeKind.elite, 'Элита'));
+        } else if (r < 0.70) {
+          floorPath.add(PathNode(PathNodeKind.rest, 'Отдых'));
+        } else {
+          floorPath.add(PathNode(PathNodeKind.combat, 'Бой'));
+        }
+      }
+    }
+  }
+
   EventRoomType _rollEvent() {
     levelsSinceEvent++;
     if (isBossLevel || isMiniBossLevel || arenaMode) return EventRoomType.none;
@@ -1477,8 +1842,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         world.add(EventMerchantProp(position: pos)..priority = 8);
         break;
       case EventRoomType.trap:
-        // trap starts after short delay via update / on level start
-        break;
       case EventRoomType.none:
         break;
     }
@@ -1500,17 +1863,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     overlays.remove('eventAltar');
     isPaused = false;
     eventResolved = true;
-    if (accept) {
-      if (player.health > 1) {
-        player.health = max(1, player.health - 1);
-        final missing = RelicId.values.where((r) => !relics.contains(r)).toList();
-        if (missing.isNotEmpty) {
-          grantRelic(missing[Random().nextInt(missing.length)]);
-          spawnDamageNumber(player.position, 0, color: const Color(0xFFFFD700), label: 'РЕЛИКВИЯ');
-        } else {
-          scraps += 15;
-          skillPoints += 1;
-        }
+    if (accept && player.health > 1) {
+      player.health = max(1, player.health - 1);
+      final missing = RelicId.values.where((r) => !relics.contains(r)).toList();
+      if (missing.isNotEmpty) {
+        grantRelic(missing[Random().nextInt(missing.length)]);
+        spawnDamageNumber(player.position, 0, color: const Color(0xFFFFD700), label: 'РЕЛИКВИЯ');
+      } else {
+        scraps += 15;
+        skillPoints += 1;
       }
     }
     playClick();
@@ -1557,7 +1918,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       enemiesSpawned++;
       final points = getEnemySpawnPoints();
       if (points.isEmpty) continue;
-      final e = Enemy(floor: currentFloor, type: _chooseEnemyType(), isChampion: i == 0 && overallLevel >= 5);
+      final e = Enemy(
+        floor: currentFloor,
+        type: _chooseEnemyType(),
+        isChampion: i == 0 && overallLevel >= 5,
+        affix: i == 0 && overallLevel >= 5 ? rollAffix() : EliteAffix.none,
+      );
       e.position = points[Random().nextInt(points.length)].clone();
       e.priority = 30;
       world.add(e);
@@ -1568,6 +1934,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   Future<void> recordVictoryRank() async {
     inquisitionRank.wins++;
+    if (activeChallenge != RankChallenge.none) {
+      if (activeChallenge == RankChallenge.meleeBossOnly && challengeBossMeleeOk) {
+        inquisitionRank.wins++; // bonus win
+      } else if (activeChallenge == RankChallenge.noDash) {
+        inquisitionRank.wins++;
+      }
+    }
     await persistRank();
   }
 
@@ -1665,20 +2038,21 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
             .toList();
       }
       final cu = prefs.getString('customization');
-      if (cu != null) {
-        custom = Customization.fromJson(Map<String, dynamic>.from(jsonDecode(cu) as Map));
-      }
+      if (cu != null) custom = Customization.fromJson(Map<String, dynamic>.from(jsonDecode(cu) as Map));
       final cx = prefs.getString('codex');
       if (cx != null) {
         final list = (jsonDecode(cx) as List).map((e) => e.toString());
-        codexUnlocked.addAll(
-          list.map((n) => CodexId.values.firstWhere((e) => e.name == n, orElse: () => CodexId.shooter)),
-        );
+        codexUnlocked.addAll(list.map((n) => CodexId.values.firstWhere((e) => e.name == n, orElse: () => CodexId.shooter)));
+      }
+      final la = prefs.getString('lore_accepted');
+      if (la != null) {
+        final list = (jsonDecode(la) as List).map((e) => e.toString());
+        loreAccepted.addAll(list.map((n) => CodexId.values.firstWhere((e) => e.name == n, orElse: () => CodexId.shooter)));
       }
       final rk = prefs.getString('inquisition_rank');
-      if (rk != null) {
-        inquisitionRank = InquisitionRank.fromJson(Map<String, dynamic>.from(jsonDecode(rk) as Map));
-      }
+      if (rk != null) inquisitionRank = InquisitionRank.fromJson(Map<String, dynamic>.from(jsonDecode(rk) as Map));
+      final wm = prefs.getString('weapon_mastery');
+      if (wm != null) mastery = WeaponMastery.fromJson(Map<String, dynamic>.from(jsonDecode(wm) as Map));
     } catch (_) {}
   }
 
@@ -1686,6 +2060,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('inquisition_rank', jsonEncode(inquisitionRank.toJson()));
+      await prefs.setString('weapon_mastery', jsonEncode(mastery.toJson()));
     } catch (_) {}
   }
 
@@ -1694,7 +2069,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('customization', jsonEncode(custom.toJson()));
       await prefs.setString('codex', jsonEncode(codexUnlocked.map((e) => e.name).toList()));
+      await prefs.setString('lore_accepted', jsonEncode(loreAccepted.map((e) => e.name).toList()));
       await prefs.setString('inquisition_rank', jsonEncode(inquisitionRank.toJson()));
+      await prefs.setString('weapon_mastery', jsonEncode(mastery.toJson()));
     } catch (_) {}
   }
 
@@ -1756,6 +2133,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       loadout: loadout.toJson(),
       codex: codexUnlocked.map((e) => e.name).toList(),
       lastEcho: pendingEcho.name,
+      mastery: mastery.toJson(),
+      challenge: activeChallenge.name,
     );
     saves.insert(0, save);
     if (saves.length > 8) saves = saves.take(8).toList();
@@ -1781,13 +2160,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       ..clear()
       ..addAll(s.codex.map((n) => CodexId.values.firstWhere((e) => e.name == n, orElse: () => CodexId.shooter)));
     loadout = WeaponLoadout.fromJson(s.loadout);
+    mastery = WeaponMastery.fromJson(s.mastery);
     activeArtifact = ActiveArtifact.values.firstWhere((e) => e.name == s.artifact, orElse: () => ActiveArtifact.fragGrenade);
     pendingEcho = EchoBossKind.values.firstWhere((e) => e.name == s.lastEcho, orElse: () => EchoBossKind.none);
+    activeChallenge = RankChallenge.values.firstWhere((e) => e.name == s.challenge, orElse: () => RankChallenge.none);
     recomputeStats();
     rangedWeapon = RangedWeapon.values.firstWhere((e) => e.name == s.ranged, orElse: () => RangedWeapon.bolter);
     meleeWeapon = MeleeWeapon.values.firstWhere((e) => e.name == s.melee, orElse: () => MeleeWeapon.sword);
     usingMelee = s.usingMelee;
-    hasDashAbility = s.hasDash || playerClass == PlayerClass.hereticus;
+    hasDashAbility = (s.hasDash || playerClass == PlayerClass.hereticus) && activeChallenge != RankChallenge.noDash;
     hasLaserAbility = s.hasLaser;
     _everReached11 = s.ever11;
     _everReached21 = s.ever21;
@@ -1798,28 +2179,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     playStartTime = DateTime.now();
     isPlaying = true;
     isPaused = false;
-    portalSpawned = false;
-    nearPortal = false;
-    secretBossUnlockedThisLevel = false;
-    secretBossSpawned = false;
-    cornerStandTimer = 0;
-    dashCooldown = 0;
-    dashActive = 0;
-    laserCooldown = 0;
-    artifactCooldown = 0;
-    holyAuraTimer = 0;
-    invulnTimer = 0;
-    hereticusDashBoost = 0;
-    combo = 0;
-    comboTimer = 0;
-    _comboMilestonesClaimed.clear();
-    tempDmgMult = 1.0;
-    tempDmgTimer = 0;
-    shieldTimer = 0;
-    _hasteTimer = 0;
-    currentEvent = EventRoomType.none;
-    eventResolved = true;
-    currentZoom = 0.85;
+    generateFloorPath();
     _clearEverything();
     if (arenaMode) {
       _startArenaLevel();
@@ -1831,7 +2191,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     for (final o in [
       'mainMenu', 'loadSave', 'settings', 'nameInput', 'classSelect', 'gameOver',
       'levelComplete', 'skills', 'reward', 'shop', 'victory', 'records', 'backpack',
-      'codex', 'eventAltar', 'eventMerchant',
+      'codex', 'eventAltar', 'eventMerchant', 'pathSelect', 'lorePopup', 'challengeSelect',
     ]) {
       overlays.remove(o);
     }
@@ -1896,6 +2256,14 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     return getEnemySpawnPointsRaw().where((p) => p.distanceTo(origin) >= safeRadius + 40).toList();
   }
 
+  PathNodeKind get _currentNodeKind {
+    if (floorPath.isEmpty || pathIndex >= floorPath.length) {
+      if (currentLevel == 5) return PathNodeKind.boss;
+      return PathNodeKind.combat;
+    }
+    return floorPath[pathIndex].kind;
+  }
+
   void _startLevel() {
     world.removeAll(world.children.toList());
     camera.viewport.children.whereType<HudLabel>().toList().forEach((c) => c.removeFromParent());
@@ -1910,8 +2278,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
     _checkUnlocks();
     recomputeStats();
-    isBossLevel = currentLevel == 5;
-    isMiniBossLevel = [3].contains(currentLevel);
+
+    final node = _currentNodeKind;
+    isBossLevel = node == PathNodeKind.boss || currentLevel == 5;
+    isMiniBossLevel = !isBossLevel && currentLevel == 3;
+    isEliteNode = node == PathNodeKind.elite;
     portalSpawned = false;
     nearPortal = false;
     secretBossUnlockedThisLevel = false;
@@ -1922,9 +2293,19 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     _comboMilestonesClaimed.clear();
     invulnTimer = 0;
     hereticusDashBoost = 0;
+    bolterHeat = max(0, bolterHeat - 0.3);
+    staffWarpStress = max(0, staffWarpStress - 0.3);
 
-    currentEvent = _rollEvent();
-    eventResolved = currentEvent == EventRoomType.none;
+    if (node == PathNodeKind.event) {
+      currentEvent = [EventRoomType.altar, EventRoomType.merchant, EventRoomType.trap][Random().nextInt(3)];
+      eventResolved = false;
+    } else if (node == PathNodeKind.rest) {
+      currentEvent = EventRoomType.none;
+      eventResolved = true;
+    } else {
+      currentEvent = _rollEvent();
+      eventResolved = currentEvent == EventRoomType.none;
+    }
 
     final wallColor = Color.lerp(const Color(0xFF5D4037), const Color(0xFF3E2723), (currentFloor - 1) / 4)!;
     world.add(Floor(size: Vector2(mapWidth, mapHeight)));
@@ -1934,8 +2315,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     world.add(Wall(position: Vector2(mapWidth - 70, 0), size: Vector2(70, mapHeight), color: wallColor));
     world.add(PlayerSpawnPoint(position: playerSpawnPos));
 
-    final rng = Random(currentFloor * 100 + currentLevel * 13);
-    final obstacleCount = 5 + currentFloor * 2 + currentLevel;
+    final rng = Random(currentFloor * 100 + currentLevel * 13 + pathIndex * 7);
+    final obstacleCount = 4 + currentFloor + currentLevel;
     int placed = 0, attempts = 0;
     while (placed < obstacleCount && attempts < 120) {
       attempts++;
@@ -1948,7 +2329,18 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       placed++;
     }
 
-    if (!isBossLevel && !isMiniBossLevel) {
+    // Breakable barrels
+    final barrels = 2 + rng.nextInt(3);
+    int bPlaced = 0, bAttempts = 0;
+    while (bPlaced < barrels && bAttempts < 80) {
+      bAttempts++;
+      final pos = Vector2(140 + rng.nextDouble() * (mapWidth - 280), 140 + rng.nextDouble() * (mapHeight - 280));
+      if (pos.distanceTo(playerSpawnPos) < 160) continue;
+      world.add(BreakableBarrel(position: pos)..priority = 6);
+      bPlaced++;
+    }
+
+    if (!isBossLevel && node != PathNodeKind.rest) {
       for (int i = 0; i < 1 + rng.nextInt(2); i++) {
         final p = Vector2(140 + rng.nextDouble() * (mapWidth - 280), 140 + rng.nextDouble() * (mapHeight - 280));
         if (p.distanceTo(playerSpawnPos) > 150) world.add(MedkitPickup(position: p));
@@ -1959,15 +2351,17 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
     }
 
-    final baseCount = 3 + currentFloor + currentLevel + (overallLevel ~/ 5);
-    enemiesToSpawn = isBossLevel ? 0 : (isMiniBossLevel ? (baseCount / 2).ceil() : baseCount);
-    if (difficulty == Difficulty.hard) enemiesToSpawn = (enemiesToSpawn * 1.2).ceil();
-    enemiesAlive = enemiesToSpawn;
-    enemiesSpawned = 0;
-    spawnTimer = 0.4;
-    spawnInterval = max(0.45, 1.15 - currentFloor * 0.08 - currentLevel * 0.04);
-
-    if (isBossLevel) {
+    // Rest node: free heal, no enemies
+    if (node == PathNodeKind.rest) {
+      enemiesToSpawn = 0;
+      enemiesAlive = 0;
+      enemiesSpawned = 0;
+      portalSpawned = true;
+      world.add(Portal(position: Vector2(mapWidth / 2, 160))..priority = 9);
+      if (world.children.whereType<Player>().isEmpty) {
+        // player added below
+      }
+    } else if (isBossLevel) {
       enemiesAlive = 1;
       enemiesToSpawn = 1;
       enemiesSpawned = 1;
@@ -1987,10 +2381,22 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         world.add(Boss(floor: currentFloor, position: bossPos)..priority = 25);
       }
     } else if (isMiniBossLevel) {
+      final baseCount = (2 + currentFloor).ceil();
+      enemiesToSpawn = baseCount;
+      enemiesAlive = baseCount;
+      enemiesSpawned = 0;
+      spawnTimer = 0.4;
       world.add(MiniBoss(floor: currentFloor, position: Vector2(mapWidth / 2, mapHeight / 2 - 280))..priority = 24);
       enemiesAlive++;
       enemiesToSpawn++;
       enemiesSpawned++;
+    } else {
+      final baseCount = 3 + currentFloor + currentLevel + (overallLevel ~/ 5) + (isEliteNode ? 2 : 0);
+      enemiesToSpawn = (baseCount * (difficulty == Difficulty.hard ? 1.2 : 1.0)).ceil();
+      enemiesAlive = enemiesToSpawn;
+      enemiesSpawned = 0;
+      spawnTimer = 0.4;
+      spawnInterval = max(0.45, 1.15 - currentFloor * 0.08 - currentLevel * 0.04);
     }
 
     _maybeSpawnEcho();
@@ -2045,6 +2451,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     player = Player(moveJoystick)..priority = 20;
     player.maxHealth = maxHealth;
     player.health = maxHealth;
+    if (node == PathNodeKind.rest) {
+      player.health = min(maxHealth, player.health + 2);
+    }
     world.add(player);
     camera.follow(player);
 
@@ -2066,7 +2475,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     _ensureLaserButton();
     _ensureArtifactButton();
 
-    // Trap event: delayed wave
     if (currentEvent == EventRoomType.trap) {
       Future.delayed(const Duration(milliseconds: 1800), () {
         if (isPlaying && !eventResolved && currentEvent == EventRoomType.trap) {
@@ -2147,6 +2555,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void _ensureDashButton() {
+    if (activeChallenge == RankChallenge.noDash) return;
     if (!hasDashAbility || dashButton != null) return;
     dashButton = HudButtonComponent(
       button: CircleComponent(radius: buttonSize * 0.45, paint: Paint()..color = const Color(0xFF00838F)),
@@ -2180,6 +2589,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void activateDash() {
+    if (activeChallenge == RankChallenge.noDash) return;
     if (!hasDashAbility || dashCooldown > 0 || dashActive > 0 || !isPlaying || isPaused) return;
     final boost = hereticusDashBoost > 0;
     dashActive = (playerClass == PlayerClass.hereticus ? 2.6 : 2.0) + (boost ? 0.8 : 0);
@@ -2242,8 +2652,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (points.isEmpty) return;
     final pos = points[Random().nextInt(points.length)].clone();
     world.add(EnemySpawnPortal(position: pos)..priority = 3);
-    final isChamp = overallLevel >= 5 && Random().nextDouble() < (0.08 + currentFloor * 0.02);
-    final e = Enemy(floor: currentFloor, type: _chooseEnemyType(), isChampion: isChamp);
+    final forceChamp = isEliteNode && enemiesSpawned < 2;
+    final isChamp = forceChamp || (overallLevel >= 5 && Random().nextDouble() < (0.08 + currentFloor * 0.02));
+    final affix = isChamp ? rollAffix() : EliteAffix.none;
+    final e = Enemy(floor: currentFloor, type: _chooseEnemyType(), isChampion: isChamp, affix: affix);
     e.position = pos;
     e.priority = 30;
     world.add(e);
@@ -2258,6 +2670,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     EnemyType? type,
     bool meleeKill = false,
     EchoBossKind? echoKind,
+    EliteAffix affix = EliteAffix.none,
   }) {
     enemiesAlive = max(0, enemiesAlive - 1);
     if (arenaMode) {
@@ -2278,9 +2691,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
     score += ((isBoss ? 200 : (isChampion ? 80 : 20)) * comboMult).round();
     registerKill(at: at, isBoss: isBoss, isChampion: isChampion, meleeKill: meleeKill);
-    if (echoKind != null && echoKind != EchoBossKind.none) {
-      rememberBossEcho(echoKind);
-    }
+    // Explosive death affix handled on enemy before remove
+    if (echoKind != null && echoKind != EchoBossKind.none) rememberBossEcho(echoKind);
   }
 
   void _spawnArenaBoss() {
@@ -2289,10 +2701,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     enemiesToSpawn++;
     enemiesSpawned++;
     final pick = Random().nextInt(4);
-    if (pick == 0) world.add(Boss(floor: 5, position: pos)..priority = 25);
-    else if (pick == 1) world.add(KnightBoss(floor: 5, position: pos)..priority = 25);
-    else if (pick == 2) world.add(KingBoss(position: pos)..priority = 26);
-    else world.add(MiniBoss(floor: 5, position: pos)..priority = 24);
+    if (pick == 0) {
+      world.add(Boss(floor: 5, position: pos)..priority = 25);
+    } else if (pick == 1) {
+      world.add(KnightBoss(floor: 5, position: pos)..priority = 25);
+    } else if (pick == 2) {
+      world.add(KingBoss(position: pos)..priority = 26);
+    } else {
+      world.add(MiniBoss(floor: 5, position: pos)..priority = 24);
+    }
   }
 
   void _checkPortal() {
@@ -2333,8 +2750,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       _ensureLaserButton();
       unlockCodex(CodexId.cyclops);
     } else {
-      hasDashAbility = true;
-      _ensureDashButton();
+      if (activeChallenge != RankChallenge.noDash) {
+        hasDashAbility = true;
+        _ensureDashButton();
+      }
       unlockCodex(CodexId.tentacle);
     }
     enemiesAlive = max(0, enemiesAlive - 1);
@@ -2350,6 +2769,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void update(double dt) {
     super.update(dt);
     if (!isPlaying || isPaused) return;
+
+    // Heat decay
+    bolterHeat = max(0, bolterHeat - dt * 0.18);
+    staffWarpStress = max(0, staffWarpStress - dt * 0.14);
 
     if (dashCooldown > 0) dashCooldown = max(0, dashCooldown - dt);
     if (dashActive > 0) {
@@ -2384,6 +2807,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
     }
 
+    // Cinematic zoom
+    if (cinemaZoomTimer > 0) {
+      cinemaZoomTimer -= dt;
+      final t = 1 - (cinemaZoomTimer / 0.45).clamp(0.0, 1.0);
+      final z = cinemaZoomFrom + (cinemaZoomTo - cinemaZoomFrom) * sin(t * pi);
+      camera.viewfinder.zoom = z;
+      if (cinemaZoomTimer <= 0) camera.viewfinder.zoom = currentZoom;
+    }
+
     if (shakeTime > 0) {
       shakeTime -= dt;
       final ox = (Random().nextDouble() - 0.5) * shakePower * 2;
@@ -2403,21 +2835,17 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
     _checkPortal();
 
-    // Secret bosses corner
     if (!secretBossSpawned && !secretBossUnlockedThisLevel) {
       final inCorner = player.position.x < 140 && player.position.y < 140;
       final needLevel = (currentLevel == 5 && currentFloor == 1) || (currentLevel == 5 && currentFloor == 2);
       if (needLevel && inCorner && enemiesAlive <= 0) {
         cornerStandTimer += dt;
-        if (cornerStandTimer >= 33) {
-          _spawnSecretBoss(cyclops: currentFloor == 2);
-        }
+        if (cornerStandTimer >= 33) _spawnSecretBoss(cyclops: currentFloor == 2);
       } else {
         cornerStandTimer = 0;
       }
     }
 
-    // Portal proximity
     nearPortal = false;
     for (final p in world.children.whereType<Portal>()) {
       if (player.position.distanceTo(p.position) < 70) {
@@ -2428,7 +2856,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (nearPortal && portalButton == null) {
       portalButton = HudButtonComponent(
         button: CircleComponent(radius: buttonSize * 0.5, paint: Paint()..color = const Color(0xFFE91E63)),
-        margin: const EdgeInsets.only(bottom: 200, left: 0, right: 0),
+        margin: const EdgeInsets.only(bottom: 200),
         onPressed: goNextLevel,
       );
       camera.viewport.add(portalButton!);
@@ -2444,16 +2872,17 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     super.render(canvas);
     if (!isPlaying) return;
     final hp = '${player.health}/${player.maxHealth}';
-    final eventTag = currentEvent == EventRoomType.none
-        ? ''
-        : ' • ${currentEvent == EventRoomType.altar ? "Алтарь" : currentEvent == EventRoomType.merchant ? "Торговец" : "Засада"}';
-    final rankTag = inquisitionRank.rank > 0 ? ' • ${inquisitionRank.title}' : '';
+    final nodeLabel = floorPath.isNotEmpty && pathIndex < floorPath.length
+        ? floorPath[pathIndex].label
+        : 'Ур.$currentLevel';
+    final heatBar = bolterHeat > 0.05 ? ' 🔥${(bolterHeat * 100).toInt()}%' : '';
+    final warpBar = staffWarpStress > 0.05 ? ' Ψ${(staffWarpStress * 100).toInt()}%' : '';
     final lines = [
-      'Этаж $currentFloor  Ур.$currentLevel  $hp  Очки:$score  Обл:$scraps$eventTag',
+      'Этаж $currentFloor • $nodeLabel  $hp  Очки:$score  Обл:$scraps$heatBar$warpBar',
       if (arenaMode) 'АРЕНА W$arenaWave  Убито:$arenaKills',
       if (combo >= 2) 'COMBO x$combo',
       if (activeSynergyLabel != null) activeSynergyLabel!,
-      if (rankTag.isNotEmpty) rankTag.trim(),
+      if (activeChallenge != RankChallenge.none) 'Испытание: ${activeChallenge.title}',
     ];
     double y = 48;
     for (final line in lines) {
@@ -2471,25 +2900,64 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void nextLevel() {
     overlays.remove('levelComplete');
-    isPaused = false;
-    if (currentLevel >= 5) {
-      if (currentFloor >= 5) {
+    pathIndex++;
+    // End of floor path → floor complete rewards
+    if (pathIndex >= floorPath.length || isBossLevel) {
+      if (currentFloor >= 5 && isBossLevel) {
         showVictory();
         return;
       }
-      currentFloor++;
-      currentLevel = 1;
+      if (isBossLevel) {
+        currentFloor++;
+        currentLevel = 1;
+        generateFloorPath();
+        pathIndex = 0;
+      } else if (pathIndex >= floorPath.length) {
+        // safety
+        currentLevel = min(5, currentLevel + 1);
+        pathIndex = 0;
+        if (currentLevel > 5) {
+          currentFloor++;
+          currentLevel = 1;
+          generateFloorPath();
+        }
+      }
       skillPoints += 1;
       pendingRewards = _rollRewards();
       overlays.add('reward');
       isPaused = true;
       return;
     }
-    currentLevel++;
+    // Advance within path: map path index to level number for scaling
+    currentLevel = min(5, pathIndex + 1);
     skillPoints += 1;
+    // Offer path choice if next nodes branch (simplified: pick from 2 random alternatives occasionally)
+    if (pathIndex < floorPath.length - 1 && Random().nextDouble() < 0.4) {
+      pendingPathChoices = [
+        floorPath[pathIndex],
+        PathNode(
+          [PathNodeKind.combat, PathNodeKind.event, PathNodeKind.elite, PathNodeKind.rest][Random().nextInt(4)],
+          'Альтернатива',
+        ),
+      ];
+      overlays.add('pathSelect');
+      isPaused = true;
+      return;
+    }
     pendingRewards = _rollRewards();
     overlays.add('reward');
     isPaused = true;
+  }
+
+  void choosePathNode(int index) {
+    if (index >= 0 && index < pendingPathChoices.length) {
+      if (pathIndex < floorPath.length) {
+        floorPath[pathIndex] = pendingPathChoices[index];
+      }
+    }
+    overlays.remove('pathSelect');
+    pendingRewards = _rollRewards();
+    overlays.add('reward');
   }
 
   List<RewardOption> _rollRewards() {
@@ -2564,7 +3032,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void openNameInput() {
     for (final o in [
       'mainMenu', 'gameOver', 'victory', 'records', 'settings', 'loadSave',
-      'classSelect', 'codex', 'eventAltar', 'eventMerchant',
+      'classSelect', 'codex', 'eventAltar', 'eventMerchant', 'pathSelect', 'lorePopup', 'challengeSelect',
     ]) {
       overlays.remove(o);
     }
@@ -2575,19 +3043,27 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     playerName = name.trim().isEmpty ? 'Inquisitor' : name.trim();
     difficulty = diff;
     overlays.remove('nameInput');
+    overlays.add('challengeSelect');
+  }
+
+  void confirmChallenge(RankChallenge ch) {
+    activeChallenge = ch;
+    challengeBossMeleeOk = true;
+    overlays.remove('challengeSelect');
     overlays.add('classSelect');
   }
 
   void confirmClass(PlayerClass cls) {
     playerClass = cls;
     applyClassDefaults();
+    if (activeChallenge == RankChallenge.noDash) hasDashAbility = false;
     overlays.remove('classSelect');
     startNewRun();
   }
 
   void startNewRun() {
     score = 0;
-    scraps = inquisitionRank.startScraps; // rank bonus
+    scraps = inquisitionRank.startScraps;
     currentFloor = 1;
     currentLevel = 1;
     skills = SkillTree();
@@ -2599,15 +3075,18 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     arenaKills = 0;
     _savedPlaySeconds = 0;
     playStartTime = DateTime.now();
-    hasDashAbility = playerClass == PlayerClass.hereticus;
+    hasDashAbility = playerClass == PlayerClass.hereticus && activeChallenge != RankChallenge.noDash;
     hasLaserAbility = false;
     _everReached11 = false;
     _everReached21 = false;
     secretBossDefeated = false;
     pendingEcho = EchoBossKind.none;
     levelsSinceEvent = 0;
-    currentEvent = EventRoomType.none;
-    eventResolved = true;
+    bolterHeat = 0;
+    staffWarpStress = 0;
+    challengeBossMeleeOk = true;
+    generateFloorPath();
+    pathIndex = 0;
     recomputeStats();
     isPlaying = true;
     isPaused = false;
@@ -2677,7 +3156,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     for (final o in [
       'gameOver', 'victory', 'levelComplete', 'skills', 'reward', 'shop',
       'settings', 'backpack', 'nameInput', 'classSelect', 'records', 'loadSave',
-      'codex', 'eventAltar', 'eventMerchant',
+      'codex', 'eventAltar', 'eventMerchant', 'pathSelect', 'lorePopup', 'challengeSelect',
     ]) {
       overlays.remove(o);
     }
@@ -2712,7 +3191,44 @@ class RewardOption {
   }
 }
 
-// ─── Event props ─────────────────────────────────────────
+// ─── Breakable barrel ────────────────────────────────────
+class BreakableBarrel extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  int hp = 2;
+  BreakableBarrel({required Vector2 position})
+      : super(position: position, size: Vector2(44, 52), anchor: Anchor.center, priority: 6);
+
+  @override
+  Future<void> onLoad() async => add(CircleHitbox(radius: 22));
+
+  void hit() {
+    hp--;
+    if (hp <= 0) {
+      final r = Random().nextDouble();
+      if (r < 0.35) {
+        game.scraps += 3 + Random().nextInt(4);
+        game.spawnDamageNumber(position, 0, color: const Color(0xFFFFD700), label: '+обломки');
+      } else if (r < 0.55) {
+        game.world.add(MedkitPickup(position: position.clone()));
+      } else if (r < 0.70) {
+        game.world.add(KillExplosion(position: position.clone(), radius: 70, damage: 8 + game.overallLevel)..priority = 12);
+        game.triggerShake(power: 5, time: 0.12);
+      }
+      removeFromParent();
+    }
+  }
+
+  @override
+  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollision(intersectionPoints, other);
+    if (other is MeleeAttack || other is Bullet || other is PsyWave) hit();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    WHDraw.barrel(canvas, size.x / 2, size.y / 2);
+  }
+}
+
 class EventAltarProp extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   EventAltarProp({required Vector2 position})
       : super(position: position, size: Vector2(64, 64), anchor: Anchor.center, priority: 8);
@@ -2721,14 +3237,10 @@ class EventAltarProp extends PositionComponent with HasGameReference<InquisitorG
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Player && !game.eventResolved) {
-      game.openEventAltar();
-    }
+    if (other is Player && !game.eventResolved) game.openEventAltar();
   }
   @override
-  void render(Canvas canvas) {
-    WHDraw.altar(canvas, size.x / 2, size.y / 2);
-  }
+  void render(Canvas canvas) => WHDraw.altar(canvas, size.x / 2, size.y / 2);
 }
 
 class EventMerchantProp extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
@@ -2739,14 +3251,10 @@ class EventMerchantProp extends PositionComponent with HasGameReference<Inquisit
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Player && !game.eventResolved) {
-      game.openEventMerchant();
-    }
+    if (other is Player && !game.eventResolved) game.openEventMerchant();
   }
   @override
-  void render(Canvas canvas) {
-    WHDraw.merchantStall(canvas, size.x / 2, size.y / 2);
-  }
+  void render(Canvas canvas) => WHDraw.merchantStall(canvas, size.x / 2, size.y / 2);
 }
 
 class HudLabel extends PositionComponent with HasGameReference<InquisitorGame> {
@@ -2768,12 +3276,7 @@ class HudLabel extends PositionComponent with HasGameReference<InquisitorGame> {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-        ),
+        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 4)]),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
@@ -2860,6 +3363,9 @@ mixin SmartMover on PositionComponent, HasGameReference<InquisitorGame> {
     for (final o in game.world.children.whereType<Obstacle>()) {
       if (pos.distanceTo(o.position) < radius + 32) return false;
     }
+    for (final b in game.world.children.whereType<BreakableBarrel>()) {
+      if (pos.distanceTo(b.position) < radius + 22) return false;
+    }
     return true;
   }
 
@@ -2890,11 +3396,7 @@ class EnemySpawnPortal extends PositionComponent {
   }
   @override
   void render(Canvas canvas) {
-    canvas.drawCircle(
-      Offset(size.x / 2, size.y / 2),
-      18,
-      Paint()..color = Color.fromRGBO(255, 140, 0, 0.45 + 0.4 * sin(flicker)),
-    );
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 18, Paint()..color = Color.fromRGBO(255, 140, 0, 0.45 + 0.4 * sin(flicker)));
   }
 }
 
@@ -2939,10 +3441,7 @@ class Obstacle extends PositionComponent with CollisionCallbacks {
   Future<void> onLoad() async => add(RectangleHitbox());
   @override
   void render(Canvas canvas) {
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(size.toRect(), const Radius.circular(6)),
-      Paint()..color = const Color(0xFF6D4C41),
-    );
+    canvas.drawRRect(RRect.fromRectAndRadius(size.toRect(), const Radius.circular(6)), Paint()..color = const Color(0xFF6D4C41));
   }
 }
 
@@ -3028,7 +3527,7 @@ class FragGrenade extends PositionComponent with HasGameReference<InquisitorGame
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle || other is Enemy) _explode();
+    if (other is Wall || other is Obstacle || other is Enemy || other is BreakableBarrel) _explode();
   }
   @override
   void render(Canvas canvas) {
@@ -3130,6 +3629,160 @@ class ServoTurret extends PositionComponent with HasGameReference<InquisitorGame
     canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy - 2), width: 6, height: 18), Paint()..color = const Color(0xFF78909C));
   }
 }
+class ChallengeSelectMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const ChallengeSelectMenu(this.game, {super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('ИСПЫТАНИЕ РАНГА', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text('Выполнение даёт +1 к победам ранга', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  children: RankChallenge.values.map((ch) {
+                    return Card(
+                      color: const Color(0xFF1A1A1A),
+                      child: ListTile(
+                        title: Text(ch.title, style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+                        subtitle: Text(ch.desc, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        onTap: () {
+                          game.playClick();
+                          game.confirmChallenge(ch);
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PathSelectMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const PathSelectMenu(this.game, {super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.94),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('ВЫБОР ПУТИ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              // Mini path overview
+              if (game.floorPath.isNotEmpty)
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 6,
+                  children: List.generate(game.floorPath.length, (i) {
+                    final n = game.floorPath[i];
+                    final done = i < game.pathIndex;
+                    final cur = i == game.pathIndex;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: cur ? const Color(0xFFB8860B) : (done ? const Color(0xFF2E7D32) : const Color(0xFF333333)),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(n.label, style: const TextStyle(color: Colors.white, fontSize: 11)),
+                    );
+                  }),
+                ),
+              const SizedBox(height: 16),
+              ...List.generate(game.pendingPathChoices.length, (i) {
+                final n = game.pendingPathChoices[i];
+                return Card(
+                  color: const Color(0xFF1A1A1A),
+                  child: ListTile(
+                    title: Text(n.label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    subtitle: Text(_kindHint(n.kind), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
+                    onTap: () {
+                      game.playClick();
+                      game.choosePathNode(i);
+                    },
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _kindHint(PathNodeKind k) {
+    switch (k) {
+      case PathNodeKind.combat: return 'Обычный бой';
+      case PathNodeKind.event: return 'Событие (алтарь / торговец / засада)';
+      case PathNodeKind.elite: return 'Элитный узел — больше чемпионов';
+      case PathNodeKind.rest: return 'Отдых — +2 HP, портал сразу';
+      case PathNodeKind.boss: return 'Босс этажа';
+    }
+  }
+}
+
+class LorePopupMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const LorePopupMenu(this.game, {super.key});
+  @override
+  Widget build(BuildContext context) {
+    final id = game.pendingLoreId;
+    if (id == null) {
+      return const SizedBox.shrink();
+    }
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.92),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('КОДЕКС', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(id.title, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Text(id.lore, style: const TextStyle(color: Colors.white70, height: 1.4, fontSize: 14)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(id.knowledgeBonus, textAlign: TextAlign.center, style: const TextStyle(color: Colors.greenAccent, fontSize: 13)),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+                onPressed: () => game.acceptLore(id),
+                child: const Text('ПРИНЯТЬ ЗНАНИЕ (+1% бонус)'),
+              ),
+              TextButton(
+                onPressed: game.skipLore,
+                child: const Text('ПОЗЖЕ', style: TextStyle(color: Colors.white54)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class EventAltarMenu extends StatelessWidget {
   final InquisitorGame game;
   const EventAltarMenu(this.game, {super.key});
@@ -3146,24 +3799,15 @@ class EventAltarMenu extends StatelessWidget {
             children: [
               const Text('АЛТАРЬ КРОВИ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
-              const Text(
-                'Пожертвуй 1 HP — получи случайную реликвию.\nЕсли реликвий больше нет: +15 обломков и +1 SP.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, height: 1.4),
-              ),
-              const SizedBox(height: 8),
+              const Text('Пожертвуй 1 HP — получи случайную реликвию.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
               Text('HP: ${game.player.health}/${game.player.maxHealth}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54)),
               const SizedBox(height: 24),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C), padding: const EdgeInsets.symmetric(vertical: 14)),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C)),
                 onPressed: game.player.health > 1 ? () => game.resolveAltar(accept: true) : null,
-                child: const Text('ПОЖЕРТВОВАТЬ', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text('ПОЖЕРТВОВАТЬ'),
               ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => game.resolveAltar(accept: false),
-                child: const Text('ОТКАЗАТЬСЯ', style: TextStyle(color: Colors.white54)),
-              ),
+              TextButton(onPressed: () => game.resolveAltar(accept: false), child: const Text('ОТКАЗАТЬСЯ', style: TextStyle(color: Colors.white54))),
             ],
           ),
         ),
@@ -3190,33 +3834,19 @@ class _EventMerchantMenuState extends State<EventMerchantMenu> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('СТРАНСТВУЮЩИЙ ТОРГОВЕЦ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+              const Text('ТОРГОВЕЦ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
               Text('Обломки: ${g.scraps}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              const SizedBox(height: 12),
-              _item('+2 HP', 10, () {
-                g.resolveMerchantBuy('heal');
-                setState(() {});
-              }),
-              _item('+1 SP', 18, () {
-                g.resolveMerchantBuy('scraps_sp');
-                setState(() {});
-              }),
-              _item('Случайная реликвия', 25, () {
-                g.resolveMerchantBuy('relic');
-                setState(() {});
-              }),
+              _item('+2 HP', 10, () { g.resolveMerchantBuy('heal'); setState(() {}); }),
+              _item('+1 SP', 18, () { g.resolveMerchantBuy('scraps_sp'); setState(() {}); }),
+              _item('Реликвия', 25, () { g.resolveMerchantBuy('relic'); setState(() {}); }),
               const Spacer(),
-              ElevatedButton(
-                onPressed: () => g.closeMerchant(),
-                child: const Text('УЙТИ'),
-              ),
+              ElevatedButton(onPressed: g.closeMerchant, child: const Text('УЙТИ')),
             ],
           ),
         ),
       ),
     );
   }
-
   Widget _item(String title, int cost, VoidCallback buy) {
     final can = widget.game.scraps >= cost;
     return Card(
@@ -3224,12 +3854,7 @@ class _EventMerchantMenuState extends State<EventMerchantMenu> {
       child: ListTile(
         title: Text(title, style: const TextStyle(color: Colors.white)),
         trailing: Text('$cost', style: TextStyle(color: can ? const Color(0xFFFFD700) : Colors.white24)),
-        onTap: can
-            ? () {
-                widget.game.playClick();
-                buy();
-              }
-            : null,
+        onTap: can ? () { widget.game.playClick(); buy(); } : null,
       ),
     );
   }
@@ -3250,21 +3875,17 @@ class ClassSelectMenu extends StatelessWidget {
             children: [
               const Text('ВЫБОР ОРДО', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
               Text(game.playerName, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+              if (game.activeChallenge != RankChallenge.none)
+                Text('Испытание: ${game.activeChallenge.title}', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFFF8A65), fontSize: 12)),
               if (game.inquisitionRank.rank > 0)
-                Text(
-                  '${game.inquisitionRank.title} • +${(game.inquisitionRank.critBonus * 100).toStringAsFixed(0)}% крит • старт ${game.inquisitionRank.startScraps} обл.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 12),
-                ),
+                Text('${game.inquisitionRank.title} • +${(game.inquisitionRank.critBonus * 100).toStringAsFixed(0)}% крит', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 12)),
               const SizedBox(height: 12),
               Expanded(
-                child: ListView(
-                  children: [
-                    _card(PlayerClass.xenos, const Color(0xFFB71C1C), 'HP 6 • Скорость норм • Болтер'),
-                    _card(PlayerClass.malleus, const Color(0xFF1A237E), 'HP 5 • Медленнее • +12% пси • ДАЛЬНИЙ посох'),
-                    _card(PlayerClass.hereticus, const Color(0xFF4A148C), 'HP 5 • Быстрее • Рывок U'),
-                  ],
-                ),
+                child: ListView(children: [
+                  _card(PlayerClass.xenos, const Color(0xFFB71C1C), 'HP 6 • Болтер'),
+                  _card(PlayerClass.malleus, const Color(0xFF1A237E), 'HP 5 • Посох (перегрев Ψ)'),
+                  _card(PlayerClass.hereticus, const Color(0xFF4A148C), 'HP 5 • Рывок U'),
+                ]),
               ),
             ],
           ),
@@ -3272,7 +3893,6 @@ class ClassSelectMenu extends StatelessWidget {
       ),
     );
   }
-
   Widget _card(PlayerClass cls, Color accent, String stats) {
     return Card(
       color: const Color(0xFF1A1A1A),
@@ -3283,10 +3903,7 @@ class ClassSelectMenu extends StatelessWidget {
         subtitle: Text('${cls.subtitle}\n$stats', style: const TextStyle(color: Colors.white70, fontSize: 12)),
         isThreeLine: true,
         trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
-        onTap: () {
-          game.playClick();
-          game.confirmClass(cls);
-        },
+        onTap: () { game.playClick(); game.confirmClass(cls); },
       ),
     );
   }
@@ -3305,22 +3922,15 @@ class RewardMenu extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('НАГРАДА УРОВНЯ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              ...game.pendingRewards.map(
-                (o) => Card(
-                  color: const Color(0xFF1A1A1A),
-                  child: ListTile(
-                    title: Text(o.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    subtitle: Text(o.subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                    onTap: () {
-                      game.playClick();
-                      o.apply(game);
-                      game.finishRewardThenShop();
-                    },
-                  ),
-                ),
-              ),
+              const Text('НАГРАДА', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
+              ...game.pendingRewards.map((o) => Card(
+                    color: const Color(0xFF1A1A1A),
+                    child: ListTile(
+                      title: Text(o.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      subtitle: Text(o.subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      onTap: () { game.playClick(); o.apply(game); game.finishRewardThenShop(); },
+                    ),
+                  )),
             ],
           ),
         ),
@@ -3349,71 +3959,18 @@ class _ShopMenuState extends State<ShopMenu> {
             children: [
               const Text('МАГАЗИН', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
               Text('Обломки: ${g.scraps}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              _item('+2 HP', 8, () {
-                if (g.scraps < 8) return;
-                g.scraps -= 8;
-                if (g.world.children.whereType<Player>().isNotEmpty) {
-                  g.player.health = min(g.player.maxHealth, g.player.health + 2);
-                }
-                setState(() {});
-              }),
-              _item('+1 SP', 15, () {
-                if (g.scraps < 15) return;
-                g.scraps -= 15;
-                g.skillPoints++;
-                setState(() {});
-              }),
-              _item('Урон ×1.3', 12, () {
-                if (g.scraps < 12) return;
-                g.scraps -= 12;
-                g.tempDmgMult = 1.3;
-                g.tempDmgTimer = 9999;
-                setState(() {});
-              }),
-              _item('Щит 8с', 10, () {
-                if (g.scraps < 10) return;
-                g.scraps -= 10;
-                g.shieldTimer = max(g.shieldTimer, 8);
-                setState(() {});
-              }),
-              if (g.unlockedBarrelMods)
-                _item('Ствол: очередь', 18, () {
-                  if (g.scraps < 18) return;
-                  g.scraps -= 18;
-                  g.loadout.barrel = BarrelMod.rapid;
-                  g.recomputeStats();
-                  setState(() {});
-                }),
-              if (g.unlockedSightMods)
-                _item('Прицел: точность', 16, () {
-                  if (g.scraps < 16) return;
-                  g.scraps -= 16;
-                  g.loadout.sight = SightMod.precision;
-                  g.recomputeStats();
-                  setState(() {});
-                }),
-              if (g.unlockedAmmoMods)
-                _item('Боезапас: взрыв', 20, () {
-                  if (g.scraps < 20) return;
-                  g.scraps -= 20;
-                  g.loadout.ammo = AmmoMod.explosive;
-                  setState(() {});
-                }),
+              _item('+2 HP', 8, () { if (g.scraps < 8) return; g.scraps -= 8; if (g.world.children.whereType<Player>().isNotEmpty) g.player.health = min(g.player.maxHealth, g.player.health + 2); setState(() {}); }),
+              _item('+1 SP', 15, () { if (g.scraps < 15) return; g.scraps -= 15; g.skillPoints++; setState(() {}); }),
+              _item('Урон ×1.3', 12, () { if (g.scraps < 12) return; g.scraps -= 12; g.tempDmgMult = 1.3; g.tempDmgTimer = 9999; setState(() {}); }),
+              _item('Щит 8с', 10, () { if (g.scraps < 10) return; g.scraps -= 10; g.shieldTimer = max(g.shieldTimer, 8); setState(() {}); }),
               const Spacer(),
-              ElevatedButton(
-                onPressed: () {
-                  g.playClick();
-                  g.finishShopThenSkills();
-                },
-                child: const Text('ДАЛЬШЕ'),
-              ),
+              ElevatedButton(onPressed: () { g.playClick(); g.finishShopThenSkills(); }, child: const Text('ДАЛЬШЕ')),
             ],
           ),
         ),
       ),
     );
   }
-
   Widget _item(String title, int cost, VoidCallback buy) {
     final can = widget.game.scraps >= cost;
     return Card(
@@ -3421,12 +3978,7 @@ class _ShopMenuState extends State<ShopMenu> {
       child: ListTile(
         title: Text(title, style: const TextStyle(color: Colors.white)),
         trailing: Text('$cost', style: TextStyle(color: can ? const Color(0xFFFFD700) : Colors.white24)),
-        onTap: can
-            ? () {
-                widget.game.playClick();
-                buy();
-              }
-            : null,
+        onTap: can ? () { widget.game.playClick(); buy(); } : null,
       ),
     );
   }
@@ -3454,30 +4006,21 @@ class _SkillsMenuState extends State<SkillsMenu> {
               const Text('НАВЫКИ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
               Text('SP: ${g.skillPoints}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
               Expanded(
-                child: ListView(
-                  children: [
-                    _row('HP', s.hp, () => setState(() => g.spendSkill('hp'))),
-                    _row('Скорость', s.speed, () => setState(() => g.spendSkill('speed'))),
-                    _row('Скор. атаки', s.attackSpeed, () => setState(() => g.spendSkill('attackSpeed'))),
-                    _row('Защита', s.defense, () => setState(() => g.spendSkill('defense'))),
-                    _row('Урон', s.damage, () => setState(() => g.spendSkill('damage'))),
-                  ],
-                ),
+                child: ListView(children: [
+                  _row('HP', s.hp, () => setState(() => g.spendSkill('hp'))),
+                  _row('Скорость', s.speed, () => setState(() => g.spendSkill('speed'))),
+                  _row('Скор. атаки', s.attackSpeed, () => setState(() => g.spendSkill('attackSpeed'))),
+                  _row('Защита', s.defense, () => setState(() => g.spendSkill('defense'))),
+                  _row('Урон', s.damage, () => setState(() => g.spendSkill('damage'))),
+                ]),
               ),
-              ElevatedButton(
-                onPressed: () {
-                  g.playClick();
-                  g.finishSkillsAndContinue();
-                },
-                child: const Text('ПРОДОЛЖИТЬ'),
-              ),
+              ElevatedButton(onPressed: () { g.playClick(); g.finishSkillsAndContinue(); }, child: const Text('ПРОДОЛЖИТЬ')),
             ],
           ),
         ),
       ),
     );
   }
-
   Widget _row(String t, int rank, VoidCallback onAdd) {
     final can = widget.game.skillPoints > 0;
     return Card(
@@ -3485,15 +4028,7 @@ class _SkillsMenuState extends State<SkillsMenu> {
       child: ListTile(
         title: Text(t, style: const TextStyle(color: Colors.white)),
         subtitle: Text('ранг $rank', style: const TextStyle(color: Colors.white54)),
-        trailing: ElevatedButton(
-          onPressed: can
-              ? () {
-                  widget.game.playClick();
-                  onAdd();
-                }
-              : null,
-          child: const Text('+1'),
-        ),
+        trailing: ElevatedButton(onPressed: can ? () { widget.game.playClick(); onAdd(); } : null, child: const Text('+1')),
       ),
     );
   }
@@ -3509,6 +4044,7 @@ class _BackpackMenuState extends State<BackpackMenu> {
   @override
   Widget build(BuildContext context) {
     final g = widget.game;
+    final m = g.mastery;
     return Scaffold(
       backgroundColor: Colors.black.withOpacity(0.92),
       body: SafeArea(
@@ -3518,62 +4054,20 @@ class _BackpackMenuState extends State<BackpackMenu> {
             children: [
               const Text('РЮКЗАК', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
               Text('${g.playerName} • ${g.playerClass.title}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              Text('${g.inquisitionRank.title} (ранг ${g.inquisitionRank.rank})', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 12)),
-              _s('HP', '${g.player.health}/${g.maxHealth}'),
-              _s('Обломки', '${g.scraps}'),
-              _s('Скорость', '${g.playerSpeed.toInt()}'),
-              _s('Крит (ранг)', '${((g.hasCrit ? 15 : 0) + g.inquisitionRank.critBonus * 100).toStringAsFixed(0)}%'),
-              if (g.hasLaserAbility) _s('Лазер L', 'CD ${g.laserCooldown.toStringAsFixed(0)}s'),
-              if (g.hasJediPath) const Text('✦ Путь Джедая: клинок сбивает пули и очищает зоны', style: TextStyle(color: Color(0xFF81D4FA), fontSize: 12)),
+              if (g.setProgressHint.isNotEmpty)
+                Text(g.setProgressHint, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFFF8A65), fontSize: 11)),
               if (g.activeSynergyLabel != null)
-                Text('Синергия: ${g.activeSynergyLabel}', style: const TextStyle(color: Color(0xFFFF8A65), fontSize: 12)),
-              if (g.playerClass == PlayerClass.xenos)
-                const Text('Подсказка: Дробовик + взрывной боезапас = Прометий-конус', style: TextStyle(color: Colors.white38, fontSize: 11)),
-              if (g.playerClass == PlayerClass.hereticus)
-                const Text('Подсказка: Катана + убийство в ближнем = удлинённый рывок', style: TextStyle(color: Colors.white38, fontSize: 11)),
-              if (g.playerClass == PlayerClass.malleus)
-                const Text('Посох: увеличенная дальность волны и клинка', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                Text(g.activeSynergyLabel!, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 12)),
+              const SizedBox(height: 8),
+              const Text('Мастерство оружия', style: TextStyle(color: Color(0xFFFFD700))),
+              _m('Болтер', m.getCount('bolter'), 'каждые 50 → +1 снаряд'),
+              _m('Посох', m.getCount('staff'), 'каждые 40 → +10% радиус'),
+              _m('Меч', m.getCount('sword'), 'каждые 40 → +5% урон'),
+              _m('Катана', m.getCount('katana'), 'каждые 40 → +5% урон'),
               if (g.relics.isNotEmpty) ...[
                 const Text('Реликвии', style: TextStyle(color: Color(0xFFFFD700))),
                 ...g.relics.map((r) => Text('• ${r.title}', style: const TextStyle(color: Colors.white70, fontSize: 12))),
               ],
-              const SizedBox(height: 8),
-              const Text('Артефакт R', style: TextStyle(color: Color(0xFFFFD700))),
-              Wrap(
-                spacing: 6,
-                children: ActiveArtifact.values.map((a) {
-                  final sel = g.activeArtifact == a;
-                  return ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: sel ? const Color(0xFFBF360C) : const Color(0xFF2A2A2A),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    onPressed: () => setState(() => g.activeArtifact = a),
-                    child: Text(a.title, style: const TextStyle(fontSize: 11)),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 8),
-              const Text('Моды оружия', style: TextStyle(color: Color(0xFFFFD700))),
-              if (g.unlockedBarrelMods)
-                Wrap(spacing: 6, children: [
-                  _modBtn('Ствол: нет', g.loadout.barrel == BarrelMod.none, () => setState(() { g.loadout.barrel = BarrelMod.none; g.recomputeStats(); })),
-                  _modBtn('Очередь', g.loadout.barrel == BarrelMod.rapid, () => setState(() { g.loadout.barrel = BarrelMod.rapid; g.recomputeStats(); })),
-                  _modBtn('Тяжёлый', g.loadout.barrel == BarrelMod.heavy, () => setState(() { g.loadout.barrel = BarrelMod.heavy; g.recomputeStats(); })),
-                ]),
-              if (g.unlockedSightMods)
-                Wrap(spacing: 6, children: [
-                  _modBtn('Прицел: нет', g.loadout.sight == SightMod.none, () => setState(() { g.loadout.sight = SightMod.none; g.recomputeStats(); })),
-                  _modBtn('Точность', g.loadout.sight == SightMod.precision, () => setState(() { g.loadout.sight = SightMod.precision; g.recomputeStats(); })),
-                  _modBtn('Широкий', g.loadout.sight == SightMod.wide, () => setState(() { g.loadout.sight = SightMod.wide; g.recomputeStats(); })),
-                ]),
-              if (g.unlockedAmmoMods)
-                Wrap(spacing: 6, children: [
-                  _modBtn('Боезапас: нет', g.loadout.ammo == AmmoMod.none, () => setState(() => g.loadout.ammo = AmmoMod.none)),
-                  _modBtn('Рикошет', g.loadout.ammo == AmmoMod.ricochet, () => setState(() => g.loadout.ammo = AmmoMod.ricochet)),
-                  _modBtn('Взрыв', g.loadout.ammo == AmmoMod.explosive, () => setState(() => g.loadout.ammo = AmmoMod.explosive)),
-                  _modBtn('Пробитие', g.loadout.ammo == AmmoMod.pierce, () => setState(() => g.loadout.ammo = AmmoMod.pierce)),
-                ]),
               const SizedBox(height: 8),
               const Text('Дальний', style: TextStyle(color: Color(0xFFFFD700))),
               Wrap(spacing: 6, runSpacing: 6, children: _ranged()),
@@ -3588,13 +4082,14 @@ class _BackpackMenuState extends State<BackpackMenu> {
     );
   }
 
-  Widget _modBtn(String t, bool sel, VoidCallback on) => ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: sel ? const Color(0xFFB8860B) : const Color(0xFF2A2A2A),
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+  Widget _m(String name, int k, String hint) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Expanded(child: Text('$name: $k убийств', style: const TextStyle(color: Colors.white70, fontSize: 12))),
+            Text(hint, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+          ],
         ),
-        onPressed: on,
-        child: Text(t, style: const TextStyle(fontSize: 11)),
       );
 
   List<Widget> _ranged() {
@@ -3603,16 +4098,8 @@ class _BackpackMenuState extends State<BackpackMenu> {
     void add(String n, RangedWeapon w, bool u) {
       final sel = !g.usingMelee && g.rangedWeapon == w;
       list.add(ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: sel ? const Color(0xFFB8860B) : const Color(0xFF2A2A2A),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-        ),
-        onPressed: u
-            ? () => setState(() {
-                  g.rangedWeapon = w;
-                  g.usingMelee = false;
-                })
-            : null,
+        style: ElevatedButton.styleFrom(backgroundColor: sel ? const Color(0xFFB8860B) : const Color(0xFF2A2A2A), padding: const EdgeInsets.symmetric(horizontal: 10)),
+        onPressed: u ? () => setState(() { g.rangedWeapon = w; g.usingMelee = false; }) : null,
         child: Text(u ? n : '🔒$n', style: const TextStyle(fontSize: 12)),
       ));
     }
@@ -3642,16 +4129,8 @@ class _BackpackMenuState extends State<BackpackMenu> {
     void add(String n, MeleeWeapon w, bool u) {
       final sel = g.usingMelee && g.meleeWeapon == w;
       list.add(ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: sel ? const Color(0xFFB8860B) : const Color(0xFF2A2A2A),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-        ),
-        onPressed: u
-            ? () => setState(() {
-                  g.meleeWeapon = w;
-                  g.usingMelee = true;
-                })
-            : null,
+        style: ElevatedButton.styleFrom(backgroundColor: sel ? const Color(0xFFB8860B) : const Color(0xFF2A2A2A), padding: const EdgeInsets.symmetric(horizontal: 10)),
+        onPressed: u ? () => setState(() { g.meleeWeapon = w; g.usingMelee = true; }) : null,
         child: Text(u ? n : '🔒$n', style: const TextStyle(fontSize: 12)),
       ));
     }
@@ -3674,17 +4153,6 @@ class _BackpackMenuState extends State<BackpackMenu> {
     }
     return list;
   }
-
-  Widget _s(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(k, style: const TextStyle(color: Colors.white70)),
-            Text(v, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ],
-        ),
-      );
 }
 
 class CodexMenu extends StatelessWidget {
@@ -3697,38 +4165,32 @@ class CodexMenu extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('КОДЕКС ИНКВИЗИЦИИ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
-            ),
-            Text('${game.codexUnlocked.length} / ${CodexId.values.length}', style: const TextStyle(color: Colors.white54)),
+            const Padding(padding: EdgeInsets.all(16), child: Text('КОДЕКС ИНКВИЗИЦИИ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold))),
+            Text('${game.codexUnlocked.length} / ${CodexId.values.length} • знание ${game.loreAccepted.length}', style: const TextStyle(color: Colors.white54)),
             Expanded(
               child: ListView.builder(
                 itemCount: CodexId.values.length,
                 itemBuilder: (_, i) {
                   final id = CodexId.values[i];
                   final open = game.codexUnlocked.contains(id);
+                  final known = game.loreAccepted.contains(id);
                   return Card(
                     color: const Color(0xFF1A1A1A),
                     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     child: ExpansionTile(
                       title: Text(open ? id.title : '???', style: TextStyle(color: open ? const Color(0xFFFFD700) : Colors.white38)),
-                      subtitle: open ? Text(id.knowledgeBonus, style: const TextStyle(color: Colors.greenAccent, fontSize: 11)) : null,
+                      subtitle: open
+                          ? Text('${id.knowledgeBonus}${known ? " ✓" : ""}', style: TextStyle(color: known ? Colors.greenAccent : Colors.white54, fontSize: 11))
+                          : null,
                       children: open
                           ? [Padding(padding: const EdgeInsets.all(12), child: Text(id.lore, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.35)))]
-                          : [const Padding(padding: EdgeInsets.all(12), child: Text('Убейте цель, чтобы открыть запись.', style: TextStyle(color: Colors.white38)))],
+                          : [const Padding(padding: EdgeInsets.all(12), child: Text('Убейте цель, чтобы открыть.', style: TextStyle(color: Colors.white38)))],
                     ),
                   );
                 },
               ),
             ),
-            ElevatedButton(
-              onPressed: () {
-                game.playClick();
-                game.closeCodex();
-              },
-              child: const Text('НАЗАД'),
-            ),
+            ElevatedButton(onPressed: () { game.playClick(); game.closeCodex(); }, child: const Text('НАЗАД')),
           ],
         ),
       ),
@@ -3746,10 +4208,7 @@ class _NameInputMenuState extends State<NameInputMenu> {
   final c = TextEditingController();
   Difficulty diff = Difficulty.normal;
   @override
-  void dispose() {
-    c.dispose();
-    super.dispose();
-  }
+  void dispose() { c.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -3761,19 +4220,7 @@ class _NameInputMenuState extends State<NameInputMenu> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Text('ИМЯ ИНКВИЗИТОРА', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-              if (widget.game.inquisitionRank.rank > 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    '${widget.game.inquisitionRank.title} • побед: ${widget.game.inquisitionRank.wins}',
-                    style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 13),
-                  ),
-                ),
-              TextField(
-                controller: c,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(hintText: 'Имя...', hintStyle: TextStyle(color: Colors.white38)),
-              ),
+              TextField(controller: c, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Имя...', hintStyle: TextStyle(color: Colors.white38))),
               const SizedBox(height: 16),
               Row(children: [
                 _d(Difficulty.easy, Colors.green),
@@ -3783,32 +4230,19 @@ class _NameInputMenuState extends State<NameInputMenu> {
                 _d(Difficulty.hard, Colors.redAccent),
               ]),
               const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () => widget.game.confirmName(c.text, diff),
-                child: const Text('ДАЛЕЕ — КЛАСС'),
-              ),
-              TextButton(
-                onPressed: () {
-                  widget.game.overlays.remove('nameInput');
-                  widget.game.overlays.add('mainMenu');
-                },
-                child: const Text('НАЗАД', style: TextStyle(color: Colors.white54)),
-              ),
+              ElevatedButton(onPressed: () => widget.game.confirmName(c.text, diff), child: const Text('ДАЛЕЕ — ИСПЫТАНИЕ')),
+              TextButton(onPressed: () { widget.game.overlays.remove('nameInput'); widget.game.overlays.add('mainMenu'); }, child: const Text('НАЗАД', style: TextStyle(color: Colors.white54))),
             ],
           ),
         ),
       ),
     );
   }
-
   Widget _d(Difficulty d, Color color) {
     final sel = diff == d;
     return Expanded(
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: sel ? color : const Color(0xFF1A1A1A),
-          side: BorderSide(color: color),
-        ),
+        style: ElevatedButton.styleFrom(backgroundColor: sel ? color : const Color(0xFF1A1A1A), side: BorderSide(color: color)),
         onPressed: () => setState(() => diff = d),
         child: Text(d.labelRu, style: TextStyle(color: sel ? Colors.white : color, fontSize: 13)),
       ),
@@ -3849,10 +4283,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
     });
   }
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  void dispose() { _controller.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext context) {
     final rank = widget.game.inquisitionRank;
@@ -3865,52 +4296,20 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  'SOUL OF THE\nINQUISITOR',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Color(0xFFFFD700),
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    height: 1.15,
-                    shadows: [Shadow(color: Colors.redAccent, blurRadius: 14)],
-                  ),
-                ),
+                const Text('SOUL OF THE\nINQUISITOR', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 32, fontWeight: FontWeight.w900, height: 1.15, shadows: [Shadow(color: Colors.redAccent, blurRadius: 14)])),
                 const Text('by Инквизитор Данте', style: TextStyle(color: Color(0xFFB8860B), fontSize: 14)),
                 if (rank.rank > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      '${rank.title} • побед ${rank.wins} • +${(rank.critBonus * 100).toStringAsFixed(0)}% крит',
-                      style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 12),
-                    ),
-                  ),
+                  Text('${rank.title} • побед ${rank.wins}', style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 12)),
                 const SizedBox(height: 24),
-                _btn('НАЧАТЬ ИГРУ', () {
-                  widget.game.playClick();
-                  widget.game.openNameInput();
-                }),
+                _btn('НАЧАТЬ ИГРУ', () { widget.game.playClick(); widget.game.openNameInput(); }),
                 const SizedBox(height: 8),
-                _btn('ЗАГРУЗИТЬ', () {
-                  widget.game.playClick();
-                  widget.game.openLoadSave();
-                }),
+                _btn('ЗАГРУЗИТЬ', () { widget.game.playClick(); widget.game.openLoadSave(); }),
                 const SizedBox(height: 8),
-                _btn('КОДЕКС', () {
-                  widget.game.playClick();
-                  widget.game.openCodex();
-                }),
+                _btn('КОДЕКС', () { widget.game.playClick(); widget.game.openCodex(); }),
                 const SizedBox(height: 8),
-                _btn('РЕКОРДЫ', () {
-                  widget.game.playClick();
-                  widget.game.overlays.remove('mainMenu');
-                  widget.game.overlays.add('records');
-                }),
+                _btn('РЕКОРДЫ', () { widget.game.playClick(); widget.game.overlays.remove('mainMenu'); widget.game.overlays.add('records'); }),
                 const SizedBox(height: 8),
-                _btn('НАСТРОЙКИ', () {
-                  widget.game.playClick();
-                  widget.game.openSettings();
-                }),
+                _btn('НАСТРОЙКИ', () { widget.game.playClick(); widget.game.openSettings(); }),
               ],
             ),
           ),
@@ -3918,15 +4317,10 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
       ),
     );
   }
-
   Widget _btn(String text, VoidCallback onTap) => SizedBox(
         width: 260,
         child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1A1A1A),
-            side: const BorderSide(color: Color(0xFFB8860B)),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-          ),
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A1A1A), side: const BorderSide(color: Color(0xFFB8860B)), padding: const EdgeInsets.symmetric(vertical: 12)),
           onPressed: onTap,
           child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))),
         ),
@@ -3938,7 +4332,6 @@ class _MS {
   String char;
   _MS(this.x, this.y, this.speed, this.char, this.opacity);
 }
-
 class _MP extends CustomPainter {
   final List<_MS> symbols;
   _MP(this.symbols);
@@ -3946,10 +4339,7 @@ class _MP extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final tp = TextPainter(textDirection: TextDirection.ltr);
     for (final s in symbols) {
-      tp.text = TextSpan(
-        text: s.char,
-        style: TextStyle(color: Color.fromRGBO(0, 255, 70, s.opacity), fontSize: 14 + s.speed * 4, fontFamily: 'monospace'),
-      );
+      tp.text = TextSpan(text: s.char, style: TextStyle(color: Color.fromRGBO(0, 255, 70, s.opacity), fontSize: 14 + s.speed * 4, fontFamily: 'monospace'));
       tp.layout();
       tp.paint(canvas, Offset(s.x * size.width, s.y * size.height));
     }
@@ -3968,10 +4358,7 @@ class LoadSaveMenu extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('ЗАГРУЗИТЬ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-            ),
+            const Padding(padding: EdgeInsets.all(16), child: Text('ЗАГРУЗИТЬ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold))),
             Expanded(
               child: game.saves.isEmpty
                   ? const Center(child: Text('Нет сохранений', style: TextStyle(color: Colors.white54)))
@@ -3983,27 +4370,14 @@ class LoadSaveMenu extends StatelessWidget {
                           color: const Color(0xFF1A1A1A),
                           child: ListTile(
                             title: Text(s.name, style: const TextStyle(color: Color(0xFFFFD700))),
-                            subtitle: Text(
-                              '${s.playerClass} • F${s.floor}/L${s.level} • ${s.scraps} обл.\n${s.dateStr}',
-                              style: const TextStyle(color: Colors.white70, fontSize: 12),
-                            ),
-                            isThreeLine: true,
-                            onTap: () {
-                              game.playClick();
-                              game.loadSave(s);
-                            },
+                            subtitle: Text('${s.playerClass} • F${s.floor} • ${s.dateStr}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                            onTap: () { game.playClick(); game.loadSave(s); },
                           ),
                         );
                       },
                     ),
             ),
-            ElevatedButton(
-              onPressed: () {
-                game.overlays.remove('loadSave');
-                game.overlays.add('mainMenu');
-              },
-              child: const Text('НАЗАД'),
-            ),
+            ElevatedButton(onPressed: () { game.overlays.remove('loadSave'); game.overlays.add('mainMenu'); }, child: const Text('НАЗАД')),
           ],
         ),
       ),
@@ -4022,10 +4396,6 @@ class RecordsMenu extends StatelessWidget {
         child: Column(
           children: [
             const Text('РЕКОРДЫ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 28, fontWeight: FontWeight.bold)),
-            Text(
-              '${game.inquisitionRank.title} • побед: ${game.inquisitionRank.wins}',
-              style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 12),
-            ),
             Expanded(
               child: game.highScores.isEmpty
                   ? const Center(child: Text('Пусто', style: TextStyle(color: Colors.white54)))
@@ -4036,22 +4406,12 @@ class RecordsMenu extends StatelessWidget {
                         return ListTile(
                           title: Text('${i + 1}. ${e.name}', style: const TextStyle(color: Colors.white)),
                           subtitle: Text(e.progressStr, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                          trailing: Text(
-                            '${e.score}\n${e.timeStr}',
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(color: Color(0xFFFFD700), fontSize: 13),
-                          ),
+                          trailing: Text('${e.score}\n${e.timeStr}', textAlign: TextAlign.right, style: const TextStyle(color: Color(0xFFFFD700), fontSize: 13)),
                         );
                       },
                     ),
             ),
-            ElevatedButton(
-              onPressed: () {
-                game.overlays.remove('records');
-                game.overlays.add('mainMenu');
-              },
-              child: const Text('НАЗАД'),
-            ),
+            ElevatedButton(onPressed: () { game.overlays.remove('records'); game.overlays.add('mainMenu'); }, child: const Text('НАЗАД')),
           ],
         ),
       ),
@@ -4078,84 +4438,23 @@ class _SettingsMenuState extends State<SettingsMenu> {
           padding: const EdgeInsets.all(20),
           children: [
             const Text('НАСТРОЙКИ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
-            Text('Ранг: ${g.inquisitionRank.title} (${g.inquisitionRank.rank})', style: const TextStyle(color: Color(0xFF81D4FA))),
             Text('Джойстик ${g.joystickSize.toInt()}', style: const TextStyle(color: Colors.white)),
             Slider(value: g.joystickSize, min: 55, max: 120, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.joystickSize = v)),
             Text('Кнопки ${g.buttonSize.toInt()}', style: const TextStyle(color: Colors.white)),
             Slider(value: g.buttonSize, min: 28, max: 65, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.buttonSize = v)),
-            SwitchListTile(
-              title: const Text('Звуки', style: TextStyle(color: Colors.white)),
-              value: g.soundEnabled,
-              activeColor: const Color(0xFFFFD700),
-              onChanged: (v) => setState(() => g.soundEnabled = v),
-            ),
-            Slider(
-              value: g.soundVolume,
-              min: 0,
-              max: 1,
-              activeColor: const Color(0xFFFFD700),
-              onChanged: g.soundEnabled ? (v) => setState(() => g.soundVolume = v) : null,
-            ),
-            SwitchListTile(
-              title: const Text('Музыка', style: TextStyle(color: Colors.white)),
-              value: g.musicEnabled,
-              activeColor: const Color(0xFFFFD700),
-              onChanged: (v) {
-                setState(() {
-                  g.musicEnabled = v;
-                  g.applyMusicSetting();
-                });
-              },
-            ),
-            Slider(
-              value: g.musicVolume,
-              min: 0,
-              max: 1,
-              activeColor: const Color(0xFFFFD700),
-              onChanged: g.musicEnabled
-                  ? (v) {
-                      setState(() {
-                        g.musicVolume = v;
-                        g._bgmPlayer?.setVolume(v);
-                      });
-                    }
-                  : null,
-            ),
+            SwitchListTile(title: const Text('Звуки', style: TextStyle(color: Colors.white)), value: g.soundEnabled, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.soundEnabled = v)),
+            SwitchListTile(title: const Text('Музыка', style: TextStyle(color: Colors.white)), value: g.musicEnabled, activeColor: const Color(0xFFFFD700), onChanged: (v) { setState(() { g.musicEnabled = v; g.applyMusicSetting(); }); }),
+            Slider(value: g.musicVolume, min: 0, max: 1, activeColor: const Color(0xFFFFD700), onChanged: g.musicEnabled ? (v) { setState(() { g.musicVolume = v; g._bgmPlayer?.setVolume(v); }); } : null),
             const Text('ЦВЕТА', style: TextStyle(color: Color(0xFFFFD700))),
             Slider(value: c.armorHue.toDouble(), min: 0, max: 360, activeColor: c.armorColor(0.4), onChanged: (v) => setState(() => c.armorHue = v.round())),
             Slider(value: c.capeHue.toDouble(), min: 0, max: 360, activeColor: c.capeColor(0.4), onChanged: (v) => setState(() => c.capeHue = v.round())),
             Slider(value: c.weaponHue.toDouble(), min: 0, max: 360, activeColor: c.weaponColor(0.45), onChanged: (v) => setState(() => c.weaponHue = v.round())),
             if (g.isPlaying) ...[
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-                onPressed: () async {
-                  await g.saveGame();
-                  setState(() => _saveMsg = 'OK');
-                },
-                child: const Text('СОХРАНИТЬ'),
-              ),
+              ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)), onPressed: () async { await g.saveGame(); setState(() => _saveMsg = 'OK'); }, child: const Text('СОХРАНИТЬ')),
               if (_saveMsg != null) Text(_saveMsg!, style: const TextStyle(color: Colors.greenAccent)),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C)),
-                onPressed: () {
-                  g.playClick();
-                  g.exitMatch();
-                },
-                child: const Text('ВЫХОД'),
-              ),
+              ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C)), onPressed: () { g.playClick(); g.exitMatch(); }, child: const Text('ВЫХОД')),
             ],
-            ElevatedButton(
-              onPressed: () {
-                g.playClick();
-                if (g.isPlaying) {
-                  g.closeSettings();
-                } else {
-                  g.persistCustomization();
-                  g.backToMenu();
-                }
-              },
-              child: Text(g.isPlaying ? 'В БОЙ' : 'НАЗАД'),
-            ),
+            ElevatedButton(onPressed: () { g.playClick(); if (g.isPlaying) g.closeSettings(); else { g.persistCustomization(); g.backToMenu(); } }, child: Text(g.isPlaying ? 'В БОЙ' : 'НАЗАД')),
           ],
         ),
       ),
@@ -4174,7 +4473,7 @@ class LevelCompleteMenu extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('УРОВЕНЬ ПРОЙДЕН', style: TextStyle(color: Colors.greenAccent, fontSize: 26, fontWeight: FontWeight.bold)),
+            const Text('УЗЕЛ ПРОЙДЕН', style: TextStyle(color: Colors.greenAccent, fontSize: 26, fontWeight: FontWeight.bold)),
             Text('Очки ${game.score} • Обломки ${game.scraps}', style: const TextStyle(color: Colors.white)),
             ElevatedButton(onPressed: game.nextLevel, child: const Text('ДАЛЬШЕ')),
           ],
@@ -4196,22 +4495,11 @@ class VictoryMenu extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text('ИСПЫТАНИЕ ПРОЙДЕНО', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
-            Text('${game.playerName} • ${game.playerClass.title}', style: const TextStyle(color: Colors.white)),
-            Text('${game.inquisitionRank.title} • побед: ${game.inquisitionRank.wins}', style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 13)),
-            ElevatedButton(
-              onPressed: () {
-                game.playClick();
-                game.finishAfterVictory();
-              },
-              child: const Text('ЗАКОНЧИТЬ'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                game.playClick();
-                game.startArena();
-              },
-              child: const Text('АРЕНА'),
-            ),
+            Text('${game.playerName} • ${game.inquisitionRank.title}', style: const TextStyle(color: Colors.white)),
+            if (game.activeChallenge != RankChallenge.none)
+              Text(game.challengeBossMeleeOk || game.activeChallenge == RankChallenge.noDash ? 'Испытание выполнено (+ранг)' : 'Испытание провалено', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            ElevatedButton(onPressed: () { game.playClick(); game.finishAfterVictory(); }, child: const Text('ЗАКОНЧИТЬ')),
+            ElevatedButton(onPressed: () { game.playClick(); game.startArena(); }, child: const Text('АРЕНА')),
           ],
         ),
       ),
@@ -4232,7 +4520,6 @@ class GameOverMenu extends StatelessWidget {
           children: [
             const Text('ИНКВИЗИТОР ПАЛ', style: TextStyle(color: Colors.redAccent, fontSize: 26, fontWeight: FontWeight.bold)),
             Text('${game.playerName}: ${game.score}', style: const TextStyle(color: Colors.white)),
-            Text(game.playerClass.title, style: const TextStyle(color: Colors.white54)),
             ElevatedButton(onPressed: game.openNameInput, child: const Text('СНОВА')),
             ElevatedButton(onPressed: game.backToMenu, child: const Text('МЕНЮ')),
           ],
@@ -4325,11 +4612,11 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     final base = game.usingMelee
         ? (game.meleeWeapon == MeleeWeapon.hammer || game.meleeWeapon == MeleeWeapon.daemonHammer ? 0.78 : 0.42)
         : switch (game.rangedWeapon) {
-            RangedWeapon.bolter => 0.28,
+            RangedWeapon.bolter => 0.28 + game.bolterHeat * 0.35,
             RangedWeapon.rifle => 0.55,
             RangedWeapon.shotgun => 0.72,
-            RangedWeapon.staff => 0.48,
-            RangedWeapon.stormStaff => 0.55,
+            RangedWeapon.staff => 0.48 + game.staffWarpStress * 0.25,
+            RangedWeapon.stormStaff => 0.55 + game.staffWarpStress * 0.3,
             RangedWeapon.warpBeam => 0.70,
             RangedWeapon.daggers => 0.22,
             RangedWeapon.needles => 0.32,
@@ -4344,6 +4631,9 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
     for (final o in game.world.children.whereType<Obstacle>()) {
       if (next.distanceTo(o.position) < 40) return false;
+    }
+    for (final b in game.world.children.whereType<BreakableBarrel>()) {
+      if (next.distanceTo(b.position) < 36) return false;
     }
     return true;
   }
@@ -4362,6 +4652,27 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
         weapon: game.meleeWeapon,
       )..priority = 15);
     } else {
+      // Overheat: bolter
+      if (game.rangedWeapon == RangedWeapon.bolter || game.rangedWeapon == RangedWeapon.rifle) {
+        game.bolterHeat = min(1.0, game.bolterHeat + 0.08);
+        if (game.bolterHeat >= 0.95) {
+          // jam — skip shot, force cooldown
+          attackTimer = 0.8;
+          game.spawnDamageNumber(position, 0, color: const Color(0xFFFF6D00), label: 'ПЕРЕГРЕВ');
+          return;
+        }
+      }
+      // Warp stress: staff
+      if (game.rangedWeapon == RangedWeapon.staff ||
+          game.rangedWeapon == RangedWeapon.stormStaff ||
+          game.rangedWeapon == RangedWeapon.warpBeam) {
+        game.staffWarpStress = min(1.0, game.staffWarpStress + 0.10);
+        if (game.staffWarpStress >= 0.85) {
+          takeDamage(1);
+          applyStatus(StatusType.corruption, 1.5, tickDamage: 1);
+          game.spawnDamageNumber(position, 1, color: const Color(0xFF9C27B0), label: 'ВАРП');
+        }
+      }
       game.playShoot();
       _ranged(dir);
     }
@@ -4394,7 +4705,12 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     final origin = position + dir * 32;
     switch (game.rangedWeapon) {
       case RangedWeapon.bolter:
-        _bullet(origin, dir, game.bolterDamage, const Color(0xFFFF6D00), 520, 5);
+        final extra = game.mastery.bolterExtraShots(1);
+        for (int i = 0; i < extra; i++) {
+          final spread = extra > 1 ? (i - (extra - 1) / 2) * 0.08 : 0.0;
+          final a = atan2(dir.y, dir.x) + spread;
+          _bullet(origin, Vector2(cos(a), sin(a)), game.bolterDamage, const Color(0xFFFF6D00), 520, 5);
+        }
         if (game.loadout.barrel == BarrelMod.rapid) {
           Future.delayed(const Duration(milliseconds: 70), () {
             if (isMounted) _bullet(origin, dir, game.bolterDamage, const Color(0xFFFF6D00), 520, 5);
@@ -4429,21 +4745,23 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
         }
         break;
       case RangedWeapon.staff:
+        final rad = 160.0 * game.mastery.staffRadiusMult();
         game.world.add(PsyWave(
           position: origin.clone(),
           direction: dir,
           damage: game.scaleDamage(game.staffDamage),
-          maxRadius: 160,
+          maxRadius: rad,
         )..priority = 13);
         break;
       case RangedWeapon.stormStaff:
+        final rad = 140.0 * game.mastery.staffRadiusMult();
         for (final o in [-0.35, 0.0, 0.35]) {
           final a = atan2(dir.y, dir.x) + o;
           game.world.add(PsyWave(
             position: origin.clone(),
             direction: Vector2(cos(a), sin(a)),
             damage: game.scaleDamage((game.stormDamage * 0.7).round()),
-            maxRadius: 140,
+            maxRadius: rad,
           )..priority = 13);
         }
         break;
@@ -4506,7 +4824,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle) {
+    if (other is Wall || other is Obstacle || other is BreakableBarrel) {
       position += (position - intersectionPoints.first).normalized() * 8;
     }
   }
@@ -4583,14 +4901,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
     canvas.restore();
     if (game.invulnTimer > 0) {
-      canvas.drawCircle(
-        Offset(cx, cy),
-        40,
-        Paint()
-          ..color = const Color(0xFF81D4FA).withOpacity(0.25)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3,
-      );
+      canvas.drawCircle(Offset(cx, cy), 40, Paint()..color = const Color(0xFF81D4FA).withOpacity(0.25)..style = PaintingStyle.stroke..strokeWidth = 3);
     }
     if (game.shieldTimer > 0 || game.holyAuraTimer > 0) {
       canvas.drawCircle(
@@ -4601,6 +4912,13 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
           ..style = PaintingStyle.stroke
           ..strokeWidth = 3,
       );
+    }
+    // Heat bar under player
+    if (game.bolterHeat > 0.05 && !game.usingMelee) {
+      canvas.drawRect(Rect.fromLTWH(cx - 24, size.y - 4, 48 * game.bolterHeat, 4), Paint()..color = Color.lerp(const Color(0xFFFFEB3B), const Color(0xFFFF1744), game.bolterHeat)!);
+    }
+    if (game.staffWarpStress > 0.05 && !game.usingMelee) {
+      canvas.drawRect(Rect.fromLTWH(cx - 24, size.y, 48 * game.staffWarpStress, 4), Paint()..color = const Color(0xFF9C27B0));
     }
     WHDraw.statusIcons(canvas, cx, -8, statuses);
   }
@@ -4632,23 +4950,26 @@ class PsyWave extends PositionComponent with HasGameReference<InquisitorGame>, C
       other.applyStatus(StatusType.corruption, 1.5, tickDamage: 1);
     }
     if (other is MiniBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is Boss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is KnightBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is KingBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is Boss && hit.add(other.hashCode)) {
+      other.takeDamage(damage);
+      game.noteBossDamagedByRanged();
+    }
+    if (other is KnightBoss && hit.add(other.hashCode)) {
+      other.takeDamage(damage);
+      game.noteBossDamagedByRanged();
+    }
+    if (other is KingBoss && hit.add(other.hashCode)) {
+      other.takeDamage(damage);
+      game.noteBossDamagedByRanged();
+    }
     if (other is TentacleBoss && hit.add(other.hashCode)) other.takeDamage(damage);
     if (other is CyclopsBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is BreakableBarrel) other.hit();
   }
   @override
   void render(Canvas canvas) {
     final a = (1 - radius / maxRadius).clamp(0.0, 1.0);
-    canvas.drawCircle(
-      Offset(size.x / 2, size.y / 2),
-      radius,
-      Paint()
-        ..color = Color.fromRGBO(124, 77, 255, 0.35 * a)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6,
-    );
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), radius, Paint()..color = Color.fromRGBO(124, 77, 255, 0.35 * a)..style = PaintingStyle.stroke..strokeWidth = 6);
   }
 }
 
@@ -4674,9 +4995,18 @@ class CyclopsLaserBeam extends PositionComponent with HasGameReference<Inquisito
     super.onCollision(intersectionPoints, other);
     if (other is Enemy && hit.add(other.hashCode)) other.applyDamage(damage);
     if (other is MiniBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is Boss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is KnightBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is KingBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    if (other is Boss && hit.add(other.hashCode)) {
+      other.takeDamage(damage);
+      game.noteBossDamagedByRanged();
+    }
+    if (other is KnightBoss && hit.add(other.hashCode)) {
+      other.takeDamage(damage);
+      game.noteBossDamagedByRanged();
+    }
+    if (other is KingBoss && hit.add(other.hashCode)) {
+      other.takeDamage(damage);
+      game.noteBossDamagedByRanged();
+    }
     if (other is TentacleBoss && hit.add(other.hashCode)) other.takeDamage(damage);
     if (other is CyclopsBoss && hit.add(other.hashCode)) other.takeDamage(damage);
   }
@@ -4722,6 +5052,11 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
   }
   void _hitEnemy(Enemy e) {
     if (!hitIds.add(e.hashCode)) return;
+    // Reflect affix
+    if (e.affix == EliteAffix.reflect && Random().nextDouble() < 0.25) {
+      game.world.add(EnemyBullet(position: e.position.clone(), direction: (game.player.position - e.position).normalized(), damage: 1)..priority = 16);
+      game.spawnDamageNumber(e.position, 0, color: const Color(0xFFE040FB), label: 'ОТРАЖ');
+    }
     e.applyDamage(damage);
     if (applyBurn || explosive) e.applyStatus(StatusType.burn, 2.0 + game.codexBurnBonus, tickDamage: 1);
     if (explosive) {
@@ -4739,14 +5074,17 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
     if (other is Boss) {
       other.takeDamage(damage);
+      game.noteBossDamagedByRanged();
       if (!pierce) removeFromParent();
     }
     if (other is KnightBoss) {
       other.takeDamage(damage);
+      game.noteBossDamagedByRanged();
       if (!pierce) removeFromParent();
     }
     if (other is KingBoss) {
       other.takeDamage(damage);
+      game.noteBossDamagedByRanged();
       if (!pierce) removeFromParent();
     }
     if (other is TentacleBoss) {
@@ -4757,10 +5095,14 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
       other.takeDamage(damage);
       if (!pierce) removeFromParent();
     }
+    if (other is BreakableBarrel) {
+      other.hit();
+      if (!pierce) removeFromParent();
+    }
     if (other is Wall || other is Obstacle) {
       if (ricochet && bounces < 2) {
         bounces++;
-        velocity.x *= -1;
+        velocity.setValues(-velocity.x, velocity.y);
       } else {
         if (explosive) {
           game.world.add(KillExplosion(position: position.clone(), radius: 50, damage: damage ~/ 3)..priority = 12);
@@ -4811,13 +5153,11 @@ class MeleeAttack extends PositionComponent with HasGameReference<InquisitorGame
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    // Jedi Path: destroy bullets
     if (game.hasJediPath && (other is EnemyBullet || other is BossProjectile)) {
       other.removeFromParent();
       game.spawnDamageNumber(other.position, 0, color: const Color(0xFF81D4FA), label: '✦');
       return;
     }
-    // Jedi Path: purify corruption zones
     if (game.hasJediPath && other is CorruptionZone) {
       other.purify();
       return;
@@ -4833,6 +5173,7 @@ class MeleeAttack extends PositionComponent with HasGameReference<InquisitorGame
     if (other is TentacleBoss && hit.add(other.hashCode)) other.takeDamage(damage);
     if (other is CyclopsBoss && hit.add(other.hashCode)) other.takeDamage(damage);
     if (other is Obstacle && hit.add(other.hashCode)) other.removeFromParent();
+    if (other is BreakableBarrel) other.hit();
   }
   @override
   void render(Canvas canvas) {
@@ -4846,11 +5187,19 @@ class MeleeAttack extends PositionComponent with HasGameReference<InquisitorGame
 }
 
 class EnemyBullet extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 velocity;
+  Vector2 velocity;
   final int damage;
+  final BulletMod mod;
   double life = 3.5;
-  EnemyBullet({required Vector2 position, required Vector2 direction, required this.damage, double speed = 180})
-      : velocity = direction.normalized() * speed,
+  int bounces = 0;
+  bool didSplit = false;
+  EnemyBullet({
+    required Vector2 position,
+    required Vector2 direction,
+    required this.damage,
+    double speed = 180,
+    this.mod = BulletMod.normal,
+  })  : velocity = direction.normalized() * speed,
         super(position: position.clone(), size: Vector2(14, 14), anchor: Anchor.center, priority: 16);
   @override
   Future<void> onLoad() async => add(CircleHitbox());
@@ -4866,14 +5215,38 @@ class EnemyBullet extends PositionComponent with HasGameReference<InquisitorGame
     super.onCollision(intersectionPoints, other);
     if (other is Player) {
       other.takeDamage(damage);
+      if (mod == BulletMod.slow) other.applyStatus(StatusType.slow, 1.8);
+      if (mod == BulletMod.split && !didSplit) {
+        didSplit = true;
+        final base = atan2(velocity.y, velocity.x);
+        for (final o in [-0.4, 0.4]) {
+          game.world.add(EnemyBullet(
+            position: position.clone(),
+            direction: Vector2(cos(base + o), sin(base + o)),
+            damage: max(1, damage - 1),
+            speed: 160,
+          )..priority = 16);
+        }
+      }
       removeFromParent();
     }
-    if (other is Wall || other is Obstacle) removeFromParent();
+    if (other is Wall || other is Obstacle) {
+      if (mod == BulletMod.ricochet && bounces < 2) {
+        bounces++;
+        velocity = Vector2(-velocity.x, velocity.y);
+      } else {
+        removeFromParent();
+      }
+    }
     if (other is MeleeAttack && game.hasJediPath) removeFromParent();
   }
   @override
   void render(Canvas canvas) {
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 6, Paint()..color = const Color(0xFF76FF03));
+    Color col = const Color(0xFF76FF03);
+    if (mod == BulletMod.slow) col = const Color(0xFF4FC3F7);
+    if (mod == BulletMod.ricochet) col = const Color(0xFFFFEB3B);
+    if (mod == BulletMod.split) col = const Color(0xFFFF8A65);
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 6, Paint()..color = col);
   }
 }
 
@@ -4935,15 +5308,21 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   final int floor;
   final EnemyType type;
   final bool isChampion;
+  final EliteAffix affix;
   late int maxHp;
   late int currentHp;
   double attackTimer = 0;
   double hurtFlash = 0;
+  double regenTimer = 0;
   final List<StatusEffect> statuses = [];
   bool _dead = false;
 
-  Enemy({required this.floor, required this.type, this.isChampion = false})
-      : super(
+  Enemy({
+    required this.floor,
+    required this.type,
+    this.isChampion = false,
+    this.affix = EliteAffix.none,
+  }) : super(
           size: Vector2(type == EnemyType.brute ? 88 : 70, type == EnemyType.brute ? 88 : 70),
           anchor: Anchor.center,
           priority: 30,
@@ -5013,8 +5392,13 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       _dead = true;
       final pos = position.clone();
       final meleeKill = game.usingMelee;
+      // Explosive death
+      if (affix == EliteAffix.explosive) {
+        game.world.add(KillExplosion(position: pos.clone(), radius: 85, damage: 10 + game.overallLevel)..priority = 12);
+        game.triggerShake(power: 7, time: 0.15);
+      }
       removeFromParent();
-      game.onEnemyKilled(at: pos, isChampion: isChampion, type: type, meleeKill: meleeKill);
+      game.onEnemyKilled(at: pos, isChampion: isChampion, type: type, meleeKill: meleeKill, affix: affix);
     }
   }
 
@@ -5024,6 +5408,15 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
     if (!game.isPlaying || game.isPaused || _dead) return;
     _tickStatuses(dt);
+
+    // Regenerating affix
+    if (affix == EliteAffix.regenerating && currentHp < maxHp) {
+      regenTimer += dt;
+      if (regenTimer >= 1.2) {
+        regenTimer = 0;
+        currentHp = min(maxHp, currentHp + max(1, maxHp ~/ 25));
+      }
+    }
 
     final toP = game.player.position - position;
     final dist = toP.length;
@@ -5037,6 +5430,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       EnemyType.melee => 110.0,
     };
     if (isChampion) spd *= 1.1;
+    if (affix == EliteAffix.swift) spd *= 1.45;
     if (statuses.any((e) => e.type == StatusType.slow)) spd *= 0.6;
     spd *= (0.95 + game.difficulty.dmgMult * 0.05);
 
@@ -5069,6 +5463,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       attackTimer = 0;
       final dir = dist > 1 ? toP / dist : Vector2(0, 1);
       final dmg = (1 * game.difficulty.dmgMult * (isChampion ? 1.4 : 1.0)).ceil();
+      final bmod = game.rollBulletMod();
       switch (type) {
         case EnemyType.melee:
         case EnemyType.dog:
@@ -5080,10 +5475,10 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
           break;
         case EnemyType.shooter:
         case EnemyType.shieldedShooter:
-          game.world.add(EnemyBullet(position: position.clone(), direction: dir, damage: dmg)..priority = 16);
+          game.world.add(EnemyBullet(position: position.clone(), direction: dir, damage: dmg, mod: bmod)..priority = 16);
           break;
         case EnemyType.sniper:
-          game.world.add(EnemyBullet(position: position.clone(), direction: dir, damage: dmg + 1, speed: 260)..priority = 16);
+          game.world.add(EnemyBullet(position: position.clone(), direction: dir, damage: dmg + 1, speed: 260, mod: bmod)..priority = 16);
           break;
         case EnemyType.flamer:
           game.world.add(FlamerCloud(position: position + dir * 40)..priority = 11);
@@ -5096,7 +5491,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle) {
+    if (other is Wall || other is Obstacle || other is BreakableBarrel) {
       final n = (position - intersectionPoints.first).normalized();
       position += n * 12;
       avoidDir = Vector2(-n.y, n.x);
@@ -5139,7 +5534,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       Rect.fromLTWH(cx - barW / 2, -10, barW * (currentHp / maxHp), 5),
       Paint()..color = isChampion ? const Color(0xFFFFD700) : const Color(0xFFE53935),
     );
-    if (isChampion) WHDraw.championMark(canvas, cx, -18);
+    if (isChampion) WHDraw.championMark(canvas, cx, -18, affix: affix);
     WHDraw.statusIcons(canvas, cx, -26, statuses);
   }
 }
@@ -5264,19 +5659,9 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.hereticBoss(canvas, cx, cy, 1.15, flash: hurtFlash / 0.12);
     if (isEcho) {
-      canvas.drawCircle(
-        Offset(cx, cy),
-        48,
-        Paint()
-          ..color = const Color(0xFF9C27B0).withOpacity(0.3)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3,
-      );
+      canvas.drawCircle(Offset(cx, cy), 48, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 3);
     }
-    canvas.drawRect(
-      Rect.fromLTWH(cx - 40, -16, 80 * (currentHp / maxHp), 7),
-      Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF9800),
-    );
+    canvas.drawRect(Rect.fromLTWH(cx - 40, -16, 80 * (currentHp / maxHp), 7), Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF9800));
     WHDraw.statusIcons(canvas, cx, -28, statuses);
   }
 }
@@ -5286,6 +5671,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   late int maxHp;
   late int currentHp;
   int hardBars = 1;
+  int _lastBar = 0;
   double attackTimer = 0;
   double telegraphTimer = 0;
   bool telegraphing = false;
@@ -5302,11 +5688,13 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     final mult = isEcho ? 0.6 : 1.0;
     maxHp = ((160 + floor * 40) * game.difficulty.bossHpMult * game.worldThreat * mult).round();
     currentHp = maxHp;
+    _lastBar = hardBars;
     add(CircleHitbox(radius: 50));
     if (!isEcho) game.unlockCodex(CodexId.boss);
   }
 
   int get _barHp => max(1, maxHp ~/ hardBars);
+  int get _barsLeft => ((currentHp - 1) ~/ _barHp) + 1;
 
   void applyStatus(StatusType t, double dur, {int tickDamage = 1}) {
     final ex = statuses.where((e) => e.type == t).toList();
@@ -5321,11 +5709,15 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     currentHp -= amount;
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF5252));
+    // Cinema zoom when losing a hard bar
+    if (hardBars > 1 && _barsLeft < _lastBar) {
+      _lastBar = _barsLeft;
+      game.triggerCinemaZoom();
+    }
     if (currentHp <= 0) {
       final pos = position.clone();
       removeFromParent();
       game.spawnBlood(pos, count: 28);
-      // zone left via registerKill(isBoss) inside onEnemyKilled
       game.onEnemyKilled(
         isBoss: true,
         at: pos,
@@ -5462,6 +5854,7 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   late int maxHp;
   late int currentHp;
   int hardBars = 1;
+  int _lastBar = 0;
   double attackTimer = 0;
   double telegraphTimer = 0;
   bool telegraphing = false;
@@ -5478,11 +5871,13 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     final mult = isEcho ? 0.6 : 1.0;
     maxHp = ((180 + floor * 45) * game.difficulty.bossHpMult * game.worldThreat * mult).round();
     currentHp = maxHp;
+    _lastBar = hardBars;
     add(CircleHitbox(radius: 48));
     if (!isEcho) game.unlockCodex(CodexId.knight);
   }
 
   int get _barHp => max(1, maxHp ~/ hardBars);
+  int get _barsLeft => ((currentHp - 1) ~/ _barHp) + 1;
 
   void applyStatus(StatusType t, double dur, {int tickDamage = 1}) {
     final ex = statuses.where((e) => e.type == t).toList();
@@ -5497,6 +5892,10 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     currentHp -= amount;
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFF90CAF9));
+    if (hardBars > 1 && _barsLeft < _lastBar) {
+      _lastBar = _barsLeft;
+      game.triggerCinemaZoom();
+    }
     if (currentHp <= 0) {
       final pos = position.clone();
       removeFromParent();
@@ -5799,6 +6198,7 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     if (phase == 1 && currentHp <= phaseHp) {
       phase = 2;
       phase2Timer = 0;
+      game.triggerCinemaZoom();
       game.triggerShake(power: 12, time: 0.35);
     }
     if (currentHp <= 0) {
@@ -5937,6 +6337,7 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
         phaseTimer = 0;
         meleeHitsLeft = game.difficulty == Difficulty.hard ? 8 : 6;
         meleeGap = 0;
+        game.triggerCinemaZoom();
         game.triggerShake(power: 10, time: 0.3);
       }
     } else {
@@ -6162,6 +6563,7 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
       if (currentHp <= maxHp ~/ 2) {
         phase = 2;
         phaseTimer = 0;
+        game.triggerCinemaZoom();
         game.triggerShake(power: 11, time: 0.3);
       }
     } else {
