@@ -1743,7 +1743,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   double get codexRangedBonus {
     var b = (codexUnlocked.contains(CodexId.shooter) ? 0.02 : 0) + (codexUnlocked.contains(CodexId.sniper) ? 0.02 : 0);
     b += _loreBonus(CodexId.shooter, 0.01) + _loreBonus(CodexId.sniper, 0.01);
-    return b;
+    return b.toDoudle();
   }
 
   double get codexMeleeBonus {
@@ -1751,13 +1751,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     for (final id in [CodexId.melee, CodexId.dog, CodexId.brute, CodexId.bloodletter]) {
       b += _loreBonus(id, 0.01);
     }
-    return b;
+    return b.toDoudle();
   }
 
   double get codexShieldBonus {
     var b = [CodexId.shielded, CodexId.shieldedShooter].where(codexUnlocked.contains).length * 0.03;
     b += _loreBonus(CodexId.shielded, 0.01) + _loreBonus(CodexId.shieldedShooter, 0.01);
-    return b;
+    return b.toDoudle();
   }
 
   double get codexBossBonus {
@@ -1771,7 +1771,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     ]) {
       b += _loreBonus(id, 0.01);
     }
-    return b;
+    return b.toDoudle();
   }
 
   double get codexEliteScrapBonus =>
@@ -2625,7 +2625,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (highScores.length > 15) highScores = highScores.take(15).toList();
     _persistScores();
   }
-}
   List<Vector2> getEnemySpawnPointsRaw() {
     final cx = mapWidth / 2, cy = mapHeight / 2;
     switch (((currentFloor - 1) % 5) + 1) {
