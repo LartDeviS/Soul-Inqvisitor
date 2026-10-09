@@ -411,7 +411,7 @@ class WeaponMastery {
     final k = getCount('bolter');
     var extra = (k ~/ 50).clamp(0, 3);
     if (ammoSavant) extra += (k ~/ 80).clamp(0, 1);
-    if (xenosSynergy && k >= 50) extra = max(extra, 1); // always at least +1 after 50
+    if (xenosSynergy && k >= 50) extra = extra < 1 ? 1 : extra;
     return base + extra;
   }
 
@@ -419,9 +419,12 @@ class WeaponMastery {
   double meleeMasteryMult(String key) => 1.0 + (getCount(key) ~/ 40) * 0.05;
 
   Map<String, dynamic> toJson() => Map<String, dynamic>.from(kills);
+
   factory WeaponMastery.fromJson(Map<String, dynamic>? j) {
     final m = WeaponMastery();
-    if (j != null) j.forEach((k, v) => m.kills[k] = (v as num?)?.toInt() ?? 0);
+    if (j != null) {
+      j.forEach((k, v) => m.kills[k] = (v as num?)?.toInt() ?? 0);
+    }
     return m;
   }
 }
@@ -1743,7 +1746,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   double get codexRangedBonus {
     var b = (codexUnlocked.contains(CodexId.shooter) ? 0.02 : 0) + (codexUnlocked.contains(CodexId.sniper) ? 0.02 : 0);
     b += _loreBonus(CodexId.shooter, 0.01) + _loreBonus(CodexId.sniper, 0.01);
-    return b.toDoudle();
+    return b.toDouble();
   }
 
   double get codexMeleeBonus {
@@ -1751,13 +1754,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     for (final id in [CodexId.melee, CodexId.dog, CodexId.brute, CodexId.bloodletter]) {
       b += _loreBonus(id, 0.01);
     }
-    return b.toDoudle();
+    return b.toDouble();
   }
 
   double get codexShieldBonus {
     var b = [CodexId.shielded, CodexId.shieldedShooter].where(codexUnlocked.contains).length * 0.03;
     b += _loreBonus(CodexId.shielded, 0.01) + _loreBonus(CodexId.shieldedShooter, 0.01);
-    return b.toDoudle();
+    return b.toDouble();
   }
 
   double get codexBossBonus {
@@ -1771,7 +1774,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     ]) {
       b += _loreBonus(id, 0.01);
     }
-    return b.toDoudle();
+    return b.toDouble();
   }
 
   double get codexEliteScrapBonus =>
