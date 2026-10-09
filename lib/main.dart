@@ -404,6 +404,7 @@ class InquisitionRank {
 
 class WeaponMastery {
   final Map<String, int> kills = {};
+  WeaponMastery();
   int getCount(String key) => kills[key] ?? 0;
   void addKill(String key) => kills[key] = getCount(key) + 1;
 
