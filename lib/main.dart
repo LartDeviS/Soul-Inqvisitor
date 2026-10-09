@@ -3279,7 +3279,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
     return false;
   }
-  @override
+    @override
   void update(double dt) {
     super.update(dt);
     if (!isPlaying || isPaused) return;
