@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:ui' as ui;
 
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
-import 'package:flame/effects.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flame/input.dart';
@@ -13,9 +11,7 @@ import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// ═══════════════════════════════════════════════════════════════
-// ENUMS
-// ═══════════════════════════════════════════════════════════════
+// ─── ENUMS ───────────────────────────────────────────────────
 
 enum Difficulty { easy, normal, hard }
 
@@ -49,38 +45,38 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy:
         return 0.75;
       case Difficulty.normal:
-        return 1.0;
+        return 1.15;
       case Difficulty.hard:
-        return 1.45;
+        return 1.70;
     }
   }
 
   double get dmgMult {
     switch (this) {
       case Difficulty.easy:
-        return 0.8;
+        return 0.70;
       case Difficulty.normal:
-        return 1.0;
+        return 1.05;
       case Difficulty.hard:
-        return 1.35;
+        return 1.45;
     }
   }
 
   double get bossHpMult {
     switch (this) {
       case Difficulty.easy:
-        return 0.7;
+        return 0.80;
       case Difficulty.normal:
-        return 1.0;
+        return 1.20;
       case Difficulty.hard:
-        return 1.5;
+        return 1.85;
     }
   }
 }
 
 enum PlayerClass { xenos, malleus, hereticus }
 
-extension PlayerClassX on PlayerClass {
+extension ClassLabel on PlayerClass {
   String get title {
     switch (this) {
       case PlayerClass.xenos:
@@ -95,9 +91,9 @@ extension PlayerClassX on PlayerClass {
   String get subtitle {
     switch (this) {
       case PlayerClass.xenos:
-        return 'Болтер и стальной клинок';
+        return 'Болтер, винтовка, дробовик';
       case PlayerClass.malleus:
-        return 'Псайкер: посох и варп';
+        return 'Псайкер: посох и варп Ψ';
       case PlayerClass.hereticus:
         return 'Ассасин: рывок и клинки';
     }
@@ -144,13 +140,14 @@ enum EnemyType {
 
 enum StatusType { burn, bleed, slow, corruption, plague }
 
-enum ActiveArtifact { none, fragGrenade, holyAura, servoTurret }
+enum ActiveArtifact { fragGrenade, holyAura, servoTurret }
 
 enum RelicId {
-  critCharm,
-  vampirism,
+  crit,
+  lifesteal,
   shieldPierce,
   killExplosion,
+  haste,
   jediPath,
   ammoSavant,
   warpAnchor,
@@ -160,31 +157,33 @@ enum RelicId {
   scavenger,
 }
 
-extension RelicX on RelicId {
+extension RelicMeta on RelicId {
   String get title {
     switch (this) {
-      case RelicId.critCharm:
-        return 'Талисман крита';
-      case RelicId.vampirism:
-        return 'Вампиризм';
+      case RelicId.crit:
+        return 'Око Императора';
+      case RelicId.lifesteal:
+        return 'Кровавая печать';
       case RelicId.shieldPierce:
-        return 'Пробитие щита';
+        return 'Иглы веры';
       case RelicId.killExplosion:
-        return 'Взрыв при убийстве';
+        return 'Разряд очищения';
+      case RelicId.haste:
+        return 'Шаги святого';
       case RelicId.jediPath:
         return 'Путь Джедая';
       case RelicId.ammoSavant:
-        return 'Мастер боезапаса';
+        return 'Арсенал Адептус';
       case RelicId.warpAnchor:
-        return 'Якорь варпа';
+        return 'Якорь Варпа';
       case RelicId.shadowStep:
-        return 'Теневой шаг';
+        return 'Тень аколита';
       case RelicId.ironWill:
         return 'Железная воля';
       case RelicId.executionerMark:
         return 'Метка палача';
       case RelicId.scavenger:
-        return 'Падальщик';
+        return 'Сборщик трофеев';
     }
   }
 }
@@ -194,6 +193,7 @@ enum CodexId {
   melee,
   shielded,
   dog,
+  shieldedShooter,
   flamer,
   sniper,
   brute,
@@ -204,31 +204,34 @@ enum CodexId {
   boss,
   knight,
   king,
-  plagueLord,
-  bloodChampion,
   tentacle,
   cyclops,
+  champion,
+  plagueLord,
+  bloodChampion,
 }
 
-extension CodexX on CodexId {
+extension CodexMeta on CodexId {
   String get title {
     switch (this) {
       case CodexId.shooter:
         return 'Культист-стрелок';
       case CodexId.melee:
-        return 'Культист ближнего боя';
+        return 'Культист-клинок';
       case CodexId.shielded:
-        return 'Щитовик';
+        return 'Еретик со щитом';
       case CodexId.dog:
         return 'Хаос-гончая';
+      case CodexId.shieldedShooter:
+        return 'Щитовой стрелок';
       case CodexId.flamer:
         return 'Огнемётчик';
       case CodexId.sniper:
-        return 'Снайпер культа';
+        return 'Снайпер';
       case CodexId.brute:
-        return 'Громила';
+        return 'Зверь культа';
       case CodexId.cultPsyker:
-        return 'Псайкер культа';
+        return 'Культист-псайкер';
       case CodexId.plagueBearer:
         return 'Носитель чумы';
       case CodexId.bloodletter:
@@ -236,99 +239,106 @@ extension CodexX on CodexId {
       case CodexId.miniBoss:
         return 'Мини-босс';
       case CodexId.boss:
-        return 'Еретик-лорд';
+        return 'Чемпион ереси';
       case CodexId.knight:
-        return 'Рыцарь Хаоса';
+        return 'Рыцарь-отступник';
       case CodexId.king:
-        return 'Король боссов';
+        return 'Король еретиков';
+      case CodexId.tentacle:
+        return 'Тентаклевый ужас';
+      case CodexId.cyclops:
+        return 'Циклоп Варпа';
+      case CodexId.champion:
+        return 'Чемпион-элита';
       case CodexId.plagueLord:
         return 'Повелитель чумы';
       case CodexId.bloodChampion:
         return 'Кровавый чемпион';
-      case CodexId.tentacle:
-        return 'Тентаклевый ужас';
-      case CodexId.cyclops:
-        return 'Циклоп';
     }
   }
 
   String get lore {
     switch (this) {
       case CodexId.shooter:
-        return 'Пехота культа: медленные болты, держат дистанцию.';
+        return 'Кустарные болтеры культа. Держат дистанцию.';
       case CodexId.melee:
-        return 'Фанатики с цепными клинками. Опасны вплотную.';
+        return 'Клинок — молитва Кхорну. Не дай им коснуться.';
       case CodexId.shielded:
-        return 'Болтер почти бесполезен — бей мечом.';
+        return 'Щит из обломков. Бей ближним.';
       case CodexId.dog:
-        return 'Быстрые твари. Высокий урон, низкое HP.';
+        return 'Быстрые твари из ульев.';
+      case CodexId.shieldedShooter:
+        return 'Щит и очередь — двойная угроза.';
       case CodexId.flamer:
-        return 'Облака огня. Не стой в лужах.';
+        return 'Прометий культа. Не стой в огне.';
       case CodexId.sniper:
-        return 'Дальний выстрел с замедлением.';
+        return 'Один выстрел — один труп.';
       case CodexId.brute:
-        return 'Толстая броня и тяжёлый удар.';
+        return 'Толстая броня, тяжёлый удар.';
       case CodexId.cultPsyker:
-        return 'Варп-залпы веером, замедление.';
+        return 'Волны варпа. Приоритет ликвидации.';
       case CodexId.plagueBearer:
-        return 'Чума: DoT при касании.';
+        return 'Чума при касании. Огонь и вера.';
       case CodexId.bloodletter:
-        return 'Кровотечение при ударе.';
+        return 'Жаждут ближнего боя.';
       case CodexId.miniBoss:
-        return 'Дробовик-культист. Телеграф конусом.';
+        return 'Дробовик-лейтенант культа.';
       case CodexId.boss:
-        return 'Кольцо / конус / крест. Отступает после залпа.';
+        return 'Залпы кольцом/конусом/крестом.';
       case CodexId.knight:
-        return 'Рывок и удар. Ближний фокус.';
+        return 'Рывок и удар в упор.';
       case CodexId.king:
-        return 'Неуязвим, пока жива свита. Две фазы.';
+        return 'Неуязвим, пока жива свита.';
+      case CodexId.tentacle:
+        return 'Секрет: угол 33с. 6666 HP.';
+      case CodexId.cyclops:
+        return 'Секрет: лазер из глаза.';
+      case CodexId.champion:
+        return 'Элита с аффиксом.';
       case CodexId.plagueLord:
-        return 'Реген и призыв носителей чумы.';
+        return 'Реген и призыв чумы.';
       case CodexId.bloodChampion:
         return 'Ярость растёт с потерей HP.';
-      case CodexId.tentacle:
-        return 'Секрет 5 этажа. 6666 HP, кольцо и slam.';
-      case CodexId.cyclops:
-        return 'Секрет 10 этажа. Лазер из глаза.';
     }
   }
 
   String get knowledgeBonus {
     switch (this) {
       case CodexId.shooter:
+      case CodexId.sniper:
+        return '+2% урон по стрелкам';
       case CodexId.melee:
       case CodexId.dog:
-        return '+1% урон по пехоте';
-      case CodexId.shielded:
-        return '+2% пробитие щита';
-      case CodexId.flamer:
-      case CodexId.sniper:
       case CodexId.brute:
-        return '+1% урон';
-      case CodexId.cultPsyker:
-        return '+2% к варп-урону';
-      case CodexId.plagueBearer:
-        return '+5% сопротивление чуме';
       case CodexId.bloodletter:
-        return '+5% сопротивление кровотечению';
-      case CodexId.miniBoss:
+        return '+2% урон в ближнем';
+      case CodexId.shielded:
+      case CodexId.shieldedShooter:
+        return '+3% пробитие щитов';
+      case CodexId.flamer:
+      case CodexId.plagueBearer:
+        return '+1с к DoT';
+      case CodexId.cultPsyker:
+        return '+5% сопротивление варпу';
+      case CodexId.champion:
+        return '+5% обломков с элит';
       case CodexId.boss:
       case CodexId.knight:
-        return '+2% урон боссам';
       case CodexId.king:
+      case CodexId.miniBoss:
       case CodexId.plagueLord:
       case CodexId.bloodChampion:
         return '+3% урон боссам';
       case CodexId.tentacle:
       case CodexId.cyclops:
-        return '+1% ко всему урону';
+        return '+1 SP за секрет';
     }
   }
 }
 
 enum EliteAffix { none, swift, regenerating, explosive, reflect, summoner }
 
-extension EliteAffixX on EliteAffix {
+extension AffixMeta on EliteAffix {
   String get letter {
     switch (this) {
       case EliteAffix.none:
@@ -342,14 +352,14 @@ extension EliteAffixX on EliteAffix {
       case EliteAffix.reflect:
         return 'F';
       case EliteAffix.summoner:
-        return 'Σ';
+        return 'N';
     }
   }
 
   Color get color {
     switch (this) {
       case EliteAffix.none:
-        return const Color(0xFFFFD700);
+        return Colors.transparent;
       case EliteAffix.swift:
         return const Color(0xFF00E5FF);
       case EliteAffix.regenerating:
@@ -365,32 +375,27 @@ extension EliteAffixX on EliteAffix {
 }
 
 enum PathNodeKind { combat, event, elite, rest, boss }
-
 enum EventRoomType { none, altar, merchant, trap }
-
 enum EchoBossKind { none, mini, ranged, knight, king, plague, blood }
-
 enum BulletMod { normal, slow, ricochet, split }
-
 enum GunBarrelMod { none, rapid, heavy }
 enum GunSightMod { none, precision, wide }
-enum GunAmmoMod { none, explosive, ricochet, pierce }
-enum StaffFocusMod { none, wideSphere, focused, dissipator }
-enum BladeEdgeMod { none, serrated, mono, weighted }
-
+enum GunAmmoMod { none, ricochet, explosive, pierce }
+enum StaffFocusMod { none, wideSphere, focusCore, dissipator }
+enum BladeEdgeMod { none, serrated, monomolecular, weighted }
 enum RankPerk { none, startSp, scrapBonus }
+enum RankChallenge { none, meleeBossOnly, noDash }
+enum RewardKind { skillPoint, scraps, heal, relic }
 
-enum RankChallenge { none, meleeOnlyBoss, noDash }
-
-extension RankChallengeX on RankChallenge {
+extension ChallengeMeta on RankChallenge {
   String get title {
     switch (this) {
       case RankChallenge.none:
         return 'Без испытания';
-      case RankChallenge.meleeOnlyBoss:
-        return 'Только клинок';
+      case RankChallenge.meleeBossOnly:
+        return 'Клинок Императора';
       case RankChallenge.noDash:
-        return 'Без рывка';
+        return 'Стоять насмерть';
     }
   }
 
@@ -398,36 +403,33 @@ extension RankChallengeX on RankChallenge {
     switch (this) {
       case RankChallenge.none:
         return 'Обычный забег';
-      case RankChallenge.meleeOnlyBoss:
-        return 'Босс этажа — только ближний бой';
+      case RankChallenge.meleeBossOnly:
+        return 'Боссов — только ближний. +ранг.';
       case RankChallenge.noDash:
-        return 'Нельзя использовать рывок (U)';
+        return 'Рывок U запрещён. +ранг.';
     }
   }
 }
 
-enum RewardKind { skillPoint, scraps, heal, relic }
-
-// ─── ACHIEVEMENTS (рынок: Soul Knight / Hades / Gungeon / VS) ───
 enum AchievementId {
-  firstBlood, // первое убийство
-  noKills, // 5 мин на уровне без убийств + портал
-  bossSlayer, // убить любого босса
-  secretTentacle, // секрет 5
-  secretCyclops, // секрет 10
-  clearEasy, // пройти easy
+  firstBlood,
+  noKills,
+  bossSlayer,
+  secretTentacle,
+  secretCyclops,
+  clearEasy,
   clearNormal,
   clearHard,
-  arena50, // 50 убийств на арене
+  arena50,
   arena100,
-  combo15, // комбо x15
-  fullCodex, // все записи кодекса
-  allClasses, // сыграть всеми классами (хотя бы 1 забег каждый)
-  ironWillProc, // сработала железная воля
-  relicHunter, // 5 реликвий за один забег
-  scrapHoarder, // 100 обломков за забег
-  timedPortal, // воспользоваться порталом по таймеру 5 мин
-  championHunter, // убить 10 чемпионов суммарно
+  combo15,
+  fullCodex,
+  allClasses,
+  ironWillProc,
+  relicHunter,
+  scrapHoarder,
+  timedPortal,
+  championHunter,
 }
 
 extension AchievementX on AchievementId {
@@ -477,68 +479,52 @@ extension AchievementX on AchievementId {
       case AchievementId.firstBlood:
         return 'Убейте любого врага';
       case AchievementId.noKills:
-        return '5 минут на уровне без убийств, уйдите порталом';
+        return '5 мин без убийств + уход порталом';
       case AchievementId.bossSlayer:
-        return 'Победите любого босса этажа';
+        return 'Победите любого босса';
       case AchievementId.secretTentacle:
-        return 'Убейте секретного босса (1–5, угол 33с)';
+        return 'Секрет 1–5, угол 33с';
       case AchievementId.secretCyclops:
-        return 'Убейте Циклопа (2–5, угол 33с)';
+        return 'Секрет 2–5 / 10, угол 33с';
       case AchievementId.clearEasy:
         return 'Пройдите кампанию на Лёгком';
       case AchievementId.clearNormal:
-        return 'Пройдите кампанию на Норме';
+        return 'Пройдите на Норме';
       case AchievementId.clearHard:
-        return 'Пройдите кампанию на Харде';
+        return 'Пройдите на Харде';
       case AchievementId.arena50:
-        return '50 убийств на арене за один заход';
+        return '50 убийств на арене';
       case AchievementId.arena100:
-        return '100 убийств на арене за один заход';
+        return '100 убийств на арене';
       case AchievementId.combo15:
-        return 'Достигните комбо x15';
+        return 'Комбо x15';
       case AchievementId.fullCodex:
-        return 'Откройте все записи кодекса';
+        return 'Все записи кодекса';
       case AchievementId.allClasses:
-        return 'Сыграйте за каждый ордо хотя бы раз';
+        return 'Сыграйте всеми ордо';
       case AchievementId.ironWillProc:
-        return 'Выживите благодаря Железной воле';
+        return 'Сработала Железная воля';
       case AchievementId.relicHunter:
-        return 'Соберите 5 реликвий за один забег';
+        return '5 реликвий за забег';
       case AchievementId.scrapHoarder:
-        return 'Накопите 100 обломков за забег';
+        return '100 обломков за забег';
       case AchievementId.timedPortal:
-        return 'Уйдите порталом, появившимся через 5 минут';
+        return 'Портал через 5 минут';
       case AchievementId.championHunter:
-        return 'Убейте 10 элитных чемпионов (суммарно)';
+        return '10 чемпионов суммарно';
     }
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// HUD LAYOUT — позиции и размеры (настройки + фикс в бою)
-// ═══════════════════════════════════════════════════════════════
+// ─── HUD LAYOUT ──────────────────────────────────────────────
 
-/// Нормализованные якоря 0..1 от краёв экрана (удобно под любой размер).
 class HudLayout {
   double joystickSize;
   double buttonSize;
-
-  // Move joystick: left-bottom
-  double moveX; // от левого края
-  double moveY; // от нижнего края
-
-  // Attack joystick: right-bottom
-  double atkX;
-  double atkY;
-
-  // Extra buttons (from right / from top or bottom)
-  double settingsX, settingsY; // top-right area
-  double backpackX, backpackY;
-  double dashX, dashY; // near attack stick
-  double laserX, laserY;
-  double artifactX, artifactY;
-  double warpX, warpY;
-  double portalBtnX, portalBtnY;
+  double moveX, moveY, atkX, atkY;
+  double settingsX, settingsY, backpackX, backpackY;
+  double dashX, dashY, laserX, laserY, artifactX, artifactY;
+  double warpX, warpY, portalBtnX, portalBtnY;
 
   HudLayout({
     this.joystickSize = 90,
@@ -562,6 +548,29 @@ class HudLayout {
     this.portalBtnX = 0.50,
     this.portalBtnY = 0.88,
   });
+
+  void reset() {
+    joystickSize = 90;
+    buttonSize = 42;
+    moveX = 0.12;
+    moveY = 0.18;
+    atkX = 0.88;
+    atkY = 0.18;
+    settingsX = 0.94;
+    settingsY = 0.08;
+    backpackX = 0.82;
+    backpackY = 0.08;
+    dashX = 0.72;
+    dashY = 0.32;
+    laserX = 0.80;
+    laserY = 0.32;
+    artifactX = 0.88;
+    artifactY = 0.38;
+    warpX = 0.64;
+    warpY = 0.32;
+    portalBtnX = 0.50;
+    portalBtnY = 0.88;
+  }
 
   Map<String, dynamic> toJson() => {
         'js': joystickSize,
@@ -611,34 +620,56 @@ class HudLayout {
       portalBtnY: (j['py'] as num?)?.toDouble() ?? 0.88,
     );
   }
+}
 
-  void reset() {
-    joystickSize = 90;
-    buttonSize = 42;
-    moveX = 0.12;
-    moveY = 0.18;
-    atkX = 0.88;
-    atkY = 0.18;
-    settingsX = 0.94;
-    settingsY = 0.08;
-    backpackX = 0.82;
-    backpackY = 0.08;
-    dashX = 0.72;
-    dashY = 0.32;
-    laserX = 0.80;
-    laserY = 0.32;
-    artifactX = 0.88;
-    artifactY = 0.38;
-    warpX = 0.64;
-    warpY = 0.32;
-    portalBtnX = 0.50;
-    portalBtnY = 0.88;
+// ─── DATA CLASSES (с явными конструкторами!) ─────────────────
+
+class SkillTree {
+  int hp = 0, speed = 0, attackSpeed = 0, defense = 0, damage = 0;
+  SkillTree(); // обязательно
+
+  Map<String, dynamic> toJson() => {
+        'hp': hp,
+        'sp': speed,
+        'as': attackSpeed,
+        'df': defense,
+        'dm': damage,
+      };
+
+  factory SkillTree.fromJson(Map<String, dynamic>? j) {
+    if (j == null) return SkillTree();
+    return SkillTree()
+      ..hp = j['hp'] as int? ?? 0
+      ..speed = j['sp'] as int? ?? 0
+      ..attackSpeed = j['as'] as int? ?? 0
+      ..defense = j['df'] as int? ?? 0
+      ..damage = j['dm'] as int? ?? 0;
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// DATA CLASSES
-// ═══════════════════════════════════════════════════════════════
+class Customization {
+  int armorHue = 0;
+  int capeHue = 0;
+  int weaponHue = 200;
+  Customization(); // обязательно
+
+  Color armorColor([double s = 0.35]) =>
+      HSLColor.fromAHSL(1, armorHue.toDouble(), s, 0.35).toColor();
+  Color capeColor([double s = 0.55]) =>
+      HSLColor.fromAHSL(1, capeHue.toDouble(), s, 0.4).toColor();
+  Color weaponColor([double s = 0.5]) =>
+      HSLColor.fromAHSL(1, weaponHue.toDouble(), s, 0.55).toColor();
+
+  Map<String, dynamic> toJson() => {'a': armorHue, 'c': capeHue, 'w': weaponHue};
+
+  factory Customization.fromJson(Map<String, dynamic>? j) {
+    if (j == null) return Customization();
+    return Customization()
+      ..armorHue = j['a'] as int? ?? 0
+      ..capeHue = j['c'] as int? ?? 0
+      ..weaponHue = j['w'] as int? ?? 200;
+  }
+}
 
 class WeaponLoadout {
   GunBarrelMod gunBarrel;
@@ -680,52 +711,18 @@ class WeaponLoadout {
   }
 }
 
-class SkillTree {
-  int hp = 0, speed = 0, attackSpeed = 0, defense = 0, damage = 0;
-  Map<String, dynamic> toJson() => {
-        'hp': hp,
-        'sp': speed,
-        'as': attackSpeed,
-        'df': defense,
-        'dm': damage,
-      };
-  factory SkillTree.fromJson(Map<String, dynamic>? j) {
-    if (j == null) return SkillTree();
-    return SkillTree()
-      ..hp = j['hp'] as int? ?? 0
-      ..speed = j['sp'] as int? ?? 0
-      ..attackSpeed = j['as'] as int? ?? 0
-      ..defense = j['df'] as int? ?? 0
-      ..damage = j['dm'] as int? ?? 0;
-  }
-}
-
-class Customization {
-  int armorHue = 0;
-  int capeHue = 0;
-  int weaponHue = 200;
-  Color armorColor([double s = 0.35]) => HSLColor.fromAHSL(1, armorHue.toDouble(), s, 0.35).toColor();
-  Color capeColor([double s = 0.55]) => HSLColor.fromAHSL(1, capeHue.toDouble(), s, 0.4).toColor();
-  Color weaponColor([double s = 0.5]) => HSLColor.fromAHSL(1, weaponHue.toDouble(), s, 0.55).toColor();
-  Map<String, dynamic> toJson() => {'a': armorHue, 'c': capeHue, 'w': weaponHue};
-  factory Customization.fromJson(Map<String, dynamic>? j) {
-    if (j == null) return Customization();
-    return Customization()
-      ..armorHue = j['a'] as int? ?? 0
-      ..capeHue = j['c'] as int? ?? 0
-      ..weaponHue = j['w'] as int? ?? 200;
-  }
-}
-
 class InquisitionRank {
   int wins;
   RankPerk chosenPerk;
   InquisitionRank({this.wins = 0, this.chosenPerk = RankPerk.none});
+
   int get rank => (wins ~/ 2).clamp(0, 20);
   double get critBonus => rank * 0.01;
-  int get startScraps => rank * 3 + (chosenPerk == RankPerk.scrapBonus ? (rank * 0.05 * 20).round() : 0);
+  int get startScraps =>
+      rank * 3 + (chosenPerk == RankPerk.scrapBonus ? (rank * 0.05 * 20).round() : 0);
   int get startSpBonus => chosenPerk == RankPerk.startSp ? 1 : 0;
   double get scrapMult => chosenPerk == RankPerk.scrapBonus ? 1.05 : 1.0;
+
   String get title {
     if (rank <= 0) return 'Новичок';
     if (rank <= 3) return 'Адепт';
@@ -736,18 +733,22 @@ class InquisitionRank {
   }
 
   Map<String, dynamic> toJson() => {'wins': wins, 'perk': chosenPerk.name};
+
   factory InquisitionRank.fromJson(Map<String, dynamic>? j) {
     if (j == null) return InquisitionRank();
     return InquisitionRank(
       wins: j['wins'] as int? ?? 0,
-      chosenPerk: RankPerk.values.firstWhere((e) => e.name == j['perk'], orElse: () => RankPerk.none),
+      chosenPerk: RankPerk.values.firstWhere(
+        (e) => e.name == j['perk'],
+        orElse: () => RankPerk.none,
+      ),
     );
   }
 }
 
 class WeaponMastery {
   final Map<String, int> kills = {};
-  WeaponMastery(); // generative — обязателен при наличии factory
+  WeaponMastery(); // обязательно
 
   int getCount(String key) => kills[key] ?? 0;
   void addKill(String key) => kills[key] = getCount(key) + 1;
@@ -764,6 +765,7 @@ class WeaponMastery {
   double meleeMasteryMult(String key) => 1.0 + (getCount(key) ~/ 40) * 0.05;
 
   Map<String, dynamic> toJson() => Map<String, dynamic>.from(kills);
+
   factory WeaponMastery.fromJson(Map<String, dynamic>? j) {
     final m = WeaponMastery();
     if (j != null) {
@@ -785,7 +787,10 @@ class StatusEffect {
   final double tickEvery;
   double tickAcc;
   final int tickDamage;
-  StatusEffect(this.type, this.remaining, {this.tickEvery = 0.5, this.tickDamage = 1}) : tickAcc = 0;
+
+  StatusEffect(this.type, this.remaining, {this.tickEvery = 0.5, this.tickDamage = 1})
+      : tickAcc = 0;
+
   Color get color {
     switch (type) {
       case StatusType.burn:
@@ -799,6 +804,30 @@ class StatusEffect {
       case StatusType.plague:
         return const Color(0xFF8BC34A);
     }
+  }
+}
+
+class AchievementState {
+  final Set<String> unlocked = {};
+  final Set<String> classesPlayed = {};
+  int championsKilledTotal = 0;
+  AchievementState(); // обязательно
+
+  bool has(AchievementId id) => unlocked.contains(id.name);
+
+  Map<String, dynamic> toJson() => {
+        'u': unlocked.toList(),
+        'c': classesPlayed.toList(),
+        'ch': championsKilledTotal,
+      };
+
+  factory AchievementState.fromJson(Map<String, dynamic>? j) {
+    final s = AchievementState();
+    if (j == null) return s;
+    s.unlocked.addAll((j['u'] as List?)?.map((e) => e.toString()) ?? []);
+    s.classesPlayed.addAll((j['c'] as List?)?.map((e) => e.toString()) ?? []);
+    s.championsKilledTotal = j['ch'] as int? ?? 0;
+    return s;
   }
 }
 
@@ -835,8 +864,6 @@ class HighScoreEntry {
     if (completed) return 'ВСЁ ПРОЙДЕНО • $difficulty';
     return 'Этаж $floor • Ур.$level • $difficulty';
   }
-
-  String get relicsStr => keyRelics.take(2).join(', ');
 
   Map<String, dynamic> toJson() => {
         'n': name,
@@ -883,7 +910,7 @@ class GameSave {
   final String ranged;
   final String melee;
   final bool usingMelee;
-  final String payload; // full json blob for restore
+  final String payload;
 
   GameSave({
     required this.name,
@@ -935,7 +962,7 @@ class GameSave {
         name: j['name'] as String? ?? '?',
         dateStr: j['date'] as String? ?? '',
         playerClass: j['pc'] as String? ?? 'xenos',
-        difficulty: j['diff'] as String? ?? 'normal',
+        difficulty: j['diff'] as String? ?? 'Норма',
         floor: j['floor'] as int? ?? 1,
         level: j['level'] as int? ?? 1,
         score: j['score'] as int? ?? 0,
@@ -945,7 +972,9 @@ class GameSave {
         mastery: Map<String, dynamic>.from(j['mastery'] as Map? ?? {}),
         relics: (j['relics'] as List?)?.map((e) => e.toString()).toList() ?? [],
         loadout: Map<String, dynamic>.from(j['loadout'] as Map? ?? {}),
-        loreRanks: (j['lore'] as Map?)?.map((k, v) => MapEntry(k.toString(), (v as num).toInt())) ?? {},
+        loreRanks: (j['lore'] as Map?)
+                ?.map((k, v) => MapEntry(k.toString(), (v as num).toInt())) ??
+            {},
         codex: (j['codex'] as List?)?.map((e) => e.toString()).toList() ?? [],
         health: j['hp'] as int? ?? 6,
         ranged: j['rw'] as String? ?? 'bolter',
@@ -954,41 +983,20 @@ class GameSave {
         payload: j['payload'] as String? ?? jsonEncode(j),
       );
 }
-
-// Meta progress for achievements (persisted)
-class AchievementState {
-  final Set<String> unlocked = {};
-  final Set<String> classesPlayed = {};
-  int championsKilledTotal = 0;
-
-  Map<String, dynamic> toJson() => {
-        'u': unlocked.toList(),
-        'c': classesPlayed.toList(),
-        'ch': championsKilledTotal,
-      };
-
-  factory AchievementState.fromJson(Map<String, dynamic>? j) {
-    final s = AchievementState();
-    if (j == null) return s;
-    s.unlocked.addAll((j['u'] as List?)?.map((e) => e.toString()) ?? []);
-    s.classesPlayed.addAll((j['c'] as List?)?.map((e) => e.toString()) ?? []);
-    s.championsKilledTotal = j['ch'] as int? ?? 0;
-    return s;
-  }
-
-  bool has(AchievementId id) => unlocked.contains(id.name);
-}
-// ═══════════════════════════════════════════════════════════════
-// VISUAL FX COMPONENTS
-// ═══════════════════════════════════════════════════════════════
+// ─── VISUAL FX ────────────────────────────────────────────────
 
 class DamageNumber extends PositionComponent {
   final int amount;
   final Color color;
   final String? label;
   double life = 0.85;
-  DamageNumber({required Vector2 position, required this.amount, this.color = const Color(0xFFFFEB3B), this.label})
-      : super(position: position.clone(), priority: 100);
+
+  DamageNumber({
+    required Vector2 position,
+    required this.amount,
+    this.color = const Color(0xFFFFEB3B),
+    this.label,
+  }) : super(position: position.clone(), priority: 100);
 
   @override
   void update(double dt) {
@@ -1020,6 +1028,7 @@ class DamageNumber extends PositionComponent {
 class BloodSplash extends PositionComponent {
   final List<_Drop> drops = [];
   double life = 0.9;
+
   BloodSplash({required Vector2 position, int count = 12, Vector2? fromDir})
       : super(position: position.clone(), priority: 8) {
     final rnd = Random();
@@ -1047,7 +1056,11 @@ class BloodSplash extends PositionComponent {
   void render(Canvas canvas) {
     final a = (life / 0.9).clamp(0.0, 1.0);
     for (final d in drops) {
-      canvas.drawCircle(Offset(d.pos.x, d.pos.y), d.r, Paint()..color = Color.fromRGBO(180, 0, 0, a));
+      canvas.drawCircle(
+        Offset(d.pos.x, d.pos.y),
+        d.r,
+        Paint()..color = Color.fromRGBO(180, 0, 0, a),
+      );
     }
   }
 }
@@ -1064,8 +1077,18 @@ class KillExplosion extends PositionComponent with CollisionCallbacks {
   final int damage;
   final bool applyBurn;
   double life = 0.35;
-  KillExplosion({required Vector2 position, this.radius = 60, this.damage = 4, this.applyBurn = false})
-      : super(position: position.clone(), size: Vector2.all(radius * 2), anchor: Anchor.center, priority: 12);
+
+  KillExplosion({
+    required Vector2 position,
+    this.radius = 60,
+    this.damage = 4,
+    this.applyBurn = false,
+  }) : super(
+          position: position.clone(),
+          size: Vector2.all(radius * 2),
+          anchor: Anchor.center,
+          priority: 12,
+        );
 
   @override
   Future<void> onLoad() async => add(CircleHitbox());
@@ -1080,14 +1103,20 @@ class KillExplosion extends PositionComponent with CollisionCallbacks {
   @override
   void render(Canvas canvas) {
     final a = (life / 0.35).clamp(0.0, 1.0);
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), radius * (1.2 - a * 0.3), Paint()..color = Color.fromRGBO(255, 109, 0, 0.45 * a));
+    canvas.drawCircle(
+      Offset(size.x / 2, size.y / 2),
+      radius * (1.2 - a * 0.3),
+      Paint()..color = Color.fromRGBO(255, 109, 0, 0.45 * a),
+    );
   }
 }
 
 class ComboBanner extends PositionComponent {
   final int combo;
   double life = 1.2;
-  ComboBanner({required Vector2 position, required this.combo}) : super(position: position.clone(), priority: 110);
+
+  ComboBanner({required Vector2 position, required this.combo})
+      : super(position: position.clone(), priority: 110);
 
   @override
   void update(double dt) {
@@ -1119,8 +1148,17 @@ class AfterImage extends PositionComponent {
   double life = 0.25;
   final double startLife = 0.25;
   final Color tint;
-  AfterImage({required Vector2 position, required Vector2 size, this.tint = const Color(0xFF81D4FA)})
-      : super(position: position.clone(), size: size.clone(), anchor: Anchor.center, priority: 18);
+
+  AfterImage({
+    required Vector2 position,
+    required Vector2 size,
+    this.tint = const Color(0xFF81D4FA),
+  }) : super(
+          position: position.clone(),
+          size: size.clone(),
+          anchor: Anchor.center,
+          priority: 18,
+        );
 
   @override
   void update(double dt) {
@@ -1133,7 +1171,10 @@ class AfterImage extends PositionComponent {
   void render(Canvas canvas) {
     final a = (life / startLife).clamp(0.0, 1.0) * 0.35;
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(size.x / 2, size.y / 2), width: size.x * 0.7, height: size.y * 0.8), const Radius.circular(8)),
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(size.x / 2, size.y / 2), width: size.x * 0.7, height: size.y * 0.8),
+        const Radius.circular(8),
+      ),
       Paint()..color = tint.withOpacity(a),
     );
   }
@@ -1145,6 +1186,7 @@ class TelegraphZone extends PositionComponent {
   final double angle;
   double life;
   final double maxLife;
+
   TelegraphZone({
     required Vector2 position,
     required this.shape,
@@ -1152,7 +1194,12 @@ class TelegraphZone extends PositionComponent {
     this.angle = 0,
     this.life = 0.7,
   })  : maxLife = life,
-        super(position: position.clone(), size: Vector2.all(radius * 2), anchor: Anchor.center, priority: 6);
+        super(
+          position: position.clone(),
+          size: Vector2.all(radius * 2),
+          anchor: Anchor.center,
+          priority: 6,
+        );
 
   @override
   void update(double dt) {
@@ -1192,48 +1239,12 @@ class TelegraphZone extends PositionComponent {
   }
 }
 
-class CorruptionZone extends PositionComponent with CollisionCallbacks, HasGameReference<InquisitorGame> {
-  double life = 8.0;
-  bool purified = false;
-  CorruptionZone({required Vector2 position})
-      : super(position: position.clone(), size: Vector2(90, 90), anchor: Anchor.center, priority: 5);
-
-  @override
-  Future<void> onLoad() async => add(CircleHitbox());
-
-  void purify() {
-    purified = true;
-    removeFromParent();
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (purified) return;
-    life -= dt;
-    if (life <= 0) removeFromParent();
-  }
-
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Player) {
-      other.applyStatus(StatusType.corruption, 1.2, tickDamage: 1);
-    }
-  }
-
-  @override
-  void render(Canvas canvas) {
-    final a = (life / 8).clamp(0.0, 1.0);
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 40, Paint()..color = Color.fromRGBO(120, 0, 180, 0.3 * a));
-  }
-}
-
 class BulletTrail extends PositionComponent {
   final Vector2 from;
   final Vector2 to;
   final Color color;
   double life = 0.1;
+
   BulletTrail({required this.from, required this.to, required this.color}) : super(priority: 12);
 
   @override
@@ -1255,13 +1266,14 @@ class BulletTrail extends PositionComponent {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// WHDraw — procedural Warhammer silhouettes (code only)
-// ═══════════════════════════════════════════════════════════════
+// ─── WHDraw ───────────────────────────────────────────────────
 
 class WHDraw {
   static void _shadow(Canvas c, double cx, double cy, double w, double h) {
-    c.drawOval(Rect.fromCenter(center: Offset(cx, cy + h * 0.55), width: w, height: h * 0.18), Paint()..color = Colors.black.withOpacity(0.25));
+    c.drawOval(
+      Rect.fromCenter(center: Offset(cx, cy + h * 0.55), width: w, height: h * 0.18),
+      Paint()..color = Colors.black.withOpacity(0.25),
+    );
   }
 
   static void _flash(Canvas c, double cx, double cy, double r, double flash) {
@@ -1270,7 +1282,15 @@ class WHDraw {
     }
   }
 
-  static void inquisitor(Canvas canvas, {required double cx, required double cy, double s = 1.2, double flash = 0, Customization? custom, PlayerClass cls = PlayerClass.xenos}) {
+  static void inquisitor(
+    Canvas canvas, {
+    required double cx,
+    required double cy,
+    double s = 1.2,
+    double flash = 0,
+    Customization? custom,
+    PlayerClass cls = PlayerClass.xenos,
+  }) {
     final armor = custom?.armorColor(0.4) ?? const Color(0xFF2A2A2A);
     final cape = custom?.capeColor(0.55) ?? const Color(0xFFB71C1C);
     final accent = switch (cls) {
@@ -1279,7 +1299,6 @@ class WHDraw {
       PlayerClass.hereticus => const Color(0xFF8E24AA),
     };
     _shadow(canvas, cx, cy, 50 * s, 70 * s);
-    // cape
     final capePath = Path()
       ..moveTo(cx - 18 * s, cy - 8 * s)
       ..quadraticBezierTo(cx - 28 * s, cy + 20 * s, cx - 16 * s, cy + 38 * s)
@@ -1287,126 +1306,167 @@ class WHDraw {
       ..quadraticBezierTo(cx + 28 * s, cy + 20 * s, cx + 18 * s, cy - 8 * s)
       ..close();
     canvas.drawPath(capePath, Paint()..color = cape);
-    // legs
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 8 * s, cy + 28 * s), width: 12 * s, height: 22 * s), Radius.circular(3 * s)), Paint()..color = armor);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 28 * s), width: 12 * s, height: 22 * s), Radius.circular(3 * s)), Paint()..color = armor);
-    // torso
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 34 * s, height: 36 * s), Radius.circular(5 * s)), Paint()..color = armor);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx - 8 * s, cy + 28 * s), width: 12 * s, height: 22 * s),
+        Radius.circular(3 * s),
+      ),
+      Paint()..color = armor,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx + 8 * s, cy + 28 * s), width: 12 * s, height: 22 * s),
+        Radius.circular(3 * s),
+      ),
+      Paint()..color = armor,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 34 * s, height: 36 * s),
+        Radius.circular(5 * s),
+      ),
+      Paint()..color = armor,
+    );
     canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy - 2 * s), width: 28 * s, height: 6 * s), Paint()..color = accent);
-    // pauldrons
     canvas.drawCircle(Offset(cx - 18 * s, cy - 4 * s), 9 * s, Paint()..color = const Color(0xFF1A1A1A));
     canvas.drawCircle(Offset(cx + 18 * s, cy - 4 * s), 9 * s, Paint()..color = const Color(0xFF1A1A1A));
-    // head / helmet
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 22 * s), width: 22 * s, height: 24 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF1C1C1C));
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, cy - 22 * s), width: 22 * s, height: 24 * s),
+        Radius.circular(4 * s),
+      ),
+      Paint()..color = const Color(0xFF1C1C1C),
+    );
     canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy - 22 * s), width: 14 * s, height: 5 * s), Paint()..color = accent);
-    // purity seals
-    canvas.drawLine(Offset(cx + 10 * s, cy + 10 * s), Offset(cx + 14 * s, cy + 22 * s), Paint()..color = const Color(0xFFFFF8E1)..strokeWidth = 2);
     _flash(canvas, cx, cy, 40 * s, flash);
   }
 
   static void bolter(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFFF6D00)}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 4 * s, 28 * s, 8 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF37474F));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 4 * s, 28 * s, 8 * s), Radius.circular(2 * s)),
+      Paint()..color = const Color(0xFF37474F),
+    );
     c.drawRect(Rect.fromLTWH(cx + 28 * s, cy - 2 * s, 10 * s, 4 * s), Paint()..color = accent);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy + 4 * s, 10 * s, 12 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF263238));
-    c.drawCircle(Offset(cx + 12 * s, cy - 6 * s), 3 * s, Paint()..color = accent);
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy + 4 * s, 10 * s, 12 * s), Radius.circular(2 * s)),
+      Paint()..color = const Color(0xFF263238),
+    );
   }
 
   static void rifle(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFF00E5FF)}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 3 * s, 36 * s, 6 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF455A64));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 3 * s, 36 * s, 6 * s), Radius.circular(2 * s)),
+      Paint()..color = const Color(0xFF455A64),
+    );
     c.drawRect(Rect.fromLTWH(cx + 34 * s, cy - 2 * s, 8 * s, 3 * s), Paint()..color = accent);
-    c.drawRect(Rect.fromLTWH(cx + 16 * s, cy - 8 * s, 6 * s, 5 * s), Paint()..color = const Color(0xFF78909C));
   }
 
   static void shotgun(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFFFAB40)}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 5 * s, 24 * s, 10 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFF5D4037));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 5 * s, 24 * s, 10 * s), Radius.circular(3 * s)),
+      Paint()..color = const Color(0xFF5D4037),
+    );
     c.drawRect(Rect.fromLTWH(cx + 24 * s, cy - 3 * s, 8 * s, 6 * s), Paint()..color = accent);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 6 * s, cy + 5 * s, 8 * s, 10 * s), Radius.circular(2 * s)), Paint()..color = const Color(0xFF3E2723));
   }
 
   static void staff(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFB388FF)}) {
-    c.drawLine(Offset(cx + 6 * s, cy + 20 * s), Offset(cx + 10 * s, cy - 22 * s), Paint()..color = const Color(0xFF5D4E37)..strokeWidth = 4 * s);
+    c.drawLine(
+      Offset(cx + 6 * s, cy + 20 * s),
+      Offset(cx + 10 * s, cy - 22 * s),
+      Paint()
+        ..color = const Color(0xFF5D4E37)
+        ..strokeWidth = 4 * s,
+    );
     c.drawCircle(Offset(cx + 10 * s, cy - 26 * s), 8 * s, Paint()..color = accent.withOpacity(0.85));
-    c.drawCircle(Offset(cx + 10 * s, cy - 26 * s), 4 * s, Paint()..color = Colors.white.withOpacity(0.7));
   }
 
   static void stormStaff(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFF7C4DFF)}) {
     staff(c, cx, cy, s, accent: accent);
-    for (int i = 0; i < 3; i++) {
-      final a = i * 2.1;
-      c.drawLine(Offset(cx + 10 * s + cos(a) * 10 * s, cy - 26 * s + sin(a) * 10 * s), Offset(cx + 10 * s + cos(a) * 16 * s, cy - 26 * s + sin(a) * 16 * s),
-          Paint()..color = accent..strokeWidth = 1.5);
-    }
   }
 
   static void warpBeamGun(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFEA80FC)}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 6 * s, 26 * s, 12 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF4A148C));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx + 4 * s, cy - 6 * s, 26 * s, 12 * s), Radius.circular(4 * s)),
+      Paint()..color = const Color(0xFF4A148C),
+    );
     c.drawCircle(Offset(cx + 30 * s, cy), 6 * s, Paint()..color = accent);
   }
 
   static void daggers(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFE0E0E0)}) {
     c.drawLine(Offset(cx + 8 * s, cy + 8 * s), Offset(cx + 22 * s, cy - 12 * s), Paint()..color = accent..strokeWidth = 3 * s);
-    c.drawLine(Offset(cx + 4 * s, cy + 10 * s), Offset(cx + 16 * s, cy - 8 * s), Paint()..color = const Color(0xFFBDBDBD)..strokeWidth = 2.5 * s);
   }
 
   static void needles(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFCE93D8)}) {
     for (int i = 0; i < 3; i++) {
-      c.drawLine(Offset(cx + 6 * s, cy - 4 * s + i * 4 * s), Offset(cx + 26 * s, cy - 10 * s + i * 4 * s), Paint()..color = accent..strokeWidth = 1.5 * s);
+      c.drawLine(
+        Offset(cx + 6 * s, cy - 4 * s + i * 4 * s),
+        Offset(cx + 26 * s, cy - 10 * s + i * 4 * s),
+        Paint()
+          ..color = accent
+          ..strokeWidth = 1.5 * s,
+      );
     }
   }
 
   static void sniperNeedle(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFE040FB)}) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 2 * s, 34 * s, 4 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF6A1B9A));
-    c.drawRect(Rect.fromLTWH(cx + 14 * s, cy - 8 * s, 5 * s, 5 * s), Paint()..color = accent);
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx + 2 * s, cy - 2 * s, 34 * s, 4 * s), Radius.circular(1 * s)),
+      Paint()..color = const Color(0xFF6A1B9A),
+    );
   }
 
   static void powerSword(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFF00BCD4)}) {
-    c.drawLine(Offset(cx + 6 * s, cy + 12 * s), Offset(cx + 28 * s, cy - 18 * s), Paint()..color = accent..strokeWidth = 4 * s);
-    c.drawLine(Offset(cx + 6 * s, cy + 12 * s), Offset(cx + 28 * s, cy - 18 * s), Paint()..color = Colors.white.withOpacity(0.5)..strokeWidth = 1.5 * s);
-    c.drawRect(Rect.fromCenter(center: Offset(cx + 8 * s, cy + 10 * s), width: 10 * s, height: 4 * s), Paint()..color = const Color(0xFF37474F));
+    c.drawLine(
+      Offset(cx + 6 * s, cy + 12 * s),
+      Offset(cx + 28 * s, cy - 18 * s),
+      Paint()
+        ..color = accent
+        ..strokeWidth = 4 * s,
+    );
   }
 
   static void chainAxe(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFFF6D00)}) {
     c.drawLine(Offset(cx + 6 * s, cy + 10 * s), Offset(cx + 18 * s, cy - 6 * s), Paint()..color = const Color(0xFF5D4037)..strokeWidth = 4 * s);
     c.drawOval(Rect.fromCenter(center: Offset(cx + 24 * s, cy - 12 * s), width: 18 * s, height: 14 * s), Paint()..color = accent);
-    c.drawOval(Rect.fromCenter(center: Offset(cx + 24 * s, cy - 12 * s), width: 10 * s, height: 8 * s), Paint()..color = const Color(0xFF212121));
   }
 
   static void thunderHammer(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFFFD700)}) {
     c.drawLine(Offset(cx + 6 * s, cy + 14 * s), Offset(cx + 16 * s, cy - 8 * s), Paint()..color = const Color(0xFF455A64)..strokeWidth = 5 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 20 * s, cy - 14 * s), width: 20 * s, height: 14 * s), Radius.circular(2 * s)), Paint()..color = accent);
+    c.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx + 20 * s, cy - 14 * s), width: 20 * s, height: 14 * s),
+        Radius.circular(2 * s),
+      ),
+      Paint()..color = accent,
+    );
   }
 
-  static void forceBlade(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFF7C4DFF)}) {
-    powerSword(c, cx, cy, s * 1.1, accent: accent);
-  }
+  static void forceBlade(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFF7C4DFF)}) =>
+      powerSword(c, cx, cy, s * 1.1, accent: accent);
 
-  static void forceSword(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFB388FF)}) {
-    powerSword(c, cx, cy, s * 1.15, accent: accent);
-    c.drawCircle(Offset(cx + 18 * s, cy - 4 * s), 4 * s, Paint()..color = accent.withOpacity(0.5));
-  }
+  static void forceSword(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFB388FF)}) =>
+      powerSword(c, cx, cy, s * 1.15, accent: accent);
 
-  static void daemonHammer(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFE040FB)}) {
-    thunderHammer(c, cx, cy, s * 1.05, accent: accent);
-  }
+  static void daemonHammer(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFE040FB)}) =>
+      thunderHammer(c, cx, cy, s * 1.05, accent: accent);
 
   static void katana(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFE0E0E0)}) {
     c.drawLine(Offset(cx + 4 * s, cy + 14 * s), Offset(cx + 32 * s, cy - 16 * s), Paint()..color = accent..strokeWidth = 2.5 * s);
-    c.drawRect(Rect.fromCenter(center: Offset(cx + 6 * s, cy + 12 * s), width: 8 * s, height: 3 * s), Paint()..color = const Color(0xFF6A1B9A));
   }
 
-  static void powerKatana(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFE040FB)}) {
-    katana(c, cx, cy, s, accent: accent);
-    c.drawLine(Offset(cx + 6 * s, cy + 12 * s), Offset(cx + 30 * s, cy - 14 * s), Paint()..color = accent.withOpacity(0.4)..strokeWidth = 5 * s);
-  }
+  static void powerKatana(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFE040FB)}) =>
+      katana(c, cx, cy, s, accent: accent);
 
   static void executioner(Canvas c, double cx, double cy, double s, {Color accent = const Color(0xFFFF1744)}) {
     c.drawLine(Offset(cx + 6 * s, cy + 12 * s), Offset(cx + 26 * s, cy - 14 * s), Paint()..color = accent..strokeWidth = 5 * s);
-    c.drawRect(Rect.fromCenter(center: Offset(cx + 28 * s, cy - 16 * s), width: 8 * s, height: 12 * s), Paint()..color = const Color(0xFF212121));
   }
 
   static void cultistShooter(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     _shadow(c, cx, cy, 40 * s, 55 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 26 * s, height: 30 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFF1B5E20));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 26 * s, height: 30 * s), Radius.circular(4 * s)),
+      Paint()..color = const Color(0xFF1B5E20),
+    );
     c.drawCircle(Offset(cx, cy - 16 * s), 11 * s, Paint()..color = const Color(0xFF2E7D32));
     bolter(c, cx, cy, s * 0.85, accent: const Color(0xFF76FF03));
     _flash(c, cx, cy, 30 * s, flash);
@@ -1414,7 +1474,10 @@ class WHDraw {
 
   static void cultistMelee(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     _shadow(c, cx, cy, 40 * s, 55 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 28 * s, height: 32 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFFF9A825));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 28 * s, height: 32 * s), Radius.circular(4 * s)),
+      Paint()..color = const Color(0xFFF9A825),
+    );
     c.drawCircle(Offset(cx, cy - 16 * s), 11 * s, Paint()..color = const Color(0xFFF57F17));
     powerSword(c, cx, cy, s * 0.9, accent: const Color(0xFFFFF176));
     _flash(c, cx, cy, 30 * s, flash);
@@ -1422,11 +1485,15 @@ class WHDraw {
 
   static void shieldedMarine(Canvas c, double cx, double cy, double s, {bool withGun = false, double flash = 0}) {
     _shadow(c, cx, cy, 48 * s, 60 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 32 * s, height: 36 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF1565C0));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 32 * s, height: 36 * s), Radius.circular(5 * s)),
+      Paint()..color = const Color(0xFF1565C0),
+    );
     c.drawCircle(Offset(cx, cy - 18 * s), 12 * s, Paint()..color = const Color(0xFF0D47A1));
-    // shield
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 16 * s, cy + 4 * s), width: 14 * s, height: 28 * s), Radius.circular(3 * s)),
-        Paint()..color = const Color(0xFF90CAF9).withOpacity(0.85));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 16 * s, cy + 4 * s), width: 14 * s, height: 28 * s), Radius.circular(3 * s)),
+      Paint()..color = const Color(0xFF90CAF9).withOpacity(0.85),
+    );
     if (withGun) bolter(c, cx + 4 * s, cy, s * 0.8, accent: const Color(0xFF42A5F5));
     _flash(c, cx, cy, 32 * s, flash);
   }
@@ -1441,14 +1508,15 @@ class WHDraw {
     c.drawPath(body, Paint()..color = const Color(0xFF4E342E));
     c.drawCircle(Offset(cx + 18, cy - 8), 8, Paint()..color = const Color(0xFF3E2723));
     c.drawCircle(Offset(cx + 21, cy - 9), 2.5, Paint()..color = const Color(0xFFFF1744));
-    c.drawLine(Offset(cx - 18, cy + 8), Offset(cx - 14, cy + 18), Paint()..color = const Color(0xFF3E2723)..strokeWidth = 3);
-    c.drawLine(Offset(cx + 6, cy + 10), Offset(cx + 10, cy + 18), Paint()..color = const Color(0xFF3E2723)..strokeWidth = 3);
     _flash(c, cx, cy, 28, flash);
   }
 
   static void flamerCultist(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     cultistShooter(c, cx, cy, s, flash: flash);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy - 2 * s, 18 * s, 10 * s), Radius.circular(3 * s)), Paint()..color = const Color(0xFFFF6D00));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8 * s, cy - 2 * s, 18 * s, 10 * s), Radius.circular(3 * s)),
+      Paint()..color = const Color(0xFFFF6D00),
+    );
   }
 
   static void sniperCultist(Canvas c, double cx, double cy, double s, {double flash = 0}) {
@@ -1458,16 +1526,20 @@ class WHDraw {
 
   static void brute(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     _shadow(c, cx, cy, 60 * s, 70 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 44 * s, height: 48 * s), Radius.circular(6 * s)), Paint()..color = const Color(0xFF5D4037));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 44 * s, height: 48 * s), Radius.circular(6 * s)),
+      Paint()..color = const Color(0xFF5D4037),
+    );
     c.drawCircle(Offset(cx, cy - 22 * s), 16 * s, Paint()..color = const Color(0xFF3E2723));
-    c.drawCircle(Offset(cx - 5 * s, cy - 24 * s), 3 * s, Paint()..color = const Color(0xFFFF1744));
-    c.drawCircle(Offset(cx + 5 * s, cy - 24 * s), 3 * s, Paint()..color = const Color(0xFFFF1744));
     _flash(c, cx, cy, 40 * s, flash);
   }
 
   static void cultPsyker(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     _shadow(c, cx, cy, 42 * s, 58 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 28 * s, height: 34 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF6A1B9A));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 28 * s, height: 34 * s), Radius.circular(5 * s)),
+      Paint()..color = const Color(0xFF6A1B9A),
+    );
     c.drawCircle(Offset(cx, cy - 18 * s), 12 * s, Paint()..color = const Color(0xFF4A148C));
     c.drawCircle(Offset(cx, cy - 28 * s), 7 * s, Paint()..color = const Color(0xFFEA80FC).withOpacity(0.8));
     _flash(c, cx, cy, 32 * s, flash);
@@ -1475,46 +1547,53 @@ class WHDraw {
 
   static void plagueBearer(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     _shadow(c, cx, cy, 48 * s, 60 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 36 * s, height: 40 * s), Radius.circular(8 * s)), Paint()..color = const Color(0xFF558B2F));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 36 * s, height: 40 * s), Radius.circular(8 * s)),
+      Paint()..color = const Color(0xFF558B2F),
+    );
     c.drawCircle(Offset(cx, cy - 20 * s), 14 * s, Paint()..color = const Color(0xFF33691E));
-    c.drawCircle(Offset(cx - 4 * s, cy - 18 * s), 3 * s, Paint()..color = const Color(0xFFCCFF90));
-    c.drawCircle(Offset(cx + 6 * s, cy - 22 * s), 2.5 * s, Paint()..color = const Color(0xFFCCFF90));
     _flash(c, cx, cy, 34 * s, flash);
   }
 
   static void bloodletter(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     _shadow(c, cx, cy, 44 * s, 58 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 30 * s, height: 36 * s), Radius.circular(4 * s)), Paint()..color = const Color(0xFFB71C1C));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 30 * s, height: 36 * s), Radius.circular(4 * s)),
+      Paint()..color = const Color(0xFFB71C1C),
+    );
     c.drawCircle(Offset(cx, cy - 18 * s), 12 * s, Paint()..color = const Color(0xFF7F0000));
-    // horns
-    c.drawLine(Offset(cx - 8 * s, cy - 24 * s), Offset(cx - 14 * s, cy - 36 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 3 * s);
-    c.drawLine(Offset(cx + 8 * s, cy - 24 * s), Offset(cx + 14 * s, cy - 36 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 3 * s);
     powerSword(c, cx, cy, s, accent: const Color(0xFFFF1744));
     _flash(c, cx, cy, 32 * s, flash);
   }
 
   static void hereticBoss(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     _shadow(c, cx, cy, 70 * s, 80 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 50 * s, height: 56 * s), Radius.circular(6 * s)), Paint()..color = const Color(0xFF4A0000));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 50 * s, height: 56 * s), Radius.circular(6 * s)),
+      Paint()..color = const Color(0xFF4A0000),
+    );
     c.drawCircle(Offset(cx, cy - 28 * s), 18 * s, Paint()..color = const Color(0xFF1A0000));
-    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 28 * s), width: 12 * s, height: 5 * s), Paint()..color = const Color(0xFFFF1744));
     bolter(c, cx + 6 * s, cy, s * 1.1, accent: const Color(0xFFFF5252));
     _flash(c, cx, cy, 48 * s, flash);
   }
 
   static void knightBoss(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     _shadow(c, cx, cy, 68 * s, 80 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 48 * s, height: 54 * s), Radius.circular(5 * s)), Paint()..color = const Color(0xFF263238));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 48 * s, height: 54 * s), Radius.circular(5 * s)),
+      Paint()..color = const Color(0xFF263238),
+    );
     c.drawCircle(Offset(cx, cy - 26 * s), 16 * s, Paint()..color = const Color(0xFF102027));
-    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 26 * s), width: 14 * s, height: 4 * s), Paint()..color = const Color(0xFF90CAF9));
     powerSword(c, cx, cy, s * 1.2, accent: const Color(0xFF90CAF9));
     _flash(c, cx, cy, 46 * s, flash);
   }
 
   static void kingBossDraw(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     _shadow(c, cx, cy, 80 * s, 90 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 58 * s, height: 64 * s), Radius.circular(7 * s)), Paint()..color = const Color(0xFF3E2723));
-    // crown
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 58 * s, height: 64 * s), Radius.circular(7 * s)),
+      Paint()..color = const Color(0xFF3E2723),
+    );
     final crown = Path()
       ..moveTo(cx - 16 * s, cy - 36 * s)
       ..lineTo(cx - 12 * s, cy - 48 * s)
@@ -1526,39 +1605,44 @@ class WHDraw {
       ..close();
     c.drawPath(crown, Paint()..color = const Color(0xFFFFD700));
     c.drawCircle(Offset(cx, cy - 28 * s), 16 * s, Paint()..color = const Color(0xFF1A1A1A));
-    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 28 * s), width: 12 * s, height: 5 * s), Paint()..color = const Color(0xFFFFD700));
     _flash(c, cx, cy, 55 * s, flash);
   }
 
   static void plagueLord(Canvas c, double cx, double cy, double s, {double flash = 0}) {
     _shadow(c, cx, cy, 75 * s, 85 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 54 * s, height: 58 * s), Radius.circular(10 * s)), Paint()..color = const Color(0xFF33691E));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 54 * s, height: 58 * s), Radius.circular(10 * s)),
+      Paint()..color = const Color(0xFF33691E),
+    );
     c.drawCircle(Offset(cx, cy - 26 * s), 18 * s, Paint()..color = const Color(0xFF1B5E20));
-    for (int i = 0; i < 5; i++) {
-      final a = i * 1.2;
-      c.drawCircle(Offset(cx + cos(a) * 16 * s, cy + sin(a) * 14 * s), 4 * s, Paint()..color = const Color(0xFF8BC34A).withOpacity(0.7));
-    }
     _flash(c, cx, cy, 50 * s, flash);
   }
 
   static void bloodChampion(Canvas c, double cx, double cy, double s, {double flash = 0, double rage = 0}) {
     _shadow(c, cx, cy, 70 * s, 80 * s);
     final body = Color.lerp(const Color(0xFFB71C1C), const Color(0xFFFF1744), rage)!;
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 48 * s, height: 54 * s), Radius.circular(5 * s)), Paint()..color = body);
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 4 * s), width: 48 * s, height: 54 * s), Radius.circular(5 * s)),
+      Paint()..color = body,
+    );
     c.drawCircle(Offset(cx, cy - 26 * s), 16 * s, Paint()..color = const Color(0xFF7F0000));
-    c.drawLine(Offset(cx - 10 * s, cy - 32 * s), Offset(cx - 18 * s, cy - 46 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 4 * s);
-    c.drawLine(Offset(cx + 10 * s, cy - 32 * s), Offset(cx + 18 * s, cy - 46 * s), Paint()..color = const Color(0xFF212121)..strokeWidth = 4 * s);
     powerSword(c, cx, cy, s * 1.15, accent: const Color(0xFFFF1744));
     _flash(c, cx, cy, 48 * s, flash);
   }
 
   static void cyclops(Canvas c, double cx, double cy, double s, {double flash = 0, double charge = 0}) {
     _shadow(c, cx, cy, 78 * s, 90 * s);
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 8 * s), width: 56 * s, height: 62 * s), Radius.circular(8 * s)), Paint()..color = const Color(0xFF4E342E));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 8 * s), width: 56 * s, height: 62 * s), Radius.circular(8 * s)),
+      Paint()..color = const Color(0xFF4E342E),
+    );
     c.drawCircle(Offset(cx, cy - 28 * s), 20 * s, Paint()..color = const Color(0xFF3E2723));
     final eyeR = 8 * s + charge * 6 * s;
-    c.drawCircle(Offset(cx, cy - 30 * s), eyeR, Paint()..color = Color.lerp(const Color(0xFFFF6D00), const Color(0xFFFFEA00), charge)!);
-    c.drawCircle(Offset(cx, cy - 30 * s), eyeR * 0.4, Paint()..color = Colors.white.withOpacity(0.8));
+    c.drawCircle(
+      Offset(cx, cy - 30 * s),
+      eyeR,
+      Paint()..color = Color.lerp(const Color(0xFFFF6D00), const Color(0xFFFFEA00), charge)!,
+    );
     _flash(c, cx, cy, 52 * s, flash);
   }
 
@@ -1575,7 +1659,10 @@ class WHDraw {
     c.drawCircle(Offset(cx, topY), 7, Paint()..color = affix != EliteAffix.none ? affix.color : const Color(0xFFFFD700));
     if (affix != EliteAffix.none && affix.letter.isNotEmpty) {
       final tp = TextPainter(
-        text: TextSpan(text: affix.letter, style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.w900)),
+        text: TextSpan(
+          text: affix.letter,
+          style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.w900),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(c, Offset(cx - tp.width / 2, topY - tp.height / 2));
@@ -1583,562 +1670,521 @@ class WHDraw {
   }
 
   static void altar(Canvas c, double cx, double cy, double t) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 40, height: 28), const Radius.circular(4)), Paint()..color = const Color(0xFF5D4037));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 40, height: 28), const Radius.circular(4)),
+      Paint()..color = const Color(0xFF5D4037),
+    );
     final pulse = 0.5 + 0.5 * sin(t * 3);
     c.drawCircle(Offset(cx, cy - 18), 10 + pulse * 3, Paint()..color = Color.fromRGBO(255, 215, 0, 0.4 + pulse * 0.3));
   }
 
   static void merchantStall(Canvas c, double cx, double cy, double t) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 48, height: 32), const Radius.circular(4)), Paint()..color = const Color(0xFF6D4C41));
-    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 20), width: 52, height: 8), Paint()..color = const Color(0xFFB8860B));
-    final spark = 0.5 + 0.5 * sin(t * 4);
-    c.drawCircle(Offset(cx + 16, cy - 8), 3 + spark, Paint()..color = Color.fromRGBO(255, 235, 59, 0.5 + spark * 0.4));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 48, height: 32), const Radius.circular(4)),
+      Paint()..color = const Color(0xFF6D4C41),
+    );
   }
 
   static void barrel(Canvas c, double cx, double cy) {
-    c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 28, height: 34), const Radius.circular(4)), Paint()..color = const Color(0xFF8D6E63));
-    c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 4), width: 28, height: 3), Paint()..color = const Color(0xFF5D4037));
-    c.drawRect(Rect.fromCenter(center: Offset(cx, cy + 6), width: 28, height: 3), Paint()..color = const Color(0xFF5D4037));
+    c.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 28, height: 34), const Radius.circular(4)),
+      Paint()..color = const Color(0xFF8D6E63),
+    );
   }
 }
-// ═══════════════════════════════════════════════════════════════
-// MAIN GAME
-// ═══════════════════════════════════════════════════════════════
+// ─── SMART MOVER ──────────────────────────────────────────────
 
-class InquisitorGame extends FlameGame with HasCollisionDetection, HasKeyboardHandlerComponents {
-  // ── world ──
-  static const double cellSize = 64;
-  double mapWidth = 1280;
-  double mapHeight = 1280;
-  final Vector2 playerSpawnPos = Vector2(200, 200);
-  final double safeRadius = cellSize * 5;
+mixin SmartMover on PositionComponent {
+  double stuckTimer = 0;
+  Vector2 _lastPos = Vector2.zero();
+  int _stuckFrames = 0;
 
-  // ── run state ──
+  InquisitorGame get _g => findGame() as InquisitorGame;
+
+  void smartMove(
+    Vector2 target,
+    double speed,
+    double dt, {
+    double radius = 20,
+    bool kite = false,
+    double preferDist = 160,
+  }) {
+    if (stuckTimer > 0) stuckTimer -= dt;
+
+    Vector2 desired;
+    final toTarget = target - position;
+    final dist = toTarget.length;
+
+    if (kite && dist < preferDist) {
+      desired = -toTarget.normalized();
+    } else if (dist > 8) {
+      desired = toTarget.normalized();
+    } else {
+      desired = Vector2.zero();
+    }
+
+    // separation from other hostiles
+    Vector2 sep = Vector2.zero();
+    for (final o in _g.world.children) {
+      if (identical(o, this)) continue;
+      if (o is! PositionComponent) continue;
+      if (o is! Enemy && o is! MiniBoss && o is! Boss && o is! KnightBoss &&
+          o is! KingBoss && o is! TentacleBoss && o is! CyclopsBoss &&
+          o is! PlagueLordBoss && o is! BloodChampionBoss) {
+        continue;
+      }
+      final d = position.distanceTo(o.position);
+      if (d > 0 && d < radius * 2.2) {
+        sep += (position - o.position).normalized() * ((radius * 2.2 - d) / (radius * 2.2));
+      }
+    }
+    if (sep.length2 > 0.01) {
+      desired = (desired + sep.normalized() * 0.55).normalized();
+    }
+
+    // avoid walls / obstacles / barrels
+    Vector2 avoid = Vector2.zero();
+    for (final o in _g.world.children) {
+      if (o is Wall || o is Obstacle || o is BreakableBarrel) {
+        final d = position.distanceTo(o.position);
+        final lim = radius + 36;
+        if (d > 0 && d < lim) {
+          avoid += (position - o.position).normalized() * ((lim - d) / lim);
+        }
+      }
+    }
+    if (avoid.length2 > 0.01) {
+      desired = (desired + avoid.normalized() * 0.9).normalized();
+    }
+
+    if (stuckTimer > 0) {
+      final a = Random().nextDouble() * pi * 2;
+      desired = Vector2(cos(a), sin(a));
+    }
+
+    if (desired.length2 < 0.01) return;
+
+    final next = position + desired * speed * dt;
+    // soft bounds
+    next.x = next.x.clamp(radius + 20, _g.mapWidth - radius - 20);
+    next.y = next.y.clamp(radius + 20, _g.mapHeight - radius - 20);
+    position.setFrom(next);
+
+    if ((position - _lastPos).length < speed * dt * 0.15) {
+      _stuckFrames++;
+      if (_stuckFrames > 12) {
+        stuckTimer = 0.55;
+        _stuckFrames = 0;
+      }
+    } else {
+      _stuckFrames = 0;
+    }
+    _lastPos.setFrom(position);
+  }
+
+  void pushOutOfWalls(double radius) {
+    for (final o in _g.world.children) {
+      if (o is Wall || o is Obstacle || o is BreakableBarrel) {
+        final d = position.distanceTo(o.position);
+        final minD = radius + 28;
+        if (d > 0 && d < minD) {
+          position += (position - o.position).normalized() * (minD - d);
+        }
+      }
+    }
+    position.x = position.x.clamp(radius + 16, _g.mapWidth - radius - 16);
+    position.y = position.y.clamp(radius + 16, _g.mapHeight - radius - 16);
+  }
+}
+
+// ─── INQUISITOR GAME ──────────────────────────────────────────
+
+class InquisitorGame extends FlameGame with HasCollisionDetection {
+  // map
+  double mapWidth = 1400;
+  double mapHeight = 1000;
+  double cellSize = 48;
+  final double safeRadius = 160;
+
+  // run state
   bool isPlaying = false;
   bool isPaused = false;
   bool isArena = false;
-  Difficulty difficulty = Difficulty.normal;
-  PlayerClass playerClass = PlayerClass.xenos;
-  String playerName = 'Inquisitor';
-  int currentFloor = 1;
-  int currentLevel = 1;
-  int pathIndex = 0;
-  int maxFloors = 5;
-  List<PathNode> floorPath = [];
-  List<PathNode> pendingPathChoices = [];
-  bool isBossLevel = false;
-  bool isMiniBossLevel = false;
-  bool isEliteNode = false;
-  EventRoomType currentEvent = EventRoomType.none;
-  bool eventResolved = true;
-  int levelsSinceEvent = 0;
+  bool portalSpawned = false;
+  bool timedPortalUsed = false;
+  bool secretBossSpawned = false;
+  bool eventResolved = false;
+  bool nearPortal = false;
+  bool ironWillUsedThisFloor = false;
 
-  // ── combat counters ──
+  String playerName = 'Аколит';
+  PlayerClass playerClass = PlayerClass.xenos;
+  Difficulty difficulty = Difficulty.normal;
+  RankChallenge activeChallenge = RankChallenge.none;
+
+  int currentFloor = 1;
+  int currentLevel = 1; // 1..5 on floor, synced with pathIndex
+  int pathIndex = 0;
+  List<PathNode> floorPath = [];
+
   int score = 0;
   int scraps = 0;
   int skillPoints = 0;
+  int runSeconds = 0;
+  double runTimeAcc = 0;
+
   int enemiesAlive = 0;
   int enemiesToSpawn = 0;
   int enemiesSpawned = 0;
-  double spawnTimer = 0;
-  double spawnInterval = 1.0;
-  int combo = 0;
-  double comboTimer = 0;
-  final Set<int> _comboMilestonesClaimed = {};
   int arenaKills = 0;
+  int levelsSinceEvent = 0;
 
-  // ── portal / no-kill timer ──
-  bool portalSpawned = false;
-  bool nearPortal = false;
-  double levelElapsed = 0; // seconds on current node
-  static const double timedPortalSec = 300; // 5 minutes
-  bool timedPortalUsed = false;
+  // timed portal (5 min) for no-kill / timed achievements
+  static const double timedPortalSec = 300;
+  double levelTimer = 0;
   int killsThisLevel = 0;
 
-  // ── secrets ──
-  bool secretBossUnlockedThisLevel = false;
-  bool secretBossSpawned = false;
-  double cornerStandTimer = 0;
-  bool tentacleDefeated = false;
-  bool cyclopsDefeated = false;
+  // combat stats (recomputed)
+  double playerSpeed = 160;
+  double attackSpeedMult = 1.0;
+  int maxHealth = 6;
+  int rangedDamage = 7;
+  int meleeDamage = 12;
+  int rangedCooldownMs = 280;
+  int meleeCooldownMs = 380;
+  int lastShotTime = 0;
+  int lastMeleeTime = 0;
 
-  // ── player combat ──
-  late Player player;
   bool usingMelee = false;
   RangedWeapon rangedWeapon = RangedWeapon.bolter;
   MeleeWeapon meleeWeapon = MeleeWeapon.sword;
-  int maxHealth = 6;
-  double playerSpeed = 160;
-  double attackSpeedMult = 1.0;
-  double defenseChance = 0;
-  double dmgMult = 1.0;
-  double tempDmgMult = 1.0;
-  double tempDmgTimer = 0;
-  double shieldTimer = 0;
-  double invulnTimer = 0;
-  double dashCooldown = 0;
-  double dashActive = 0;
-  double laserCooldown = 0;
-  double holyAuraTimer = 0;
-  double _hasteTimer = 0;
-  double bolterHeat = 0;
-  double staffWarpStress = 0;
-  double warpResetCooldown = 0;
-  double hereticusDashBoost = 0;
-  double bossRetreatTimer = 0;
-  double cinemaZoomTimer = 0;
-  double shakeTime = 0;
-  double shakePower = 0;
-  double currentZoom = 0.85;
-  ActiveArtifact activeArtifact = ActiveArtifact.none;
-  double artifactCooldown = 0;
-  bool ironWillUsedThisFloor = false;
-  EchoBossKind pendingEcho = EchoBossKind.none;
 
-  // unlocks
-  bool unlockedRifle = false, unlockedShotgun = false;
-  bool unlockedAxe = false, unlockedHammer = false;
-  bool unlockedStormStaff = false, unlockedWarpBeam = false;
-  bool unlockedForceSword = false, unlockedDaemonHammer = false;
-  bool unlockedNeedles = false, unlockedSniperNeedle = false;
-  bool unlockedPowerKatana = false, unlockedExecutioner = false;
-  bool unlockedDash = true, unlockedLaser = false, unlockedArtifact = false;
-
-  // damage baselines (recomputed)
-  int bolterDamage = 8, rifleDamage = 16, shotgunDamage = 7;
-  int staffDamage = 12, stormDamage = 10, warpDamage = 22;
-  int daggerDamage = 6, needleDamage = 5, sniperNeedleDamage = 20;
-  int swordDamage = 14, axeDamage = 18, hammerDamage = 28;
-  int forceDamage = 16, forceSwordDamage = 20, daemonDamage = 30;
-  int katanaDamage = 15, powerKatanaDamage = 19, execDamage = 26;
-
-  // ── systems ──
   SkillTree skills = SkillTree();
   Customization custom = Customization();
   WeaponLoadout loadout = WeaponLoadout();
   WeaponMastery mastery = WeaponMastery();
-  InquisitionRank inquisitionRank = InquisitionRank();
-  RankChallenge activeChallenge = RankChallenge.none;
-  bool challengeBossMeleeOk = true;
-  final List<RelicId> relics = [];
-  final Set<CodexId> codexUnlocked = {};
-  final Map<String, int> loreRanks = {};
-  CodexId? pendingLoreId;
+  InquisitionRank rank = InquisitionRank();
   AchievementState achievements = AchievementState();
-  final List<HighScoreEntry> highScores = [];
-  final List<GameSave> saves = [];
-  List<RewardOption> pendingRewards = [];
-
-  // ── audio ──
-  bool soundEnabled = true;
-  bool musicEnabled = true;
-  double musicVolume = 0.45;
-  ui.AudioPlayer? _bgmPlayer; // ignore if using flame_audio only
-
-  // ── HUD layout (sizes + positions) ──
   HudLayout hud = HudLayout();
-  // legacy aliases used by settings UI
-  double get joystickSize => hud.joystickSize;
-  set joystickSize(double v) => hud.joystickSize = v;
-  double get buttonSize => hud.buttonSize;
-  set buttonSize(double v) => hud.buttonSize = v;
 
-  late JoystickComponent moveJoystick;
-  late JoystickComponent attackJoystick;
+  final Set<RelicId> relics = {};
+  final Set<CodexId> codexUnlocked = {};
+  final Map<String, int> loreRanks = {}; // 0..2
+
+  ActiveArtifact activeArtifact = ActiveArtifact.fragGrenade;
+  double artifactCd = 0;
+  double dashCooldown = 0;
+  double laserCooldown = 0;
+  double warpResetCd = 0;
+  double invulnTimer = 0;
+  double shieldTimer = 0;
+  double hasteTimer = 0;
+  double bolterHeat = 0;
+  double staffWarpStress = 0;
+  double bossRetreatTimer = 0;
+  double cinemaZoomTimer = 0;
+  double shakeTimer = 0;
+  double shakePower = 0;
+
+  int combo = 0;
+  double comboTimer = 0;
+  EchoBossKind lastBossEcho = EchoBossKind.none;
+  EventRoomType currentEvent = EventRoomType.none;
+
+  late Player player;
+  Vector2 playerSpawnPos = Vector2(200, 500);
+
+  // HUD refs
+  JoystickComponent? moveJoystick;
+  JoystickComponent? attackJoystick;
   HudButtonComponent? settingsBtn;
   HudButtonComponent? backpackBtn;
-  HudButtonComponent? dashButton;
-  HudButtonComponent? laserButton;
-  HudButtonComponent? artifactButton;
-  HudButtonComponent? warpResetButton;
-  HudButtonComponent? portalButton;
-  AttackCooldownRing? cooldownRing;
+  HudButtonComponent? dashBtn;
+  HudButtonComponent? laserBtn;
+  HudButtonComponent? artifactBtn;
+  HudButtonComponent? warpBtn;
+  HudButtonComponent? portalBtn;
+  Component? attackCdRing;
 
-  // synergies flags
-  bool get hasJediPath => relics.contains(RelicId.jediPath);
-  bool get hasAmmoSavant => relics.contains(RelicId.ammoSavant);
-  bool get hasWarpAnchor => relics.contains(RelicId.warpAnchor);
-  bool get hasIronWill => relics.contains(RelicId.ironWill);
-  bool get hasExecutionerMark => relics.contains(RelicId.executionerMark);
-  bool get hasShieldPierce => relics.contains(RelicId.shieldPierce);
-  bool get synergyXenosMastery => playerClass == PlayerClass.xenos && mastery.getCount('bolter') >= 50;
-  bool get synergyXenosBlast => playerClass == PlayerClass.xenos && loadout.gunAmmo == GunAmmoMod.explosive && rangedWeapon == RangedWeapon.shotgun;
-  bool get synergyHereticusBleedDash => playerClass == PlayerClass.hereticus && relics.contains(RelicId.critCharm);
-  bool get synergyBloodRush => relics.contains(RelicId.vampirism) && relics.contains(RelicId.killExplosion);
-  String? get activeSynergyLabel {
-    final parts = <String>[];
-    if (synergyXenosMastery) parts.add('Xenos Mastery');
-    if (synergyXenosBlast) parts.add('Blast Cone');
-    if (synergyHereticusBleedDash) parts.add('Bleed Dash');
-    if (synergyBloodRush) parts.add('Blood Rush');
-    return parts.isEmpty ? null : parts.join(' • ');
+  // audio volumes
+  double musicVol = 0.55;
+  double sfxVol = 0.8;
+
+  // meta lists
+  List<HighScoreEntry> highScores = [];
+  List<GameSave> saves = [];
+
+  bool get isBossLevel =>
+      floorPath.isNotEmpty && pathIndex < floorPath.length && floorPath[pathIndex].kind == PathNodeKind.boss;
+
+  bool get areOtherBossesAlive {
+    return world.children.whereType<Boss>().isNotEmpty ||
+        world.children.whereType<KnightBoss>().isNotEmpty ||
+        world.children.whereType<MiniBoss>().isNotEmpty;
   }
 
-  double get worldThreat => 1.0 + (currentFloor - 1) * 0.12 + (isArena ? arenaKills * 0.01 : 0);
-
-  double get codexRangedBonus {
-    double b = 0;
-    for (final id in codexUnlocked) {
-      final r = loreRankOf(id);
-      if (r <= 0) continue;
-      if (id == CodexId.shooter || id == CodexId.flamer || id == CodexId.sniper) b += 0.01 * r;
-    }
-    return b;
-  }
-
-  double get codexMeleeBonus {
-    double b = 0;
-    for (final id in codexUnlocked) {
-      final r = loreRankOf(id);
-      if (r <= 0) continue;
-      if (id == CodexId.melee || id == CodexId.bloodletter || id == CodexId.dog) b += 0.01 * r;
-    }
-    return b;
-  }
+  double get worldThreat => 1.0 + (currentFloor - 1) * 0.08 + (currentLevel - 1) * 0.03;
 
   double get codexShieldBonus {
     double b = 0;
-    if (codexUnlocked.contains(CodexId.shielded)) b += 0.02 * loreRankOf(CodexId.shielded);
+    for (final id in [CodexId.shielded, CodexId.shieldedShooter]) {
+      b += (loreRanks[id.name] ?? 0) * 0.015;
+    }
     return b;
   }
 
   double get codexBossBonus {
     double b = 0;
-    for (final id in [CodexId.boss, CodexId.knight, CodexId.king, CodexId.miniBoss, CodexId.plagueLord, CodexId.bloodChampion]) {
-      if (codexUnlocked.contains(id)) b += 0.02 * loreRankOf(id);
+    for (final id in [
+      CodexId.boss,
+      CodexId.knight,
+      CodexId.king,
+      CodexId.miniBoss,
+      CodexId.plagueLord,
+      CodexId.bloodChampion
+    ]) {
+      b += (loreRanks[id.name] ?? 0) * 0.015;
     }
     return b;
   }
 
-  double get codexBurnBonus => codexUnlocked.contains(CodexId.flamer) ? 0.3 * loreRankOf(CodexId.flamer) : 0;
-
-  int loreRankOf(CodexId id) => loreRanks[id.name] ?? 0;
-
-  bool get areOtherBossesAlive {
-    final w = world;
-    return w.children.whereType<Boss>().any((b) => !b.isEcho) ||
-        w.children.whereType<KnightBoss>().any((b) => !b.isEcho) ||
-        w.children.whereType<PlagueLordBoss>().any((b) => !b.isEcho) ||
-        w.children.whereType<BloodChampionBoss>().any((b) => !b.isEcho);
-  }
+  bool get hasShieldPierce => relics.contains(RelicId.shieldPierce);
+  bool get hasJediPath => relics.contains(RelicId.jediPath);
+  bool get hasAmmoSavant => relics.contains(RelicId.ammoSavant);
+  bool get hasWarpAnchor => relics.contains(RelicId.warpAnchor);
+  bool get hasShadowStep => relics.contains(RelicId.shadowStep);
+  bool get hasIronWill => relics.contains(RelicId.ironWill);
+  bool get hasExecutioner => relics.contains(RelicId.executionerMark);
+  bool get hasScavenger => relics.contains(RelicId.scavenger);
+  bool get hasCrit => relics.contains(RelicId.crit);
+  bool get hasLifesteal => relics.contains(RelicId.lifesteal);
+  bool get hasKillExplosion => relics.contains(RelicId.killExplosion);
+  bool get hasHaste => relics.contains(RelicId.haste);
 
   // ── lifecycle ──
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    camera.viewfinder.anchor = Anchor.center;
     await _loadMeta();
-    camera.viewfinder.zoom = currentZoom;
-    overlays.add('mainMenu');
+    try {
+      await FlameAudio.audioCache.loadAll([
+        'bgm.mp3',
+        'shoot.mp3',
+        'melee.mp3',
+        'hit.mp3',
+      ]);
+    } catch (_) {}
   }
 
   Future<void> _loadMeta() async {
     final prefs = await SharedPreferences.getInstance();
-    final hs = prefs.getStringList('highScores') ?? [];
-    highScores.clear();
-    for (final s in hs) {
+    musicVol = prefs.getDouble('musicVol') ?? 0.55;
+    sfxVol = prefs.getDouble('sfxVol') ?? 0.8;
+    final hudJson = prefs.getString('hud');
+    if (hudJson != null) {
       try {
-        highScores.add(HighScoreEntry.fromJson(jsonDecode(s) as Map<String, dynamic>));
+        hud = HudLayout.fromJson(jsonDecode(hudJson) as Map<String, dynamic>);
       } catch (_) {}
     }
-    final sv = prefs.getStringList('saves') ?? [];
-    saves.clear();
-    for (final s in sv) {
+    final rankJson = prefs.getString('rank');
+    if (rankJson != null) {
       try {
-        saves.add(GameSave.fromJson(jsonDecode(s) as Map<String, dynamic>));
+        rank = InquisitionRank.fromJson(jsonDecode(rankJson) as Map<String, dynamic>);
       } catch (_) {}
     }
-    final rankRaw = prefs.getString('rank');
-    if (rankRaw != null) {
+    final achJson = prefs.getString('achievements');
+    if (achJson != null) {
       try {
-        inquisitionRank = InquisitionRank.fromJson(jsonDecode(rankRaw) as Map<String, dynamic>);
+        achievements = AchievementState.fromJson(jsonDecode(achJson) as Map<String, dynamic>);
       } catch (_) {}
     }
-    final cust = prefs.getString('custom');
-    if (cust != null) {
+    final hs = prefs.getString('highScores');
+    if (hs != null) {
       try {
-        custom = Customization.fromJson(jsonDecode(cust) as Map<String, dynamic>);
+        final list = jsonDecode(hs) as List;
+        highScores = list.map((e) => HighScoreEntry.fromJson(e as Map<String, dynamic>)).toList();
       } catch (_) {}
     }
-    final hudRaw = prefs.getString('hudLayout');
-    if (hudRaw != null) {
+    final sv = prefs.getString('saves');
+    if (sv != null) {
       try {
-        hud = HudLayout.fromJson(jsonDecode(hudRaw) as Map<String, dynamic>);
+        final list = jsonDecode(sv) as List;
+        saves = list.map((e) => GameSave.fromJson(e as Map<String, dynamic>)).toList();
       } catch (_) {}
     }
-    final achRaw = prefs.getString('achievements');
-    if (achRaw != null) {
-      try {
-        achievements = AchievementState.fromJson(jsonDecode(achRaw) as Map<String, dynamic>);
-      } catch (_) {}
-    }
-    soundEnabled = prefs.getBool('sound') ?? true;
-    musicEnabled = prefs.getBool('music') ?? true;
-    musicVolume = prefs.getDouble('musicVol') ?? 0.45;
   }
 
-  Future<void> persistMeta() async {
+  Future<void> _saveMeta() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('highScores', highScores.map((e) => jsonEncode(e.toJson())).toList());
-    await prefs.setStringList('saves', saves.map((e) => jsonEncode(e.toJson())).toList());
-    await prefs.setString('rank', jsonEncode(inquisitionRank.toJson()));
-    await prefs.setString('custom', jsonEncode(custom.toJson()));
-    await prefs.setString('hudLayout', jsonEncode(hud.toJson()));
+    await prefs.setDouble('musicVol', musicVol);
+    await prefs.setDouble('sfxVol', sfxVol);
+    await prefs.setString('hud', jsonEncode(hud.toJson()));
+    await prefs.setString('rank', jsonEncode(rank.toJson()));
     await prefs.setString('achievements', jsonEncode(achievements.toJson()));
-    await prefs.setBool('sound', soundEnabled);
-    await prefs.setBool('music', musicEnabled);
-    await prefs.setDouble('musicVol', musicVolume);
+    await prefs.setString('highScores', jsonEncode(highScores.map((e) => e.toJson()).toList()));
+    await prefs.setString('saves', jsonEncode(saves.map((e) => e.toJson()).toList()));
   }
 
-  Future<void> persistCustomization() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('custom', jsonEncode(custom.toJson()));
-    await prefs.setString('hudLayout', jsonEncode(hud.toJson()));
+  void recomputeStats() {
+    maxHealth = 6 + skills.hp + playerClass.hpMod + (hasIronWill ? 1 : 0) + rank.startSpBonus.clamp(0, 0);
+    // startSp is skill points, not HP — fix:
+    maxHealth = 6 + skills.hp + (playerClass == PlayerClass.malleus ? -1 : 0) + (playerClass == PlayerClass.hereticus ? -1 : 0) + (hasIronWill ? 1 : 0);
+    playerSpeed = 160 + skills.speed * 12 + playerClass.speedMod + (hasteTimer > 0 ? 30 : 0);
+    attackSpeedMult = 1.0 + skills.attackSpeed * 0.08;
+    rangedDamage = (7 + skills.damage * 1.5).round();
+    meleeDamage = (12 + skills.damage * 2).round();
+    rangedCooldownMs = (280 / attackSpeedMult).round();
+    meleeCooldownMs = (380 / attackSpeedMult).round();
+    if (loadout.gunBarrel == GunBarrelMod.rapid) rangedCooldownMs = (rangedCooldownMs * 0.75).round();
+    if (loadout.gunBarrel == GunBarrelMod.heavy) rangedDamage = (rangedDamage * 1.35).round();
   }
 
-  // ── achievements ──
-  Future<void> unlockAchievement(AchievementId id) async {
-    if (achievements.has(id)) return;
-    achievements.unlocked.add(id.name);
-    await persistMeta();
-    if (isPlaying) {
-      spawnDamageNumber(player.position.clone() + Vector2(0, -50), 0, color: const Color(0xFFFFD700), label: '★ ${id.title}');
+  int scaleDamage(num base) {
+    var d = base.toDouble() * playerClass.dmgMod;
+    if (hasCrit && Random().nextDouble() < 0.15 + rank.critBonus) d *= 2;
+    return d.round().clamp(1, 9999);
+  }
+
+  // ── HUD ──
+
+  void rebuildHud() {
+    // remove old
+    for (final c in [
+      moveJoystick,
+      attackJoystick,
+      settingsBtn,
+      backpackBtn,
+      dashBtn,
+      laserBtn,
+      artifactBtn,
+      warpBtn,
+      portalBtn,
+      attackCdRing,
+    ]) {
+      c?.removeFromParent();
     }
-  }
 
-  void noteClassPlayed(PlayerClass c) {
-    achievements.classesPlayed.add(c.name);
-    if (achievements.classesPlayed.length >= 3) {
-      unlockAchievement(AchievementId.allClasses);
+    final size = camera.viewport.size;
+    final js = hud.joystickSize;
+    final bs = hud.buttonSize;
+
+    Vector2 anchorOf(double nx, double nyFromBottom, {bool fromTop = false}) {
+      final x = size.x * nx;
+      final y = fromTop ? size.y * nyFromBottom : size.y * (1.0 - nyFromBottom);
+      return Vector2(x, y);
     }
-    persistMeta();
+
+    moveJoystick = JoystickComponent(
+      knob: CircleComponent(radius: js * 0.28, paint: Paint()..color = const Color(0xFFB71C1C)),
+      background: CircleComponent(radius: js * 0.5, paint: Paint()..color = const Color(0x55FFFFFF)),
+      margin: EdgeInsets.only(
+        left: size.x * hud.moveX - js * 0.5,
+        bottom: size.y * hud.moveY - js * 0.5,
+      ),
+    );
+
+    attackJoystick = JoystickComponent(
+      knob: CircleComponent(radius: js * 0.28, paint: Paint()..color = const Color(0xFFFFD700)),
+      background: CircleComponent(radius: js * 0.5, paint: Paint()..color = const Color(0x55FFFFFF)),
+      margin: EdgeInsets.only(
+        right: size.x * (1 - hud.atkX) - js * 0.5,
+        bottom: size.y * hud.atkY - js * 0.5,
+      ),
+    );
+
+    HudButtonComponent mkBtn(String label, Vector2 pos, void Function() onPress) {
+      return HudButtonComponent(
+        button: CircleComponent(radius: bs * 0.5, paint: Paint()..color = const Color(0xFF1A1A1A))
+          ..add(TextComponent(
+            text: label,
+            anchor: Anchor.center,
+            position: Vector2(bs * 0.5, bs * 0.5),
+            textRenderer: TextPaint(style: const TextStyle(color: Color(0xFFFFD700), fontSize: 14, fontWeight: FontWeight.bold)),
+          )),
+        buttonDown: CircleComponent(radius: bs * 0.5, paint: Paint()..color = const Color(0xFFB71C1C)),
+        position: pos,
+        onPressed: onPress,
+      );
+    }
+
+    settingsBtn = mkBtn('S', anchorOf(hud.settingsX, hud.settingsY, fromTop: true), openSettings);
+    backpackBtn = mkBtn('B', anchorOf(hud.backpackX, hud.backpackY, fromTop: true), openBackpack);
+    dashBtn = mkBtn('U', anchorOf(hud.dashX, hud.dashY), () => player.dash());
+    laserBtn = mkBtn('L', anchorOf(hud.laserX, hud.laserY), useLaser);
+    artifactBtn = mkBtn('R', anchorOf(hud.artifactX, hud.artifactY), useArtifact);
+    warpBtn = mkBtn('Ψ', anchorOf(hud.warpX, hud.warpY), resetWarp);
+    portalBtn = mkBtn('P', anchorOf(hud.portalBtnX, hud.portalBtnY), usePortal);
+    portalBtn!.debugMode = false;
+
+    camera.viewport.add(moveJoystick!);
+    camera.viewport.add(attackJoystick!);
+    camera.viewport.add(settingsBtn!);
+    camera.viewport.add(backpackBtn!);
+    camera.viewport.add(dashBtn!);
+    camera.viewport.add(laserBtn!);
+    camera.viewport.add(artifactBtn!);
+    camera.viewport.add(warpBtn!);
+    camera.viewport.add(portalBtn!);
+    portalBtn!.opacity = 0; // shown when near portal
   }
 
-  // ── audio stubs (flame_audio assets/sounds/) ──
-  void playClick() {
-    if (!soundEnabled) return;
+  void playSfx(String name) {
     try {
-      FlameAudio.play('click.mp3', volume: 0.4);
+      FlameAudio.play(name, volume: sfxVol);
     } catch (_) {}
   }
 
-  void playShoot() {
-    if (!soundEnabled) return;
+  void ensureBgm() {
     try {
-      FlameAudio.play('shoot.mp3', volume: 0.35);
+      FlameAudio.bgm.play('bgm.mp3', volume: musicVol);
     } catch (_) {}
   }
 
-  void playMelee() {
-    if (!soundEnabled) return;
-    try {
-      FlameAudio.play('melee.mp3', volume: 0.4);
-    } catch (_) {}
-  }
-
-  void startMusic() {
-    if (!musicEnabled) return;
-    try {
-      FlameAudio.bgm.play('bgm.mp3', volume: musicVolume);
-    } catch (_) {}
-  }
-
-  void stopMusic() {
+  void stopBgm() {
     try {
       FlameAudio.bgm.stop();
     } catch (_) {}
   }
 
-  void applyMusicSetting() {
-    if (musicEnabled) {
-      startMusic();
-    } else {
-      stopMusic();
-    }
+  void spawnDamageNumber(Vector2 at, int amount, {Color color = const Color(0xFFFFEB3B), String? label}) {
+    world.add(DamageNumber(position: at + Vector2(0, -20), amount: amount, color: color, label: label));
   }
 
-  // ── stats ──
-  void recomputeStats() {
-    maxHealth = (playerClass == PlayerClass.xenos ? 6 : 5) + skills.hp;
-    playerSpeed = (playerClass == PlayerClass.hereticus ? 175.0 : 155.0) + skills.speed * 8;
-    attackSpeedMult = 1.0 / (1.0 + skills.attackSpeed * 0.06);
-    defenseChance = skills.defense * 0.04;
-    dmgMult = 1.0 + skills.damage * 0.07 + inquisitionRank.critBonus + codexRangedBonus + codexMeleeBonus;
-
-    bolterDamage = (8 * dmgMult).round();
-    rifleDamage = (16 * dmgMult).round();
-    shotgunDamage = (7 * dmgMult).round();
-    staffDamage = (14 * dmgMult * (loadout.staffFocus == StaffFocusMod.focused ? 1.2 : loadout.staffFocus == StaffFocusMod.wideSphere ? 0.85 : 1.0)).round();
-    stormDamage = (11 * dmgMult).round();
-    warpDamage = (22 * dmgMult).round();
-    daggerDamage = (6 * dmgMult).round();
-    needleDamage = (5 * dmgMult).round();
-    sniperNeedleDamage = (20 * dmgMult).round();
-
-    final blade = loadout.bladeEdge == BladeEdgeMod.mono
-        ? 1.12
-        : loadout.bladeEdge == BladeEdgeMod.serrated
-            ? 1.08
-            : loadout.bladeEdge == BladeEdgeMod.weighted
-                ? 1.15
-                : 1.0;
-    swordDamage = (14 * dmgMult * blade * mastery.meleeMasteryMult('sword')).round();
-    axeDamage = (18 * dmgMult * blade * mastery.meleeMasteryMult('axe')).round();
-    hammerDamage = (28 * dmgMult * blade * mastery.meleeMasteryMult('hammer')).round();
-    forceDamage = (16 * dmgMult * blade).round();
-    forceSwordDamage = (20 * dmgMult * blade).round();
-    daemonDamage = (30 * dmgMult * blade).round();
-    katanaDamage = (15 * dmgMult * blade * mastery.meleeMasteryMult('katana')).round();
-    powerKatanaDamage = (19 * dmgMult * blade).round();
-    execDamage = (26 * dmgMult * blade).round();
-
-    if (loadout.gunSight == GunSightMod.precision) {
-      bolterDamage = (bolterDamage * 1.1).round();
-      rifleDamage = (rifleDamage * 1.1).round();
-    }
-    if (loadout.gunBarrel == GunBarrelMod.heavy) {
-      bolterDamage = (bolterDamage * 1.25).round();
-      rifleDamage = (rifleDamage * 1.2).round();
-    }
+  void spawnBlood(Vector2 at, {int count = 12, Vector2? fromDir}) {
+    world.add(BloodSplash(position: at, count: count, fromDir: fromDir));
   }
-
-  double staffRadiusMult() {
-    var m = mastery.staffRadiusMult();
-    if (loadout.staffFocus == StaffFocusMod.wideSphere) m *= 1.35;
-    if (loadout.staffFocus == StaffFocusMod.focused) m *= 0.8;
-    return m;
-  }
-
-  int scaleDamage(int base) {
-    var d = base * tempDmgMult;
-    if (relics.contains(RelicId.critCharm) && Random().nextDouble() < 0.12 + inquisitionRank.critBonus) {
-      d *= 1.75;
-    }
-    return d.round().clamp(1, 9999);
-  }
-
-  // ── HUD rebuild (FIX: sizes & positions apply in combat) ──
-  Vector2 _hudPos(double nx, double ny, {bool fromBottom = true}) {
-    final sz = size;
-    final x = nx * sz.x;
-    final y = fromBottom ? sz.y - ny * sz.y : ny * sz.y;
-    return Vector2(x, y);
-  }
-
-  void rebuildHud() {
-    // remove old controls
-    moveJoystick.removeFromParent();
-    attackJoystick.removeFromParent();
-    settingsBtn?.removeFromParent();
-    backpackBtn?.removeFromParent();
-    dashButton?.removeFromParent();
-    laserButton?.removeFromParent();
-    artifactButton?.removeFromParent();
-    warpResetButton?.removeFromParent();
-    portalButton?.removeFromParent();
-    cooldownRing?.removeFromParent();
-
-    final js = hud.joystickSize;
-    final bs = hud.buttonSize;
-
-    moveJoystick = JoystickComponent(
-      knob: CircleComponent(radius: js * 0.35, paint: Paint()..color = const Color(0xFFB8860B).withOpacity(0.85)),
-      background: CircleComponent(radius: js * 0.5, paint: Paint()..color = const Color(0xFF1A1A1A).withOpacity(0.55)),
-      margin: EdgeInsets.only(left: hud.moveX * size.x - js * 0.5, bottom: hud.moveY * size.y - js * 0.5),
-    );
-    attackJoystick = JoystickComponent(
-      knob: CircleComponent(radius: js * 0.35, paint: Paint()..color = const Color(0xFFE53935).withOpacity(0.85)),
-      background: CircleComponent(radius: js * 0.5, paint: Paint()..color = const Color(0xFF1A1A1A).withOpacity(0.55)),
-      margin: EdgeInsets.only(right: (1 - hud.atkX) * size.x - js * 0.5, bottom: hud.atkY * size.y - js * 0.5),
-    );
-
-    camera.viewport.add(moveJoystick);
-    camera.viewport.add(attackJoystick);
-
-    settingsBtn = HudButtonComponent(
-      button: CircleComponent(radius: bs * 0.5, paint: Paint()..color = const Color(0xFF37474F)),
-      position: _hudPos(hud.settingsX, hud.settingsY, fromBottom: false),
-      onPressed: openSettings,
-    )..priority = 200;
-    backpackBtn = HudButtonComponent(
-      button: CircleComponent(radius: bs * 0.5, paint: Paint()..color = const Color(0xFF4E342E)),
-      position: _hudPos(hud.backpackX, hud.backpackY, fromBottom: false),
-      onPressed: openBackpack,
-    )..priority = 200;
-    camera.viewport.add(settingsBtn!);
-    camera.viewport.add(backpackBtn!);
-    camera.viewport.add(HudLabel(text: 'S', target: settingsBtn!)..priority = 201);
-    camera.viewport.add(HudLabel(text: 'B', target: backpackBtn!)..priority = 201);
-
-    if (playerClass == PlayerClass.hereticus || unlockedDash) {
-      dashButton = HudButtonComponent(
-        button: CircleComponent(radius: bs * 0.5, paint: Paint()..color = const Color(0xFF6A1B9A)),
-        position: _hudPos(hud.dashX, hud.dashY),
-        onPressed: activateDash,
-      )..priority = 200;
-      camera.viewport.add(dashButton!);
-      camera.viewport.add(HudLabel(text: 'U', target: dashButton!)..priority = 201);
-    }
-    if (unlockedLaser) {
-      laserButton = HudButtonComponent(
-        button: CircleComponent(radius: bs * 0.5, paint: Paint()..color = const Color(0xFFFF6D00)),
-        position: _hudPos(hud.laserX, hud.laserY),
-        onPressed: activateLaser,
-      )..priority = 200;
-      camera.viewport.add(laserButton!);
-      camera.viewport.add(HudLabel(text: 'L', target: laserButton!)..priority = 201);
-    }
-    if (unlockedArtifact && activeArtifact != ActiveArtifact.none) {
-      artifactButton = HudButtonComponent(
-        button: CircleComponent(radius: bs * 0.5, paint: Paint()..color = const Color(0xFF1B5E20)),
-        position: _hudPos(hud.artifactX, hud.artifactY),
-        onPressed: activateArtifact,
-      )..priority = 200;
-      camera.viewport.add(artifactButton!);
-      camera.viewport.add(HudLabel(text: 'R', target: artifactButton!)..priority = 201);
-    }
-    if (playerClass == PlayerClass.malleus) {
-      warpResetButton = HudButtonComponent(
-        button: CircleComponent(radius: bs * 0.5, paint: Paint()..color = const Color(0xFF7C4DFF)),
-        position: _hudPos(hud.warpX, hud.warpY),
-        onPressed: resetWarpStress,
-      )..priority = 200;
-      camera.viewport.add(warpResetButton!);
-      camera.viewport.add(HudLabel(text: 'Ψ', target: warpResetButton!)..priority = 201);
-    }
-
-    cooldownRing = AttackCooldownRing(game: this, joystick: attackJoystick)..priority = 199;
-    camera.viewport.add(cooldownRing!);
-  }
-
-  void grantInvuln(double t) => invulnTimer = max(invulnTimer, t);
 
   void triggerShake({double power = 6, double time = 0.15}) {
     shakePower = power;
-    shakeTime = time;
+    shakeTimer = time;
   }
 
   void triggerCinemaZoom() {
-    cinemaZoomTimer = 0.45;
+    cinemaZoomTimer = 0.4;
   }
 
-  void markBossRetreat() => bossRetreatTimer = 0.8;
-
-  void noteBossDamagedByRanged() {
-    if (activeChallenge == RankChallenge.meleeOnlyBoss && isBossLevel) {
-      challengeBossMeleeOk = false;
-    }
+  void markBossRetreat() {
+    bossRetreatTimer = 0.8;
   }
 
-  void spawnDamageNumber(Vector2 pos, int amount, {Color color = const Color(0xFFFFEB3B), String? label}) {
-    world.add(DamageNumber(position: pos.clone(), amount: amount, color: color, label: label));
+  void spawnCorruptionZone(Vector2 at) {
+    world.add(CorruptionPuddle(position: at.clone())..priority = 5);
   }
 
-  void spawnBlood(Vector2 pos, {int count = 12, Vector2? fromDir}) {
-    world.add(BloodSplash(position: pos.clone(), count: count, fromDir: fromDir));
+  void unlockAchievement(AchievementId id) {
+    if (achievements.has(id)) return;
+    achievements.unlocked.add(id.name);
+    _saveMeta();
+    spawnDamageNumber(player.position, 0, color: const Color(0xFFFFD700), label: '★ ${id.title}');
   }
 
-  void spawnCorruptionZone(Vector2 pos) {
-    world.add(CorruptionZone(position: pos.clone()));
+  void unlockCodex(CodexId id) {
+    if (codexUnlocked.contains(id)) return;
+    codexUnlocked.add(id);
+    loreRanks[id.name] = 0;
+    overlays.add('lorePopup');
   }
 
   BulletMod rollBulletMod() {
@@ -2149,877 +2195,170 @@ class InquisitorGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     return BulletMod.normal;
   }
 
-  // ── path / floors ──
-  void generateFloorPath() {
-    floorPath = [];
-    // 5 nodes per floor: combat, event/elite, combat, rest/elite, boss
-    floorPath.add(PathNode(PathNodeKind.combat, 'Бой'));
-    floorPath.add(PathNode(Random().nextBool() ? PathNodeKind.event : PathNodeKind.elite, Random().nextBool() ? 'Событие' : 'Элита'));
-    floorPath.add(PathNode(PathNodeKind.combat, 'Бой'));
-    floorPath.add(PathNode(Random().nextBool() ? PathNodeKind.rest : PathNodeKind.elite, Random().nextBool() ? 'Отдых' : 'Элита'));
-    floorPath.add(PathNode(PathNodeKind.boss, 'Босс'));
-    pathIndex = 0;
-    syncLevelFromPath();
+  // stubs used by menus / player — filled in PART 4+
+  void openSettings() {
+    isPaused = true;
+    overlays.add('settings');
   }
 
-  void syncLevelFromPath() {
-    currentLevel = pathIndex + 1;
-    if (floorPath.isNotEmpty && pathIndex < floorPath.length) {
-      isBossLevel = floorPath[pathIndex].kind == PathNodeKind.boss;
-    }
+  void closeSettings() {
+    overlays.remove('settings');
+    isPaused = false;
+    rebuildHud(); // фикс размеров/позиций в бою
+    _saveMeta();
   }
 
-  PathNodeKind get currentNodeKind {
-    if (floorPath.isEmpty || pathIndex >= floorPath.length) {
-      return currentLevel >= 5 ? PathNodeKind.boss : PathNodeKind.combat;
-    }
-    return floorPath[pathIndex].kind;
+  void openBackpack() {
+    isPaused = true;
+    overlays.add('backpack');
   }
 
-  int get maxFloorsForDiff => difficulty.maxFloors;
-
-  // ── unlocks by overall progress ──
-  void _checkUnlocks() {
-    final overall = (currentFloor - 1) * 5 + currentLevel;
-    if (overall >= 11) {
-      unlockedRifle = true;
-      unlockedAxe = true;
-      unlockedStormStaff = true;
-      unlockedForceSword = true;
-      unlockedNeedles = true;
-      unlockedPowerKatana = true;
-    }
-    if (overall >= 21) {
-      unlockedShotgun = true;
-      unlockedHammer = true;
-      unlockedWarpBeam = true;
-      unlockedDaemonHammer = true;
-      unlockedSniperNeedle = true;
-      unlockedExecutioner = true;
-    }
-    if (tentacleDefeated) unlockedDash = true;
-    if (cyclopsDefeated) unlockedLaser = true;
-  }
-}
-  // ── spawn points ──
-  List<Vector2> getEnemySpawnPointsRaw() {
-    final cx = mapWidth / 2, cy = mapHeight / 2;
-    final pts = <Vector2>[];
-    switch (((currentFloor - 1) % 5) + 1) {
-      case 1: // cross hall
-        for (final o in [-320.0, -160.0, 160.0, 320.0]) {
-          pts.add(Vector2(cx + o, cy - 280));
-          pts.add(Vector2(cx + o, cy + 280));
-          pts.add(Vector2(cx - 320, cy + o * 0.5));
-          pts.add(Vector2(cx + 320, cy + o * 0.5));
-        }
-        break;
-      case 2: // ring
-        for (int i = 0; i < 12; i++) {
-          final a = i / 12 * pi * 2;
-          pts.add(Vector2(cx + cos(a) * 340, cy + sin(a) * 300));
-        }
-        break;
-      case 3: // corners + mid
-        pts.addAll([
-          Vector2(180, 180),
-          Vector2(mapWidth - 180, 180),
-          Vector2(180, mapHeight - 180),
-          Vector2(mapWidth - 180, mapHeight - 180),
-          Vector2(cx, 160),
-          Vector2(cx, mapHeight - 160),
-          Vector2(160, cy),
-          Vector2(mapWidth - 160, cy),
-        ]);
-        break;
-      case 4: // lanes
-        for (double y = 160; y < mapHeight - 160; y += 140) {
-          pts.add(Vector2(160, y));
-          pts.add(Vector2(mapWidth - 160, y));
-        }
-        break;
-      default: // dense grid
-        for (double x = 160; x < mapWidth - 160; x += 180) {
-          for (double y = 160; y < mapHeight - 160; y += 180) {
-            if ((x - cx).abs() < 100 && (y - cy).abs() < 100) continue;
-            pts.add(Vector2(x, y));
-          }
-        }
-    }
-    return pts.where((p) => p.x > 100 && p.x < mapWidth - 100 && p.y > 100 && p.y < mapHeight - 100).toList();
-  }
-
-  List<Vector2> getEnemySpawnPoints() {
-    final origin = playerSpawnPos;
-    return getEnemySpawnPointsRaw().where((p) => p.distanceTo(origin) >= safeRadius + 40).toList();
-  }
-
-  EventRoomType _rollEvent() {
-    levelsSinceEvent++;
-    if (levelsSinceEvent < 2) return EventRoomType.none;
-    if (Random().nextDouble() < 0.55) {
-      levelsSinceEvent = 0;
-      return [EventRoomType.altar, EventRoomType.merchant, EventRoomType.trap][Random().nextInt(3)];
-    }
-    return EventRoomType.none;
-  }
-
-  void _forceSpawnPortal({bool fromTimer = false}) {
-    if (portalSpawned) return;
-    portalSpawned = true;
-    if (fromTimer) timedPortalUsed = true;
-    for (final p in world.children.whereType<Portal>().toList()) {
-      p.removeFromParent();
-    }
-    world.add(Portal(position: Vector2(mapWidth / 2, 160))..priority = 9);
-    spawnDamageNumber(
-      Vector2(mapWidth / 2, 200),
-      0,
-      color: const Color(0xFFE91E63),
-      label: fromTimer ? 'ПОРТАЛ (5 мин)' : 'ПОРТАЛ',
-    );
-  }
-
-  int countLivingHostiles() {
-    var n = 0;
-    n += world.children.whereType<Enemy>().length;
-    n += world.children.whereType<MiniBoss>().length;
-    n += world.children.whereType<Boss>().length;
-    n += world.children.whereType<KnightBoss>().length;
-    n += world.children.whereType<KingBoss>().length;
-    n += world.children.whereType<TentacleBoss>().length;
-    n += world.children.whereType<CyclopsBoss>().length;
-    n += world.children.whereType<PlagueLordBoss>().length;
-    n += world.children.whereType<BloodChampionBoss>().length;
-    return n;
-  }
-
-  void _checkPortal() {
-    if (portalSpawned || isArena) return;
-    // clear room
-    if (countLivingHostiles() <= 0 && enemiesSpawned >= enemiesToSpawn && !isBossLevel) {
-      _forceSpawnPortal();
-      return;
-    }
-    // boss clear
-    if (isBossLevel && countLivingHostiles() <= 0 && secretBossSpawned == false) {
-      // allow secret window; portal still after small delay via living count
-      _forceSpawnPortal();
-    }
-  }
-
-  void _spawnEventProps() {
-    if (currentEvent == EventRoomType.altar) {
-      world.add(EventAltarProp(position: Vector2(mapWidth / 2, mapHeight / 2 - 40))..priority = 10);
-    } else if (currentEvent == EventRoomType.merchant) {
-      world.add(EventMerchantProp(position: Vector2(mapWidth / 2, mapHeight / 2 - 40))..priority = 10);
-    }
-  }
-
-  void _startTrapWave() {
-    eventResolved = true;
-    final pts = getEnemySpawnPoints();
-    final n = 6 + currentFloor;
-    enemiesToSpawn += n;
-    for (int i = 0; i < n; i++) {
-      final pos = pts.isEmpty ? Vector2(mapWidth / 2, mapHeight / 2) : pts[Random().nextInt(pts.length)].clone();
-      _spawnOneEnemy(pos, forceChampion: i == 0);
-    }
-  }
-
-  EnemyType _rollEnemyType() {
-    final overall = (currentFloor - 1) * 5 + currentLevel;
-    final r = Random().nextDouble();
-    if (overall >= 20 && r < 0.12) return EnemyType.shieldedShooter;
-    if (overall >= 11 && r < 0.18) return EnemyType.dog;
-    if (overall >= 13 && r < 0.12) return EnemyType.cultPsyker;
-    if (overall >= 15 && r < 0.10) return EnemyType.plagueBearer;
-    if (overall >= 16 && r < 0.10) return EnemyType.bloodletter;
-    if (overall >= 8 && r < 0.12) return EnemyType.flamer;
-    if (overall >= 9 && r < 0.10) return EnemyType.sniper;
-    if (overall >= 10 && r < 0.08) return EnemyType.brute;
-    if (r < 0.34) return EnemyType.shooter;
-    if (r < 0.62) return EnemyType.melee;
-    if (r < 0.78) return EnemyType.shielded;
-    return EnemyType.shooter;
-  }
-
-  EliteAffix _rollAffix() {
-    final r = Random().nextDouble();
-    if (r < 0.20) return EliteAffix.swift;
-    if (r < 0.40) return EliteAffix.regenerating;
-    if (r < 0.58) return EliteAffix.explosive;
-    if (r < 0.74) return EliteAffix.reflect;
-    if (r < 0.90) return EliteAffix.summoner;
-    return EliteAffix.none;
-  }
-
-  void _spawnOneEnemy(Vector2 pos, {bool forceChampion = false}) {
-    final type = _rollEnemyType();
-    final champ = forceChampion || isEliteNode || Random().nextDouble() < (isArena ? 0.12 : 0.08);
-    final affix = champ ? _rollAffix() : EliteAffix.none;
-    final e = Enemy(floor: currentFloor, type: type, isChampion: champ, affix: affix);
-    e.position = pos;
-    e.priority = 30;
-    world.add(e);
-    enemiesAlive++;
-    enemiesSpawned++;
-    // spawn portal marker
-    world.add(SpawnPortalMarker(position: pos.clone())..priority = 7);
-  }
-
-  void _spawnFloorBosses() {
-    final bossPos = Vector2(mapWidth / 2, mapHeight / 2 - 260);
-    final floor = currentFloor;
-
-    // main ranged boss
-    world.add(Boss(floor: floor, position: bossPos.clone())..priority = 25);
-    enemiesAlive++;
-    enemiesToSpawn++;
-    enemiesSpawned++;
-
-    // knight + specials on higher floors
-    if (floor >= 3) {
-      world.add(KnightBoss(floor: floor, position: bossPos + Vector2(-180, 40))..priority = 25);
-      enemiesAlive++;
-      enemiesToSpawn++;
-      enemiesSpawned++;
-    }
-    if (floor >= 4) {
-      world.add(PlagueLordBoss(position: bossPos + Vector2(180, 60))..priority = 26);
-      enemiesAlive++;
-      enemiesToSpawn++;
-      enemiesSpawned++;
-    }
-    if (floor >= 5) {
-      world.add(BloodChampionBoss(position: bossPos + Vector2(0, 120))..priority = 26);
-      enemiesAlive++;
-      enemiesToSpawn++;
-      enemiesSpawned++;
-    }
-    // king on last floors
-    if (floor >= maxFloorsForDiff || floor >= 5) {
-      world.add(KingBoss(position: Vector2(mapWidth / 2, mapHeight / 2))..priority = 26);
-      enemiesAlive++;
-      enemiesToSpawn++;
-      enemiesSpawned++;
-    }
-
-    // echo
-    if (pendingEcho != EchoBossKind.none && Random().nextDouble() < 0.10) {
-      final echoPos = bossPos + Vector2(0, 200);
-      switch (pendingEcho) {
-        case EchoBossKind.mini:
-          world.add(MiniBoss(floor: floor, position: echoPos, isEcho: true));
-          break;
-        case EchoBossKind.ranged:
-          world.add(Boss(floor: floor, position: echoPos, isEcho: true));
-          break;
-        case EchoBossKind.knight:
-          world.add(KnightBoss(floor: floor, position: echoPos, isEcho: true));
-          break;
-        case EchoBossKind.king:
-          world.add(KingBoss(position: echoPos, isEcho: true));
-          break;
-        case EchoBossKind.plague:
-          world.add(PlagueLordBoss(position: echoPos, isEcho: true));
-          break;
-        case EchoBossKind.blood:
-          world.add(BloodChampionBoss(position: echoPos, isEcho: true));
-          break;
-        case EchoBossKind.none:
-          break;
-      }
-      enemiesAlive++;
-      enemiesToSpawn++;
-      enemiesSpawned++;
-    }
-    pendingEcho = EchoBossKind.none;
-  }
-
-  void _startLevel() {
-    // clear world entities except we rebuild fully
-    world.removeAll(world.children.toList());
-    camera.viewport.children.whereType<HudLabel>().toList().forEach((c) => c.removeFromParent());
-    portalButton?.removeFromParent();
-    portalButton = null;
-    dashButton?.removeFromParent();
-    dashButton = null;
-    laserButton?.removeFromParent();
-    laserButton = null;
-    artifactButton?.removeFromParent();
-    artifactButton = null;
-    warpResetButton?.removeFromParent();
-    warpResetButton = null;
-
-    syncLevelFromPath();
-    _checkUnlocks();
-    recomputeStats();
-    ironWillUsedThisFloor = false;
-
-    final node = currentNodeKind;
-    isBossLevel = node == PathNodeKind.boss;
-    isMiniBossLevel = !isBossLevel && currentLevel == 3;
-    isEliteNode = node == PathNodeKind.elite;
-    portalSpawned = false;
-    nearPortal = false;
-    secretBossUnlockedThisLevel = false;
-    secretBossSpawned = false;
-    cornerStandTimer = 0;
-    combo = 0;
-    comboTimer = 0;
-    _comboMilestonesClaimed.clear();
-    invulnTimer = 0;
-    hereticusDashBoost = 0;
-    bossRetreatTimer = 0;
-    bolterHeat = max(0, bolterHeat - 0.35);
-    staffWarpStress = max(0, staffWarpStress - 0.35);
-    levelElapsed = 0;
-    killsThisLevel = 0;
-    timedPortalUsed = false;
-
-    if (node == PathNodeKind.event) {
-      currentEvent = [EventRoomType.altar, EventRoomType.merchant, EventRoomType.trap][Random().nextInt(3)];
-      eventResolved = false;
-    } else if (node == PathNodeKind.rest) {
-      currentEvent = EventRoomType.none;
-      eventResolved = true;
-    } else {
-      currentEvent = _rollEvent();
-      eventResolved = currentEvent == EventRoomType.none;
-    }
-
-    final wallColor = Color.lerp(const Color(0xFF5D4037), const Color(0xFF3E2723), ((currentFloor - 1) % 5) / 4)!;
-    world.add(Floor(size: Vector2(mapWidth, mapHeight)));
-    world.add(Wall(position: Vector2(0, 0), size: Vector2(mapWidth, 70), color: wallColor));
-    world.add(Wall(position: Vector2(0, mapHeight - 70), size: Vector2(mapWidth, 70), color: wallColor));
-    world.add(Wall(position: Vector2(0, 0), size: Vector2(70, mapHeight), color: wallColor));
-    world.add(Wall(position: Vector2(mapWidth - 70, 0), size: Vector2(70, mapHeight), color: wallColor));
-
-    // inner obstacles — keep clear near player spawn
-    final rnd = Random();
-    for (int i = 0; i < 10 + currentFloor; i++) {
-      final p = Vector2(120 + rnd.nextDouble() * (mapWidth - 240), 120 + rnd.nextDouble() * (mapHeight - 240));
-      if (p.distanceTo(playerSpawnPos) < safeRadius) continue;
-      if (rnd.nextBool()) {
-        world.add(Obstacle(position: p)..priority = 8);
-      } else {
-        world.add(BreakableBarrel(position: p)..priority = 8);
-      }
-    }
-
-    // player
-    player = Player(moveJoystick);
-    player.position = playerSpawnPos.clone();
-    player.health = min(player.health > 0 ? player.health : maxHealth, maxHealth);
-    if (node == PathNodeKind.rest) {
-      player.health = min(maxHealth, player.health + 2);
-    }
-    world.add(player);
-    camera.follow(player);
-
-    // purple spawn marker
-    world.add(PlayerSpawnMarker(position: playerSpawnPos.clone())..priority = 6);
-
-    enemiesAlive = 0;
-    enemiesSpawned = 0;
-    enemiesToSpawn = 0;
-
-    if (isArena) {
-      enemiesToSpawn = 999999; // endless
-      spawnInterval = 0.85;
-    } else if (isBossLevel) {
-      _spawnFloorBosses();
-    } else if (isMiniBossLevel) {
-      final pts = getEnemySpawnPoints();
-      final pos = pts.isNotEmpty ? pts[rnd.nextInt(pts.length)] : Vector2(mapWidth / 2, mapHeight / 2 - 200);
-      world.add(MiniBoss(floor: currentFloor, position: pos)..priority = 24);
-      enemiesAlive++;
-      enemiesToSpawn = 1 + 4 + currentFloor;
-      enemiesSpawned = 1;
-      // also small pack
-      for (int i = 0; i < 3; i++) {
-        if (pts.isEmpty) break;
-        _spawnOneEnemy(pts[rnd.nextInt(pts.length)].clone());
-      }
-    } else if (node == PathNodeKind.rest) {
-      enemiesToSpawn = 0;
-      _forceSpawnPortal();
-    } else {
-      enemiesToSpawn = (6 + currentFloor * 2 + currentLevel + (isEliteNode ? 4 : 0) * (difficulty == Difficulty.hard ? 1.3 : 1.0)).round();
-      spawnInterval = max(0.4, 1.15 - currentFloor * 0.06 - currentLevel * 0.04);
-      // initial burst
-      final pts = getEnemySpawnPoints();
-      final burst = min(4, enemiesToSpawn);
-      for (int i = 0; i < burst; i++) {
-        if (pts.isEmpty) break;
-        _spawnOneEnemy(pts[rnd.nextInt(pts.length)].clone(), forceChampion: isEliteNode && i == 0);
-      }
-    }
-
-    _spawnEventProps();
-    rebuildHud();
-
-    if (currentEvent == EventRoomType.trap) {
-      Future.delayed(const Duration(milliseconds: 600), () {
-        if (isPlaying && !eventResolved && currentEvent == EventRoomType.trap) {
-          _startTrapWave();
-        }
-      });
-    }
-
-    if (currentEvent == EventRoomType.altar) {
-      overlays.add('eventAltar');
-      isPaused = true;
-    } else if (currentEvent == EventRoomType.merchant) {
-      overlays.add('eventMerchant');
-      isPaused = true;
-    }
-  }
-
-  void onEnemyKilled({
-    Vector2? at,
-    bool isChampion = false,
-    bool isBoss = false,
-    EnemyType? type,
-    bool meleeKill = false,
-    EliteAffix affix = EliteAffix.none,
-    EchoBossKind echoKind = EchoBossKind.none,
-    Vector2? fromDir,
-  }) {
-    enemiesAlive = max(0, enemiesAlive - 1);
-    killsThisLevel++;
-    if (isArena) arenaKills++;
-
-    final pos = at ?? player.position.clone();
-    var pts = 10 + currentFloor * 2;
-    if (isChampion) pts *= 3;
-    if (isBoss) pts *= 8;
-    if (affix != EliteAffix.none) pts = (pts * 1.4).round();
-    score += (pts * (1 + combo * 0.05)).round();
-
-    // scraps
-    var scrapGain = isChampion ? 4 : (isBoss ? 12 : 1 + Random().nextInt(2));
-    if (relics.contains(RelicId.scavenger)) scrapGain = (scrapGain * 1.4).round();
-    scrapGain = (scrapGain * inquisitionRank.scrapMult).round();
-    scraps += scrapGain;
-
-    // combo
-    combo++;
-    comboTimer = 3.0;
-    if (combo >= 15) unlockAchievement(AchievementId.combo15);
-    if (combo == 5 || combo == 10 || combo == 15) {
-      if (_comboMilestonesClaimed.add(combo)) {
-        scraps += 1;
-        world.add(ComboBanner(position: pos.clone(), combo: combo));
-      }
-    }
-
-    // mastery
-    if (meleeKill) {
-      final key = switch (meleeWeapon) {
-        MeleeWeapon.sword => 'sword',
-        MeleeWeapon.axe => 'axe',
-        MeleeWeapon.hammer => 'hammer',
-        MeleeWeapon.katana || MeleeWeapon.powerKatana || MeleeWeapon.executioner => 'katana',
-        _ => 'sword',
-      };
-      mastery.addKill(key);
-    } else {
-      final key = switch (rangedWeapon) {
-        RangedWeapon.bolter || RangedWeapon.rifle || RangedWeapon.shotgun => 'bolter',
-        RangedWeapon.staff || RangedWeapon.stormStaff || RangedWeapon.warpBeam => 'staff',
-        _ => 'bolter',
-      };
-      mastery.addKill(key);
-    }
-
-    // relics procs
-    if (relics.contains(RelicId.vampirism) && Random().nextDouble() < 0.12) {
-      player.health = min(maxHealth, player.health + 1);
-    }
-    if (relics.contains(RelicId.killExplosion) && at != null) {
-      world.add(KillExplosion(position: at.clone(), radius: 55, damage: 5 + currentFloor, applyBurn: synergyBloodRush)..priority = 12);
-    }
-
-    // codex
-    if (type != null) {
-      final id = switch (type) {
-        EnemyType.shooter => CodexId.shooter,
-        EnemyType.melee => CodexId.melee,
-        EnemyType.shielded || EnemyType.shieldedShooter => CodexId.shielded,
-        EnemyType.dog => CodexId.dog,
-        EnemyType.flamer => CodexId.flamer,
-        EnemyType.sniper => CodexId.sniper,
-        EnemyType.brute => CodexId.brute,
-        EnemyType.cultPsyker => CodexId.cultPsyker,
-        EnemyType.plagueBearer => CodexId.plagueBearer,
-        EnemyType.bloodletter => CodexId.bloodletter,
-      };
-      unlockCodex(id);
-    }
-
-    if (isChampion) {
-      achievements.championsKilledTotal++;
-      if (achievements.championsKilledTotal >= 10) unlockAchievement(AchievementId.championHunter);
-      if (Random().nextDouble() < 0.25) {
-        _grantRandomRelic();
-      }
-    }
-
-    if (isBoss) {
-      unlockAchievement(AchievementId.bossSlayer);
-      if (echoKind != EchoBossKind.none) {
-        pendingEcho = echoKind;
-      }
-      triggerShake(power: 10, time: 0.25);
-    }
-
-    unlockAchievement(AchievementId.firstBlood);
-    if (isArena && arenaKills >= 50) unlockAchievement(AchievementId.arena50);
-    if (isArena && arenaKills >= 100) unlockAchievement(AchievementId.arena100);
-    if (scraps >= 100) unlockAchievement(AchievementId.scrapHoarder);
-    if (relics.length >= 5) unlockAchievement(AchievementId.relicHunter);
-
-    // arena: never stop — keep quota high
-    if (isArena) {
-      enemiesToSpawn = enemiesSpawned + 20;
-      spawnInterval = max(0.35, 0.9 - arenaKills * 0.002);
-    }
-
-    _checkPortal();
-  }
-
-  void unlockCodex(CodexId id) {
-    if (codexUnlocked.add(id)) {
-      pendingLoreId = id;
-      if (!overlays.isActive('lorePopup')) {
-        isPaused = true;
-        overlays.add('lorePopup');
-      }
-      if (codexUnlocked.length >= CodexId.values.length) {
-        unlockAchievement(AchievementId.fullCodex);
-      }
-    }
-  }
-
-  void acceptLore(CodexId id, {bool fromPopup = true}) {
-    final rank = loreRankOf(id);
-    if (rank >= 2) {
-      if (fromPopup) skipLore();
-      return;
-    }
-    if (rank == 1) {
-      if (skillPoints < 1) return;
-      skillPoints -= 1;
-    }
-    loreRanks[id.name] = rank + 1;
-    recomputeStats();
-    if (fromPopup) skipLore();
-  }
-
-  void skipLore() {
-    pendingLoreId = null;
-    overlays.remove('lorePopup');
+  void closeBackpack() {
+    overlays.remove('backpack');
     isPaused = false;
   }
 
-  void _grantRandomRelic() {
-    final pool = RelicId.values.where((r) => !relics.contains(r)).toList();
-    if (pool.isEmpty) return;
-    final r = pool[Random().nextInt(pool.length)];
-    relics.add(r);
-    spawnDamageNumber(player.position, 0, color: const Color(0xFFFFD700), label: r.title);
-    if (relics.length >= 5) unlockAchievement(AchievementId.relicHunter);
+  void openCodex() {
+    isPaused = true;
+    overlays.add('codex');
   }
 
-  void onSecretBossKilled({required bool cyclops}) {
-    score += 6666;
-    scraps += 30;
-    if (cyclops) {
-      cyclopsDefeated = true;
-      unlockedLaser = true;
-      unlockAchievement(AchievementId.secretCyclops);
-      unlockCodex(CodexId.cyclops);
-    } else {
-      tentacleDefeated = true;
-      unlockedDash = true;
-      unlockAchievement(AchievementId.secretTentacle);
-      unlockCodex(CodexId.tentacle);
-    }
-    spawnDamageNumber(player.position, 6666, color: const Color(0xFFE040FB), label: '+6666');
-    rebuildHud();
-    _checkPortal();
-  }
-
-  // abilities
-  void activateDash() {
-    if (dashCooldown > 0 || activeChallenge == RankChallenge.noDash) return;
-    dashCooldown = 6.0 * (relics.contains(RelicId.shadowStep) ? 0.75 : 1.0);
-    dashActive = 2.0;
-    grantInvuln(0.25);
-    // afterimages
-    for (int i = 0; i < 3; i++) {
-      Future.delayed(Duration(milliseconds: 50 * i), () {
-        if (!isPlaying) return;
-        world.add(AfterImage(position: player.position.clone(), size: player.size.clone())..priority = 18);
-      });
-    }
-    if (synergyHereticusBleedDash) hereticusDashBoost = 1.5;
-  }
-
-  void activateLaser() {
-    if (laserCooldown > 0 || !unlockedLaser) return;
-    laserCooldown = 20;
-    final dir = player.aimDir.length2 < 0.01 ? Vector2(0, -1) : player.aimDir.normalized();
-    world.add(CyclopsLaserBeam(position: player.position.clone(), direction: dir, damage: scaleDamage(40))..priority = 14);
-  }
-
-  void activateArtifact() {
-    if (artifactCooldown > 0 || activeArtifact == ActiveArtifact.none) return;
-    artifactCooldown = 14;
-    switch (activeArtifact) {
-      case ActiveArtifact.fragGrenade:
-        world.add(FragGrenade(position: player.position.clone(), direction: player.aimDir)..priority = 15);
-        break;
-      case ActiveArtifact.holyAura:
-        holyAuraTimer = 8;
-        break;
-      case ActiveArtifact.servoTurret:
-        world.add(ServoTurret(position: player.position + Vector2(40, 0))..priority = 12);
-        break;
-      case ActiveArtifact.none:
-        break;
-    }
-  }
-
-  void resetWarpStress() {
-    if (playerClass != PlayerClass.malleus) return;
-    if (warpResetCooldown > 0) return;
-    if (staffWarpStress < 0.05) return;
-    if (skillPoints > 0) {
-      skillPoints -= 1;
-      staffWarpStress = 0;
-      warpResetCooldown = 8;
-      spawnDamageNumber(player.position, 0, color: const Color(0xFFB388FF), label: 'Ψ СБРОС');
-    } else {
-      warpResetCooldown = 12;
-      staffWarpStress = max(0, staffWarpStress - 0.5);
-      spawnDamageNumber(player.position, 0, color: const Color(0xFFB388FF), label: 'Ψ');
-    }
+  void closeCodex() {
+    overlays.remove('codex');
+    isPaused = false;
   }
 
   void usePortal() {
-    if (!portalSpawned || !nearPortal) return;
-    // no-kills achievement
-    if (killsThisLevel == 0 && levelElapsed >= timedPortalSec * 0.9) {
+    if (!nearPortal || !portalSpawned) return;
+    if (timedPortalUsed && killsThisLevel == 0) {
       unlockAchievement(AchievementId.noKills);
-    }
-    if (timedPortalUsed) {
       unlockAchievement(AchievementId.timedPortal);
     }
-    portalButton?.removeFromParent();
-    portalButton = null;
-    nearPortal = false;
-    goNextLevel();
+    nextLevel();
   }
-  // ── update loop ──
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (!isPlaying || isPaused) return;
 
-    levelElapsed += dt;
-    // Timed portal (5 min) — for no-kill achievement
-    if (!portalSpawned && !isArena && levelElapsed >= timedPortalSec) {
-      _forceSpawnPortal(fromTimer: true);
+  void useLaser() {
+    if (laserCooldown > 0) return;
+    if (!achievements.unlocked.contains(AchievementId.secretCyclops.name) &&
+        !codexUnlocked.contains(CodexId.cyclops)) {
+      return; // unlocked by secret
     }
+    laserCooldown = 20;
+    final dir = player.aimDir;
+    world.add(CyclopsLaserBeam(position: player.position.clone(), direction: dir, damage: scaleDamage(28))..priority = 22);
+    playSfx('shoot.mp3');
+  }
 
-    bolterHeat = max(0, bolterHeat - dt * 0.18);
-    staffWarpStress = max(0, staffWarpStress - dt * 0.12);
-    if (dashCooldown > 0) dashCooldown = max(0, dashCooldown - dt);
-    if (dashActive > 0) dashActive = max(0, dashActive - dt);
-    if (laserCooldown > 0) laserCooldown = max(0, laserCooldown - dt);
-    if (artifactCooldown > 0) artifactCooldown = max(0, artifactCooldown - dt);
-    if (warpResetCooldown > 0) warpResetCooldown = max(0, warpResetCooldown - dt);
-    if (holyAuraTimer > 0) holyAuraTimer = max(0, holyAuraTimer - dt);
-    if (_hasteTimer > 0) _hasteTimer = max(0, _hasteTimer - dt);
-    if (shieldTimer > 0) shieldTimer = max(0, shieldTimer - dt);
-    if (invulnTimer > 0) invulnTimer = max(0, invulnTimer - dt);
-    if (bossRetreatTimer > 0) bossRetreatTimer = max(0, bossRetreatTimer - dt);
-    if (tempDmgTimer > 0) {
-      tempDmgTimer -= dt;
-      if (tempDmgTimer <= 0) tempDmgMult = 1.0;
-    }
-    if (hereticusDashBoost > 0) hereticusDashBoost = max(0, hereticusDashBoost - dt);
-
-    if (comboTimer > 0) {
-      comboTimer -= dt;
-      if (comboTimer <= 0) combo = 0;
-    }
-
-    // camera shake
-    if (shakeTime > 0) {
-      shakeTime -= dt;
-      final ox = (Random().nextDouble() - 0.5) * shakePower;
-      final oy = (Random().nextDouble() - 0.5) * shakePower;
-      camera.viewfinder.position = player.position + Vector2(ox, oy);
-    }
-
-    // cinema zoom
-    if (cinemaZoomTimer > 0) {
-      cinemaZoomTimer -= dt;
-      camera.viewfinder.zoom = currentZoom + 0.12 * (cinemaZoomTimer / 0.45);
-    } else {
-      camera.viewfinder.zoom = currentZoom;
-    }
-
-    // spawn waves
-    if (isArena || (!isBossLevel && enemiesSpawned < enemiesToSpawn)) {
-      spawnTimer += dt;
-      if (spawnTimer >= spawnInterval) {
-        spawnTimer = 0;
-        final pts = getEnemySpawnPoints();
-        if (pts.isNotEmpty) {
-          _spawnOneEnemy(pts[Random().nextInt(pts.length)].clone());
-        }
-        // arena: always keep buffer of enemies
-        if (isArena && enemiesAlive < 8 + (arenaKills ~/ 30)) {
-          enemiesToSpawn = enemiesSpawned + 15;
-        }
-      }
-    }
-
-    _checkPortal();
-
-    // secret boss corner (left-top 33s) after boss kill on floors 1 (tentacle) / 2 (cyclops) boss nodes
-    if (!secretBossSpawned && isBossLevel && countLivingHostiles() == 0) {
-      final inCorner = player.position.x < 140 && player.position.y < 140;
-      if (inCorner) {
-        cornerStandTimer += dt;
-        if (cornerStandTimer >= 33) {
-          secretBossSpawned = true;
-          final pos = Vector2(mapWidth / 2, mapHeight / 2);
-          if (currentFloor == 1 || (currentFloor % 5 == 1 && currentFloor < 6)) {
-            world.add(TentacleBoss(position: pos)..priority = 28);
-          } else if (currentFloor == 2 || currentFloor == 10 || (currentFloor % 5 == 2)) {
-            world.add(CyclopsBoss(position: pos)..priority = 28);
-          } else {
-            // other floors: still tentacle as rare secret
-            world.add(TentacleBoss(position: pos)..priority = 28);
+  void useArtifact() {
+    if (artifactCd > 0) return;
+    artifactCd = activeArtifact.cooldown;
+    switch (activeArtifact) {
+      case ActiveArtifact.fragGrenade:
+        world.add(KillExplosion(position: player.position + player.aimDir * 80, radius: 90, damage: scaleDamage(18), applyBurn: true));
+        triggerShake(power: 8, time: 0.2);
+        break;
+      case ActiveArtifact.holyAura:
+        shieldTimer = 3.5;
+        for (final e in world.children.whereType<Enemy>()) {
+          if (e.position.distanceTo(player.position) < 140) {
+            e.applyDamage(scaleDamage(6));
           }
-          enemiesAlive++;
-          enemiesToSpawn++;
-          enemiesSpawned++;
-          portalSpawned = false; // kill secret first
-          for (final p in world.children.whereType<Portal>().toList()) {
-            p.removeFromParent();
-          }
-          spawnDamageNumber(pos, 0, color: const Color(0xFF9C27B0), label: 'СЕКРЕТ');
         }
-      } else {
-        cornerStandTimer = 0;
-      }
-    }
-
-    // near portal → show P button
-    nearPortal = false;
-    if (portalSpawned) {
-      for (final p in world.children.whereType<Portal>()) {
-        if (player.position.distanceTo(p.position) < 70) {
-          nearPortal = true;
-          break;
-        }
-      }
-    }
-    if (nearPortal && portalButton == null) {
-      portalButton = HudButtonComponent(
-        button: CircleComponent(radius: hud.buttonSize * 0.55, paint: Paint()..color = const Color(0xFFE91E63)),
-        position: _hudPos(hud.portalBtnX, hud.portalBtnY),
-        onPressed: usePortal,
-      )..priority = 210;
-      camera.viewport.add(portalButton!);
-      camera.viewport.add(HudLabel(text: 'P', target: portalButton!)..priority = 211);
-    } else if (!nearPortal && portalButton != null) {
-      portalButton?.removeFromParent();
-      portalButton = null;
+        break;
+      case ActiveArtifact.servoTurret:
+        world.add(ServoTurret(position: player.position + Vector2(40, 0))..priority = 20);
+        break;
     }
   }
 
-  // ── navigation ──
-  void goNextLevel() {
+  void resetWarp() {
+    if (warpResetCd > 0) return;
+    if (playerClass != PlayerClass.malleus) return;
+    staffWarpStress = 0;
+    warpResetCd = hasWarpAnchor ? 12 : 8;
+    if (!hasWarpAnchor && skillPoints > 0) {
+      skillPoints--;
+    }
+    spawnDamageNumber(player.position, 0, color: const Color(0xFFB388FF), label: 'Ψ СБРОС');
+  }
+
+  // navigation stubs
+  void openNameInput() {
+    for (final o in overlays.activeOverlays.toList()) {
+      overlays.remove(o);
+    }
+    overlays.add('nameInput');
+  }
+
+  void backToMenu() {
+    isPlaying = false;
+    isPaused = false;
+    isArena = false;
+    stopBgm();
+    world.removeAll(world.children);
+    for (final o in overlays.activeOverlays.toList()) {
+      overlays.remove(o);
+    }
+    overlays.add('mainMenu');
+  }
+
+  void showGameOver() {
+    isPlaying = false;
     isPaused = true;
-    overlays.add('levelComplete');
+    stopBgm();
+    _pushHighScore(completed: false);
+    overlays.add('gameOver');
+  }
+
+  void _pushHighScore({required bool completed}) {
+    highScores.add(HighScoreEntry(
+      name: playerName,
+      score: score,
+      seconds: runSeconds,
+      difficulty: difficulty.labelRu,
+      playerClass: playerClass.title,
+      floor: currentFloor,
+      level: currentLevel,
+      completed: completed,
+      keyRelics: relics.take(2).map((e) => e.title).toList(),
+    ));
+    highScores.sort((a, b) => b.score.compareTo(a.score));
+    if (highScores.length > 30) highScores = highScores.take(30).toList();
+    if (completed) {
+      rank.wins++;
+      switch (difficulty) {
+        case Difficulty.easy:
+          unlockAchievement(AchievementId.clearEasy);
+          break;
+        case Difficulty.normal:
+          unlockAchievement(AchievementId.clearNormal);
+          break;
+        case Difficulty.hard:
+          unlockAchievement(AchievementId.clearHard);
+          break;
+      }
+    }
+    _saveMeta();
+  }
+
+  void finishAfterVictory() {
+    _pushHighScore(completed: true);
+    backToMenu();
+  }
+
+  void startArena() {
+    isArena = true;
+    arenaKills = 0;
+    overlays.remove('victory');
+    isPaused = false;
+    isPlaying = true;
+    currentFloor = difficulty.maxFloors;
+    currentLevel = 5;
+    _startLevel(forceArena: true);
   }
 
   void nextLevel() {
-    overlays.remove('levelComplete');
-    isPaused = false;
-
-    if (isArena) {
-      // should not happen via portal; arena has no portal clear win
-      return;
-    }
-
-    pathIndex++;
-    if (pathIndex >= floorPath.length) {
-      // floor complete → path select or next floor
-      currentFloor++;
-      pathIndex = 0;
-      if (currentFloor > maxFloorsForDiff) {
-        showVictory();
-        return;
-      }
-      // rank perk every 2 wins handled at victory
-      generateFloorPath();
-      _rollRewards();
-      overlays.add('reward');
-      isPaused = true;
-      return;
-    }
-
-    // mid-floor: sometimes path choice
-    if (pathIndex < floorPath.length - 1 && Random().nextDouble() < 0.35) {
-      pendingPathChoices = [
-        floorPath[pathIndex],
-        PathNode(
-          [PathNodeKind.combat, PathNodeKind.event, PathNodeKind.elite, PathNodeKind.rest][Random().nextInt(4)],
-          'Альт.',
-        ),
-      ];
-      overlays.add('pathSelect');
-      isPaused = true;
-      return;
-    }
-
-    _rollRewards();
-    overlays.add('reward');
-    isPaused = true;
-  }
-
-  void choosePathNode(int i) {
-    if (i >= 0 && i < pendingPathChoices.length) {
-      floorPath[pathIndex] = pendingPathChoices[i];
-    }
-    overlays.remove('pathSelect');
-    pendingPathChoices = [];
-    _rollRewards();
-    overlays.add('reward');
-  }
-
-  void _rollRewards() {
-    pendingRewards = [];
-    final rnd = Random();
-    final options = <RewardOption>[
-      RewardOption(RewardKind.skillPoint, 'Очко навыка', '+1 SP'),
-      RewardOption(RewardKind.scraps, 'Обломки', '+12 обломков'),
-      RewardOption(RewardKind.heal, 'Медикаменты', '+3 HP'),
-    ];
-    if (rnd.nextDouble() < 0.55) {
-      options.add(RewardOption(RewardKind.relic, 'Реликвия', 'Случайная пассивка'));
-    }
-    options.shuffle();
-    pendingRewards = options.take(3).toList();
+    // implemented PART 4
   }
 
   void finishRewardThenShop() {
@@ -3035,6 +2374,22 @@ class InquisitorGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
   void finishSkillsAndContinue() {
     overlays.remove('skills');
     isPaused = false;
+    pathIndex++;
+    currentLevel = pathIndex + 1;
+    if (pathIndex >= floorPath.length) {
+      currentFloor++;
+      pathIndex = 0;
+      currentLevel = 1;
+      if (currentFloor > difficulty.maxFloors) {
+        isPlaying = false;
+        isPaused = true;
+        overlays.add('victory');
+        return;
+      }
+      _buildFloorPath();
+      overlays.add('pathSelect');
+      return;
+    }
     _startLevel();
   }
 
@@ -3059,197 +2414,600 @@ class InquisitorGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
         break;
     }
     recomputeStats();
-    if (world.children.whereType<Player>().isNotEmpty) {
-      player.maxHealth = maxHealth;
-      player.health = min(player.health, maxHealth);
+    if (player.health > maxHealth) player.health = maxHealth.toDouble();
+  }
+
+  void resolveMerchantBuy(String id) {
+    // PART 4
+  }
+
+  void closeMerchant() {
+    overlays.remove('eventMerchant');
+    isPaused = false;
+    eventResolved = true;
+  }
+
+  void _buildFloorPath() {
+    // PART 4
+  }
+
+  void _startLevel({bool forceArena = false}) {
+    // PART 4
+  }
+    // ── floor path ──
+
+  void _buildFloorPath() {
+    floorPath = [];
+    // 5 nodes: combat / event / combat / elite|combat / boss
+    floorPath.add(PathNode(PathNodeKind.combat, 'Бой'));
+    floorPath.add(Random().nextBool() ? PathNode(PathNodeKind.event, 'Событие') : PathNode(PathNodeKind.combat, 'Бой'));
+    floorPath.add(PathNode(PathNodeKind.combat, 'Бой'));
+    floorPath.add(Random().nextDouble() < 0.45 ? PathNode(PathNodeKind.elite, 'Элита') : PathNode(PathNodeKind.combat, 'Бой'));
+    floorPath.add(PathNode(PathNodeKind.boss, 'Босс'));
+    pathIndex = 0;
+    currentLevel = 1;
+  }
+
+  List<Vector2> getEnemySpawnPointsRaw() {
+    final cx = mapWidth / 2, cy = mapHeight / 2;
+    final pts = <Vector2>[];
+    switch (((currentFloor - 1) % 5) + 1) {
+      case 1: // corners
+        pts.addAll([
+          Vector2(180, 180),
+          Vector2(mapWidth - 180, 180),
+          Vector2(180, mapHeight - 180),
+          Vector2(mapWidth - 180, mapHeight - 180),
+          Vector2(cx, 160),
+          Vector2(cx, mapHeight - 160),
+          Vector2(160, cy),
+          Vector2(mapWidth - 160, cy),
+        ]);
+        break;
+      case 2: // sides
+        for (double y = 160; y < mapHeight - 160; y += 140) {
+          pts.add(Vector2(160, y));
+          pts.add(Vector2(mapWidth - 160, y));
+        }
+        break;
+      default: // grid
+        for (double x = 160; x < mapWidth - 160; x += 180) {
+          for (double y = 160; y < mapHeight - 160; y += 180) {
+            pts.add(Vector2(x, y));
+          }
+        }
+    }
+    return pts.where((p) => p.x > 100 && p.x < mapWidth - 100 && p.y > 100 && p.y < mapHeight - 100).toList();
+  }
+
+  List<Vector2> getEnemySpawnPoints() {
+    final origin = playerSpawnPos;
+    return getEnemySpawnPointsRaw().where((p) => p.distanceTo(origin) >= safeRadius + 40).toList();
+  }
+
+  EventRoomType _rollEvent() {
+    levelsSinceEvent++;
+    if (levelsSinceEvent < 2) return EventRoomType.none;
+    if (Random().nextDouble() < 0.55) {
+      levelsSinceEvent = 0;
+      final r = Random().nextDouble();
+      if (r < 0.34) return EventRoomType.altar;
+      if (r < 0.67) return EventRoomType.merchant;
+      return EventRoomType.trap;
+    }
+    return EventRoomType.none;
+  }
+
+  void _forceSpawnPortal({bool fromTimer = false}) {
+    if (portalSpawned) return;
+    portalSpawned = true;
+    if (fromTimer) timedPortalUsed = true;
+    for (final p in world.children.whereType<Portal>().toList()) {
+      p.removeFromParent();
+    }
+    world.add(Portal(position: Vector2(mapWidth / 2, 160))..priority = 9);
+    spawnDamageNumber(
+      Vector2(mapWidth / 2, 200),
+      0,
+      color: const Color(0xFFE040FB),
+      label: fromTimer ? 'ПОРТАЛ (5 мин)' : 'ПОРТАЛ',
+    );
+  }
+
+  int countLivingHostiles() {
+    int n = 0;
+    n += world.children.whereType<Enemy>().length;
+    n += world.children.whereType<MiniBoss>().length;
+    n += world.children.whereType<Boss>().length;
+    n += world.children.whereType<KnightBoss>().length;
+    n += world.children.whereType<KingBoss>().length;
+    n += world.children.whereType<TentacleBoss>().length;
+    n += world.children.whereType<CyclopsBoss>().length;
+    n += world.children.whereType<PlagueLordBoss>().length;
+    n += world.children.whereType<BloodChampionBoss>().length;
+    return n;
+  }
+
+  void _checkPortal() {
+    if (portalSpawned || isArena) return;
+    if (countLivingHostiles() <= 0 && enemiesSpawned >= enemiesToSpawn && !isBossLevel) {
+      _forceSpawnPortal();
+      return;
+    }
+    if (isBossLevel && countLivingHostiles() <= 0 && secretBossSpawned == false) {
+      _forceSpawnPortal();
     }
   }
 
-  void showVictory() {
-    isPlaying = false;
-    isPaused = true;
-    stopMusic();
-    // achievements by difficulty
-    switch (difficulty) {
-      case Difficulty.easy:
-        unlockAchievement(AchievementId.clearEasy);
-        break;
-      case Difficulty.normal:
-        unlockAchievement(AchievementId.clearNormal);
-        break;
-      case Difficulty.hard:
-        unlockAchievement(AchievementId.clearHard);
-        break;
+  void _clearWorldKeepPlayer() {
+    for (final c in world.children.toList()) {
+      if (c is Player) continue;
+      c.removeFromParent();
     }
-    // rank win
-    final ok = activeChallenge == RankChallenge.none ||
-        (activeChallenge == RankChallenge.meleeOnlyBoss && challengeBossMeleeOk) ||
-        (activeChallenge == RankChallenge.noDash);
-    if (ok) {
-      inquisitionRank.wins++;
-      persistMeta();
-      if (inquisitionRank.wins % 2 == 0 && inquisitionRank.chosenPerk == RankPerk.none) {
-        overlays.add('rankPerk');
-        return;
+  }
+
+  void _buildMapGeometry() {
+    // floor visual + border walls
+    world.add(FloorLayer(size: Vector2(mapWidth, mapHeight))..priority = 0);
+    const t = 40.0;
+    world.add(Wall(position: Vector2(mapWidth / 2, t / 2), size: Vector2(mapWidth, t)));
+    world.add(Wall(position: Vector2(mapWidth / 2, mapHeight - t / 2), size: Vector2(mapWidth, t)));
+    world.add(Wall(position: Vector2(t / 2, mapHeight / 2), size: Vector2(t, mapHeight)));
+    world.add(Wall(position: Vector2(mapWidth - t / 2, mapHeight / 2), size: Vector2(t, mapHeight)));
+
+    // obstacles away from spawn
+    final rnd = Random(currentFloor * 97 + currentLevel * 13);
+    final count = 6 + currentFloor;
+    for (int i = 0; i < count; i++) {
+      final p = Vector2(
+        120 + rnd.nextDouble() * (mapWidth - 240),
+        120 + rnd.nextDouble() * (mapHeight - 240),
+      );
+      if (p.distanceTo(playerSpawnPos) < safeRadius) continue;
+      if (rnd.nextDouble() < 0.35) {
+        world.add(BreakableBarrel(position: p)..priority = 8);
+      } else {
+        world.add(Obstacle(position: p)..priority = 7);
       }
     }
-    overlays.add('victory');
   }
 
-  void chooseRankPerk(RankPerk p) {
-    inquisitionRank.chosenPerk = p;
-    persistMeta();
-    overlays.remove('rankPerk');
-    overlays.add('victory');
+  EnemyType _rollEnemyType() {
+    final f = currentFloor;
+    final pool = <EnemyType>[EnemyType.shooter, EnemyType.melee, EnemyType.shielded];
+    if (f >= 2) pool.add(EnemyType.dog);
+    if (f >= 3) pool.addAll([EnemyType.flamer, EnemyType.sniper]);
+    if (f >= 4) pool.add(EnemyType.brute);
+    if (f >= 3) pool.add(EnemyType.cultPsyker);
+    if (f >= 4) pool.addAll([EnemyType.plagueBearer, EnemyType.bloodletter]);
+    if (f >= 4) pool.add(EnemyType.shieldedShooter);
+    return pool[Random().nextInt(pool.length)];
   }
 
-  void finishAfterVictory() {
-    addScoreEntry(completed: true);
-    overlays.remove('victory');
-    backToMenu();
+  EliteAffix _rollAffix() {
+    final v = EliteAffix.values.where((e) => e != EliteAffix.none).toList();
+    return v[Random().nextInt(v.length)];
   }
 
-  void startArena() {
-    overlays.remove('victory');
-    isArena = true;
-    isPlaying = true;
-    isPaused = false;
-    arenaKills = 0;
-    enemiesToSpawn = 999999;
+  void _spawnWave({bool eliteRoom = false}) {
+    final points = getEnemySpawnPoints();
+    if (points.isEmpty) return;
+    final base = 4 + currentFloor + currentLevel;
+    enemiesToSpawn = isArena ? 9999 : base;
     enemiesSpawned = 0;
     enemiesAlive = 0;
-    portalSpawned = false;
-    currentFloor = maxFloorsForDiff;
-    pathIndex = 0;
-    floorPath = [PathNode(PathNodeKind.combat, 'Арена')];
-    startMusic();
-    _startLevel();
-  }
 
-  void showGameOver() {
-    isPlaying = false;
-    isPaused = true;
-    stopMusic();
-    addScoreEntry(completed: false, fromArena: isArena);
-    overlays.add('gameOver');
-  }
-
-  void addScoreEntry({bool completed = false, bool fromArena = false}) {
-    highScores.add(HighScoreEntry(
-      name: playerName,
-      score: score,
-      seconds: levelElapsed.round() + currentFloor * 60, // rough playtime marker
-      difficulty: difficulty.labelRu,
-      playerClass: playerClass.title,
-      floor: currentFloor,
-      level: currentLevel,
-      completed: completed && !fromArena,
-      keyRelics: relics.take(2).map((e) => e.title).toList(),
-    ));
-    highScores.sort((a, b) => b.score.compareTo(a.score));
-    if (highScores.length > 30) highScores.removeRange(30, highScores.length);
-    persistMeta();
-  }
-
-  // ── run start flow ──
-  void openNameInput() {
-    for (final o in ['mainMenu', 'gameOver', 'victory', 'records', 'achievements']) {
-      overlays.remove(o);
+    final toSpawnNow = isArena ? 8 : base;
+    for (int i = 0; i < toSpawnNow; i++) {
+      final pos = points[Random().nextInt(points.length)].clone();
+      final isChamp = eliteRoom || Random().nextDouble() < 0.12 + currentFloor * 0.01;
+      final e = Enemy(
+        floor: currentFloor,
+        type: _rollEnemyType(),
+        isChampion: isChamp,
+        affix: isChamp ? _rollAffix() : EliteAffix.none,
+      );
+      e.position = pos;
+      world.add(e);
+      enemiesSpawned++;
+      enemiesAlive++;
     }
-    overlays.add('nameInput');
   }
 
-  void confirmName(String name, Difficulty diff) {
-    playerName = name.trim().isEmpty ? 'Inquisitor' : name.trim();
-    difficulty = diff;
-    maxFloors = diff.maxFloors;
-    overlays.remove('nameInput');
-    overlays.add('challengeSelect');
+  void _spawnBosses() {
+    final cx = mapWidth / 2, cy = mapHeight / 2 - 40;
+    final f = currentFloor;
+
+    if (f % 5 == 0 || f == difficulty.maxFloors) {
+      // king + retinue
+      world.add(KingBoss(position: Vector2(cx, cy)));
+      world.add(Boss(floor: f, position: Vector2(cx - 160, cy + 40)));
+      world.add(KnightBoss(floor: f, position: Vector2(cx + 160, cy + 40)));
+      if (f >= 7) world.add(PlagueLordBoss(position: Vector2(cx, cy + 140)));
+      if (f >= 8) world.add(BloodChampionBoss(position: Vector2(cx, cy - 120)));
+    } else if (f % 3 == 0) {
+      world.add(MiniBoss(floor: f, position: Vector2(cx, cy)));
+      world.add(Boss(floor: f, position: Vector2(cx + 120, cy + 60)));
+    } else {
+      world.add(Boss(floor: f, position: Vector2(cx, cy)));
+      if (f >= 3) world.add(KnightBoss(floor: f, position: Vector2(cx + 140, cy)));
+    }
+    enemiesToSpawn = 0;
+    enemiesSpawned = 0;
   }
 
-  void confirmChallenge(RankChallenge ch) {
-    activeChallenge = ch;
-    challengeBossMeleeOk = true;
-    overlays.remove('challengeSelect');
-    overlays.add('classSelect');
-  }
-
-  void confirmClass(PlayerClass cls) {
-    playerClass = cls;
-    noteClassPlayed(cls);
-    overlays.remove('classSelect');
-    startNewRun();
-  }
-
-  void startNewRun() {
-    isArena = false;
-    score = 0;
-    scraps = inquisitionRank.startScraps;
-    skillPoints = 1 + inquisitionRank.startSpBonus;
-    skills = SkillTree();
-    loadout = WeaponLoadout();
-    mastery = WeaponMastery();
-    relics.clear();
-    currentFloor = 1;
-    pathIndex = 0;
-    arenaKills = 0;
-    tentacleDefeated = false;
-    cyclopsDefeated = false;
-    unlockedRifle = false;
-    unlockedShotgun = false;
-    unlockedAxe = false;
-    unlockedHammer = false;
-    unlockedStormStaff = false;
-    unlockedWarpBeam = false;
-    unlockedForceSword = false;
-    unlockedDaemonHammer = false;
-    unlockedNeedles = false;
-    unlockedSniperNeedle = false;
-    unlockedPowerKatana = false;
-    unlockedExecutioner = false;
-    unlockedLaser = false;
-    unlockedArtifact = false;
-    activeArtifact = ActiveArtifact.fragGrenade;
-    unlockedArtifact = true;
-    pendingEcho = EchoBossKind.none;
-    levelsSinceEvent = 0;
+  void _startLevel({bool forceArena = false}) {
+    _clearWorldKeepPlayer();
+    portalSpawned = false;
+    timedPortalUsed = false;
+    secretBossSpawned = false;
+    eventResolved = false;
+    nearPortal = false;
+    levelTimer = 0;
+    killsThisLevel = 0;
+    ironWillUsedThisFloor = false;
     bolterHeat = 0;
     staffWarpStress = 0;
-    warpResetCooldown = 0;
-    ironWillUsedThisFloor = false;
+    combo = 0;
+    comboTimer = 0;
+    currentEvent = EventRoomType.none;
 
-    switch (playerClass) {
-      case PlayerClass.xenos:
-        rangedWeapon = RangedWeapon.bolter;
-        meleeWeapon = MeleeWeapon.sword;
-        usingMelee = false;
+    mapWidth = 1300 + currentFloor * 40.0;
+    mapHeight = 950 + currentFloor * 30.0;
+    playerSpawnPos = Vector2(180, mapHeight / 2);
+    _buildMapGeometry();
+
+    if (!world.children.whereType<Player>().isNotEmpty) {
+      player = Player(position: playerSpawnPos.clone(), pClass: playerClass);
+      world.add(player);
+    } else {
+      player.position = playerSpawnPos.clone();
+    }
+    recomputeStats();
+    player.health = maxHealth.toDouble();
+    camera.follow(player);
+    rebuildHud();
+
+    if (forceArena || isArena) {
+      isArena = true;
+      _spawnWave();
+      ensureBgm();
+      isPlaying = true;
+      isPaused = false;
+      return;
+    }
+
+    final node = floorPath.isNotEmpty && pathIndex < floorPath.length
+        ? floorPath[pathIndex]
+        : PathNode(PathNodeKind.combat, 'Бой');
+
+    switch (node.kind) {
+      case PathNodeKind.boss:
+        _spawnBosses();
         break;
-      case PlayerClass.malleus:
-        rangedWeapon = RangedWeapon.staff;
-        meleeWeapon = MeleeWeapon.forceBlade;
-        usingMelee = false;
+      case PathNodeKind.elite:
+        _spawnWave(eliteRoom: true);
         break;
-      case PlayerClass.hereticus:
-        rangedWeapon = RangedWeapon.daggers;
-        meleeWeapon = MeleeWeapon.katana;
-        usingMelee = true;
+      case PathNodeKind.event:
+        currentEvent = _rollEvent();
+        if (currentEvent == EventRoomType.none) currentEvent = EventRoomType.altar;
+        _spawnEventProps();
+        break;
+      case PathNodeKind.rest:
+        player.heal(3);
+        _forceSpawnPortal();
+        break;
+      case PathNodeKind.combat:
+        _spawnWave();
         break;
     }
 
-    generateFloorPath();
-    syncLevelFromPath();
-    recomputeStats();
+    // echo boss chance
+    if (lastBossEcho != EchoBossKind.none && Random().nextDouble() < 0.10 && node.kind == PathNodeKind.combat) {
+      _spawnEcho(lastBossEcho);
+    }
+
+    ensureBgm();
     isPlaying = true;
     isPaused = false;
-    currentZoom = 0.85;
-    camera.viewfinder.zoom = currentZoom;
-    startMusic();
-    _startLevel();
   }
 
-  // ── save / load / delete ──
-  Future<void> saveGame() async {
+  void _spawnEventProps() {
+    final c = Vector2(mapWidth / 2, mapHeight / 2);
+    switch (currentEvent) {
+      case EventRoomType.altar:
+        world.add(EventAltar(position: c)..priority = 9);
+        overlays.add('eventAltar');
+        isPaused = true;
+        break;
+      case EventRoomType.merchant:
+        world.add(EventMerchant(position: c)..priority = 9);
+        overlays.add('eventMerchant');
+        isPaused = true;
+        break;
+      case EventRoomType.trap:
+        for (int i = 0; i < 10; i++) {
+          final a = i / 10 * pi * 2;
+          world.add(Enemy(floor: currentFloor, type: EnemyType.melee)
+            ..position = c + Vector2(cos(a) * 120, sin(a) * 120));
+          enemiesSpawned++;
+          enemiesAlive++;
+          enemiesToSpawn++;
+        }
+        break;
+      case EventRoomType.none:
+        break;
+    }
+  }
+
+  void _spawnEcho(EchoBossKind kind) {
+    final p = Vector2(mapWidth / 2 + 80, mapHeight / 2 - 80);
+    switch (kind) {
+      case EchoBossKind.mini:
+        world.add(MiniBoss(floor: currentFloor, position: p, isEcho: true));
+        break;
+      case EchoBossKind.ranged:
+        world.add(Boss(floor: currentFloor, position: p, isEcho: true));
+        break;
+      case EchoBossKind.knight:
+        world.add(KnightBoss(floor: currentFloor, position: p, isEcho: true));
+        break;
+      case EchoBossKind.king:
+        world.add(KingBoss(position: p, isEcho: true));
+        break;
+      case EchoBossKind.plague:
+        world.add(PlagueLordBoss(position: p, isEcho: true));
+        break;
+      case EchoBossKind.blood:
+        world.add(BloodChampionBoss(position: p, isEcho: true));
+        break;
+      case EchoBossKind.none:
+        break;
+    }
+  }
+
+  void nextLevel() {
+    portalSpawned = false;
+    nearPortal = false;
+    isPaused = true;
+    skillPoints += 1;
+    scraps += 3 + currentFloor;
+    overlays.add('reward');
+  }
+
+  void onEnemyKilled({
+    Vector2? at,
+    bool isChampion = false,
+    bool isBoss = false,
+    EnemyType? type,
+    bool meleeKill = false,
+    EliteAffix affix = EliteAffix.none,
+    EchoBossKind echoKind = EchoBossKind.none,
+    Vector2? fromDir,
+  }) {
+    killsThisLevel++;
+    enemiesAlive = max(0, enemiesAlive - 1);
+    unlockAchievement(AchievementId.firstBlood);
+
+    combo++;
+    comboTimer = 2.5;
+    if (combo >= 15) unlockAchievement(AchievementId.combo15);
+    if (combo == 5 || combo == 10 || combo == 15) {
+      scraps += 1;
+      if (at != null) world.add(ComboBanner(position: at, combo: combo));
+    }
+
+    var pts = 10 + currentFloor * 2;
+    if (isChampion) {
+      pts *= 3;
+      achievements.championsKilledTotal++;
+      if (achievements.championsKilledTotal >= 10) unlockAchievement(AchievementId.championHunter);
+      scraps += hasScavenger ? 5 : 3;
+      if (Random().nextDouble() < 0.25) {
+        _grantRandomRelic();
+      }
+    }
+    if (isBoss) {
+      pts *= 8;
+      unlockAchievement(AchievementId.bossSlayer);
+      if (echoKind != EchoBossKind.none) lastBossEcho = echoKind;
+    }
+    score += (pts * (1 + combo * 0.05)).round();
+
+    if (isArena) {
+      arenaKills++;
+      if (arenaKills >= 50) unlockAchievement(AchievementId.arena50);
+      if (arenaKills >= 100) unlockAchievement(AchievementId.arena100);
+      // endless: keep spawning
+      if (enemiesAlive < 6) {
+        final points = getEnemySpawnPoints();
+        if (points.isNotEmpty) {
+          final e = Enemy(floor: currentFloor, type: _rollEnemyType(), isChampion: arenaKills % 100 == 0, affix: arenaKills % 100 == 0 ? _rollAffix() : EliteAffix.none);
+          e.position = points[Random().nextInt(points.length)];
+          world.add(e);
+          enemiesAlive++;
+          enemiesSpawned++;
+        }
+        if (arenaKills % 100 == 0) {
+          world.add(Boss(floor: currentFloor, position: Vector2(mapWidth / 2, mapHeight / 2)));
+        }
+      }
+    }
+
+    // mastery
+    if (meleeKill) {
+      mastery.addKill(meleeWeapon.name);
+    } else {
+      mastery.addKill(rangedWeapon.name.contains('staff') || rangedWeapon == RangedWeapon.staff || rangedWeapon == RangedWeapon.stormStaff || rangedWeapon == RangedWeapon.warpBeam
+          ? 'staff'
+          : rangedWeapon == RangedWeapon.bolter || rangedWeapon == RangedWeapon.rifle || rangedWeapon == RangedWeapon.shotgun
+              ? 'bolter'
+              : rangedWeapon.name);
+    }
+
+    if (hasLifesteal && Random().nextDouble() < 0.15) {
+      player.heal(1);
+    }
+    if (hasHaste) {
+      hasteTimer = 3.0;
+    }
+    if (hasKillExplosion && at != null) {
+      world.add(KillExplosion(position: at, radius: 70, damage: scaleDamage(8), applyBurn: true));
+    }
+    if (type != null) {
+      final codex = switch (type) {
+        EnemyType.shooter => CodexId.shooter,
+        EnemyType.melee => CodexId.melee,
+        EnemyType.shielded => CodexId.shielded,
+        EnemyType.dog => CodexId.dog,
+        EnemyType.shieldedShooter => CodexId.shieldedShooter,
+        EnemyType.flamer => CodexId.flamer,
+        EnemyType.sniper => CodexId.sniper,
+        EnemyType.brute => CodexId.brute,
+        EnemyType.cultPsyker => CodexId.cultPsyker,
+        EnemyType.plagueBearer => CodexId.plagueBearer,
+        EnemyType.bloodletter => CodexId.bloodletter,
+      };
+      unlockCodex(codex);
+    }
+    if (scraps >= 100) unlockAchievement(AchievementId.scrapHoarder);
+    if (relics.length >= 5) unlockAchievement(AchievementId.relicHunter);
+
+    _checkPortal();
+  }
+
+  void onSecretBossKilled({required bool cyclops}) {
+    score += 6666;
+    skillPoints += 1;
+    if (cyclops) {
+      unlockAchievement(AchievementId.secretCyclops);
+      unlockCodex(CodexId.cyclops);
+    } else {
+      unlockAchievement(AchievementId.secretTentacle);
+      unlockCodex(CodexId.tentacle);
+    }
+    _forceSpawnPortal();
+  }
+
+  void _grantRandomRelic() {
+    final pool = RelicId.values.where((r) => !relics.contains(r)).toList();
+    if (pool.isEmpty) return;
+    final r = pool[Random().nextInt(pool.length)];
+    relics.add(r);
+    spawnDamageNumber(player.position, 0, color: const Color(0xFFFFD700), label: r.title);
+  }
+
+  // ── secret corner 33s ──
+  double cornerTimer = 0;
+
+  void _updateSecretCorner(double dt) {
+    if (secretBossSpawned || !isBossLevel) return;
+    if (countLivingHostiles() > 0) {
+      cornerTimer = 0;
+      return;
+    }
+    final inCorner = player.position.x < 120 && player.position.y < 120;
+    if (!inCorner) {
+      cornerTimer = 0;
+      return;
+    }
+    cornerTimer += dt;
+    if (cornerTimer >= 33) {
+      secretBossSpawned = true;
+      final pos = Vector2(mapWidth / 2, mapHeight / 2);
+      if (currentFloor == 1 || (currentFloor % 5 == 0 && currentFloor < 10)) {
+        world.add(TentacleBoss(position: pos));
+      } else if (currentFloor >= 2) {
+        world.add(CyclopsBoss(position: pos));
+      }
+      spawnDamageNumber(pos, 0, color: const Color(0xFF9C27B0), label: 'СЕКРЕТ');
+      triggerShake(power: 12, time: 0.4);
+    }
+  }
+
+  // ── update ──
+
+  @override
+  void update(double dt) {
+    super.update(dt);
     if (!isPlaying) return;
+
+    // camera shake / cinema
+    if (shakeTimer > 0) {
+      shakeTimer -= dt;
+      final ox = (Random().nextDouble() - 0.5) * shakePower * 2;
+      final oy = (Random().nextDouble() - 0.5) * shakePower * 2;
+      camera.viewfinder.position = player.position + Vector2(ox, oy);
+    } else if (!camera.viewfinder.isFollowing) {
+      camera.follow(player);
+    }
+    if (cinemaZoomTimer > 0) {
+      cinemaZoomTimer -= dt;
+      camera.viewfinder.zoom = 1.0 + 0.15 * (cinemaZoomTimer / 0.4);
+    } else {
+      camera.viewfinder.zoom = 1.0;
+    }
+
+    if (isPaused) return;
+
+    runTimeAcc += dt;
+    if (runTimeAcc >= 1) {
+      runTimeAcc = 0;
+      runSeconds++;
+    }
+    levelTimer += dt;
+
+    // 5-minute portal
+    if (!portalSpawned && !isArena && levelTimer >= timedPortalSec) {
+      _forceSpawnPortal(fromTimer: true);
+    }
+
+    if (comboTimer > 0) {
+      comboTimer -= dt;
+      if (comboTimer <= 0) combo = 0;
+    }
+    if (invulnTimer > 0) invulnTimer -= dt;
+    if (shieldTimer > 0) shieldTimer -= dt;
+    if (hasteTimer > 0) hasteTimer -= dt;
+    if (dashCooldown > 0) dashCooldown -= dt;
+    if (laserCooldown > 0) laserCooldown -= dt;
+    if (artifactCd > 0) artifactCd -= dt;
+    if (warpResetCd > 0) warpResetCd -= dt;
+    if (bossRetreatTimer > 0) bossRetreatTimer -= dt;
+
+    // heat dissipation
+    bolterHeat = max(0, bolterHeat - dt * (hasAmmoSavant ? 0.35 : 0.25));
+    staffWarpStress = max(0, staffWarpStress - dt * (hasWarpAnchor ? 0.2 : 0.12));
+
+    // portal proximity
+    nearPortal = false;
+    for (final p in world.children.whereType<Portal>()) {
+      if (player.position.distanceTo(p.position) < 70) {
+        nearPortal = true;
+        break;
+      }
+    }
+    portalBtn?.opacity = nearPortal ? 1.0 : 0.0;
+
+    _updateSecretCorner(dt);
+    _checkPortal();
+
+    // arena continuous spawn
+    if (isArena && enemiesAlive < 8) {
+      final points = getEnemySpawnPoints();
+      if (points.isNotEmpty) {
+        final e = Enemy(floor: max(1, currentFloor), type: _rollEnemyType());
+        e.position = points[Random().nextInt(points.length)];
+        world.add(e);
+        enemiesAlive++;
+        enemiesSpawned++;
+      }
+    }
+  }
+
+  // ── save / load ──
+
+  Future<void> saveGame() async {
     final payload = jsonEncode({
       'floor': currentFloor,
       'level': currentLevel,
@@ -3263,16 +3021,18 @@ class InquisitorGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       'loadout': loadout.toJson(),
       'lore': loreRanks,
       'codex': codexUnlocked.map((e) => e.name).toList(),
-      'hp': world.children.whereType<Player>().isEmpty ? maxHealth : player.health,
+      'hp': player.health,
       'rw': rangedWeapon.name,
       'mw': meleeWeapon.name,
       'um': usingMelee,
       'pc': playerClass.name,
       'diff': difficulty.name,
       'name': playerName,
+      'seconds': runSeconds,
     });
     final now = DateTime.now();
-    final dateStr = '${now.day}.${now.month}.${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}';
+    final dateStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
     final gs = GameSave(
       name: playerName,
       dateStr: dateStr,
@@ -3289,849 +3049,661 @@ class InquisitorGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       loadout: loadout.toJson(),
       loreRanks: Map<String, int>.from(loreRanks),
       codex: codexUnlocked.map((e) => e.name).toList(),
-      health: world.children.whereType<Player>().isEmpty ? maxHealth : player.health,
+      health: player.health.round(),
       ranged: rangedWeapon.name,
       melee: meleeWeapon.name,
       usingMelee: usingMelee,
       payload: payload,
     );
     saves.insert(0, gs);
-    if (saves.length > 10) saves.removeLast();
-    await persistMeta();
+    if (saves.length > 10) saves = saves.take(10).toList();
+    await _saveMeta();
+    spawnDamageNumber(player.position, 0, color: const Color(0xFF69F0AE), label: 'СОХРАНЕНО');
+  }
+
+  Future<void> deleteSave(int index) async {
+    if (index < 0 || index >= saves.length) return;
+    saves.removeAt(index);
+    await _saveMeta();
+  }
+
+  Future<void> deleteAllSaves() async {
+    saves.clear();
+    await _saveMeta();
   }
 
   void loadSave(GameSave s) {
     try {
       final j = jsonDecode(s.payload) as Map<String, dynamic>;
-      playerName = s.name;
-      playerClass = PlayerClass.values.firstWhere((e) => e.name == s.playerClass, orElse: () => PlayerClass.xenos);
-      difficulty = Difficulty.values.firstWhere((e) => e.labelRu == s.difficulty || e.name == (j['diff'] as String?), orElse: () => Difficulty.normal);
-      maxFloors = difficulty.maxFloors;
-      currentFloor = s.floor;
-      currentLevel = s.level;
-      pathIndex = (j['pathIndex'] as int?) ?? (currentLevel - 1);
-      score = s.score;
-      scraps = s.scraps;
-      skillPoints = s.skillPoints;
-      skills = SkillTree.fromJson(s.skills);
-      mastery = WeaponMastery.fromJson(s.mastery);
-      loadout = WeaponLoadout.fromJson(s.loadout);
+      playerName = j['name'] as String? ?? s.name;
+      playerClass = PlayerClass.values.firstWhere((e) => e.name == j['pc'], orElse: () => PlayerClass.xenos);
+      difficulty = Difficulty.values.firstWhere((e) => e.name == j['diff'], orElse: () => Difficulty.normal);
+      currentFloor = j['floor'] as int? ?? 1;
+      currentLevel = j['level'] as int? ?? 1;
+      pathIndex = j['pathIndex'] as int? ?? 0;
+      score = j['score'] as int? ?? 0;
+      scraps = j['scraps'] as int? ?? 0;
+      skillPoints = j['sp'] as int? ?? 0;
+      skills = SkillTree.fromJson(j['skills'] as Map<String, dynamic>?);
+      mastery = WeaponMastery.fromJson(j['mastery'] as Map<String, dynamic>?);
       relics
         ..clear()
-        ..addAll(s.relics.map((n) => RelicId.values.firstWhere((e) => e.name == n, orElse: () => RelicId.critCharm)));
+        ..addAll((j['relics'] as List? ?? []).map((e) => RelicId.values.firstWhere((r) => r.name == e, orElse: () => RelicId.crit)));
+      loadout = WeaponLoadout.fromJson(j['loadout'] as Map<String, dynamic>?);
       loreRanks
         ..clear()
-        ..addAll(s.loreRanks);
+        ..addAll((j['lore'] as Map?)?.map((k, v) => MapEntry(k.toString(), (v as num).toInt())) ?? {});
       codexUnlocked
         ..clear()
-        ..addAll(s.codex.map((n) => CodexId.values.firstWhere((e) => e.name == n, orElse: () => CodexId.shooter)));
-      rangedWeapon = RangedWeapon.values.firstWhere((e) => e.name == s.ranged, orElse: () => RangedWeapon.bolter);
-      meleeWeapon = MeleeWeapon.values.firstWhere((e) => e.name == s.melee, orElse: () => MeleeWeapon.sword);
-      usingMelee = s.usingMelee;
-      isArena = false;
-      generateFloorPath();
-      pathIndex = pathIndex.clamp(0, floorPath.length - 1);
-      syncLevelFromPath();
-      recomputeStats();
-      isPlaying = true;
-      isPaused = false;
-      overlays.remove('loadSave');
-      startMusic();
-      _startLevel();
-      if (world.children.whereType<Player>().isNotEmpty) {
-        player.health = s.health.clamp(1, maxHealth);
+        ..addAll((j['codex'] as List? ?? []).map((e) => CodexId.values.firstWhere((c) => c.name == e, orElse: () => CodexId.shooter)));
+      rangedWeapon = RangedWeapon.values.firstWhere((e) => e.name == j['rw'], orElse: () => RangedWeapon.bolter);
+      meleeWeapon = MeleeWeapon.values.firstWhere((e) => e.name == j['mw'], orElse: () => MeleeWeapon.sword);
+      usingMelee = j['um'] as bool? ?? false;
+      runSeconds = j['seconds'] as int? ?? 0;
+      _buildFloorPath();
+      pathIndex = (currentLevel - 1).clamp(0, floorPath.length - 1);
+      for (final o in overlays.activeOverlays.toList()) {
+        overlays.remove(o);
       }
+      _startLevel();
+      player.health = (j['hp'] as num?)?.toDouble() ?? maxHealth.toDouble();
     } catch (_) {
-      overlays.remove('loadSave');
-      overlays.add('mainMenu');
+      backToMenu();
     }
-  }
-
-  Future<void> deleteSaveAt(int index) async {
-    if (index < 0 || index >= saves.length) return;
-    saves.removeAt(index);
-    await persistMeta();
-  }
-
-  Future<void> deleteAllSaves() async {
-    saves.clear();
-    await persistMeta();
-  }
-
-  // ── menus open/close ──
-  void openSettings() {
-    isPaused = true;
-    overlays.add('settings');
-  }
-
-  void closeSettings() {
-    overlays.remove('settings');
-    // FIX: apply HUD sizes/positions while in combat
-    if (isPlaying) {
-      rebuildHud();
-      isPaused = false;
-    }
-    persistCustomization();
-  }
-
-  void openBackpack() {
-    isPaused = true;
-    overlays.add('backpack');
-  }
-
-  void closeBackpack() {
-    overlays.remove('backpack');
-    isPaused = false;
-  }
-
-  void openLoadSave() {
-    overlays.remove('mainMenu');
-    overlays.add('loadSave');
-  }
-
-  void openCodex() {
-    overlays.remove('mainMenu');
-    overlays.add('codex');
-  }
-
-  void closeCodex() {
-    overlays.remove('codex');
-    overlays.add('mainMenu');
-  }
-
-  void openAchievements() {
-    overlays.remove('mainMenu');
-    overlays.add('achievements');
-  }
-
-  void closeAchievements() {
-    overlays.remove('achievements');
-    overlays.add('mainMenu');
-  }
-
-  void exitMatch() {
-    overlays.remove('settings');
-    isPlaying = false;
-    isPaused = false;
-    stopMusic();
-    addScoreEntry();
-    backToMenu();
-  }
-
-  void backToMenu() {
-    isPlaying = false;
-    isPaused = false;
-    stopMusic();
-    world.removeAll(world.children.toList());
-    camera.viewport.children.toList().forEach((c) {
-      if (c is! CameraComponent) c.removeFromParent();
-    });
-    for (final o in [
-      'settings',
-      'backpack',
-      'reward',
-      'shop',
-      'skills',
-      'levelComplete',
-      'victory',
-      'gameOver',
-      'pathSelect',
-      'lorePopup',
-      'eventAltar',
-      'eventMerchant',
-      'rankPerk',
-      'challengeSelect',
-      'classSelect',
-      'nameInput',
-      'loadSave',
-      'records',
-      'codex',
-      'achievements',
-    ]) {
-      overlays.remove(o);
-    }
-    overlays.add('mainMenu');
-  }
-
-  // event handlers
-  void resolveAltar({required bool accept}) {
-    overlays.remove('eventAltar');
-    isPaused = false;
-    eventResolved = true;
-    if (accept && player.health > 1) {
-      player.health -= 1;
-      _grantRandomRelic();
-    }
-    if (countLivingHostiles() == 0 && enemiesToSpawn == 0) _forceSpawnPortal();
   }
 
   void resolveMerchantBuy(String id) {
-    void pay(int cost, void Function() apply) {
-      if (scraps < cost) return;
-      scraps -= cost;
-      apply();
-      recomputeStats();
-    }
-
     switch (id) {
       case 'heal':
-        pay(10, () => player.health = min(maxHealth, player.health + 2));
-        break;
-      case 'scraps_sp':
-        pay(18, () => skillPoints++);
-        break;
-      case 'relic':
-        pay(25, _grantRandomRelic);
-        break;
-      case 'gun_rapid':
-        pay(14, () => loadout.gunBarrel = GunBarrelMod.rapid);
-        break;
-      case 'gun_heavy':
-        pay(14, () => loadout.gunBarrel = GunBarrelMod.heavy);
-        break;
-      case 'gun_precision':
-        pay(12, () => loadout.gunSight = GunSightMod.precision);
-        break;
-      case 'gun_wide':
-        pay(12, () => loadout.gunSight = GunSightMod.wide);
-        break;
-      case 'gun_explosive':
-        pay(16, () => loadout.gunAmmo = GunAmmoMod.explosive);
-        break;
-      case 'staff_wide':
-        pay(14, () => loadout.staffFocus = StaffFocusMod.wideSphere);
-        break;
-      case 'staff_focus':
-        pay(14, () => loadout.staffFocus = StaffFocusMod.focused);
-        break;
-      case 'staff_dissipator':
-        pay(12, () => loadout.staffFocus = StaffFocusMod.dissipator);
-        break;
-      case 'blade_serrated':
-        pay(12, () => loadout.bladeEdge = BladeEdgeMod.serrated);
-        break;
-      case 'blade_mono':
-        pay(14, () => loadout.bladeEdge = BladeEdgeMod.mono);
-        break;
-      case 'blade_weighted':
-        pay(14, () => loadout.bladeEdge = BladeEdgeMod.weighted);
-        break;
-    }
-  }
-
-  void closeMerchant() {
-    overlays.remove('eventMerchant');
-    isPaused = false;
-    eventResolved = true;
-    if (countLivingHostiles() == 0 && enemiesToSpawn == 0) _forceSpawnPortal();
-  }
-} // ← ЕДИНСТВЕННОЕ закрытие InquisitorGame
-
-// ═══════════════════════════════════════════════════════════════
-// HELPER COMPONENTS
-// ═══════════════════════════════════════════════════════════════
-
-class RewardOption {
-  final RewardKind kind;
-  final String title;
-  final String subtitle;
-  RewardOption(this.kind, this.title, this.subtitle);
-  void apply(InquisitorGame g) {
-    switch (kind) {
-      case RewardKind.skillPoint:
-        g.skillPoints++;
-        break;
-      case RewardKind.scraps:
-        g.scraps += 12;
-        break;
-      case RewardKind.heal:
-        if (g.world.children.whereType<Player>().isNotEmpty) {
-          g.player.health = min(g.maxHealth, g.player.health + 3);
+        if (scraps >= 8) {
+          scraps -= 8;
+          player.heal(3);
         }
         break;
-      case RewardKind.relic:
-        g._grantRandomRelic();
+      case 'scraps_sp':
+        if (scraps >= 12) {
+          scraps -= 12;
+          skillPoints++;
+        }
+        break;
+      case 'relic':
+        if (scraps >= 20) {
+          scraps -= 20;
+          _grantRandomRelic();
+        }
+        break;
+      case 'gun_rapid':
+        if (scraps >= 15 && playerClass == PlayerClass.xenos) {
+          scraps -= 15;
+          loadout.gunBarrel = GunBarrelMod.rapid;
+        }
+        break;
+      case 'gun_heavy':
+        if (scraps >= 15 && playerClass == PlayerClass.xenos) {
+          scraps -= 15;
+          loadout.gunBarrel = GunBarrelMod.heavy;
+        }
+        break;
+      case 'gun_precision':
+        if (scraps >= 12 && playerClass == PlayerClass.xenos) {
+          scraps -= 12;
+          loadout.gunSight = GunSightMod.precision;
+        }
+        break;
+      case 'gun_explosive':
+        if (scraps >= 18 && playerClass == PlayerClass.xenos) {
+          scraps -= 18;
+          loadout.gunAmmo = GunAmmoMod.explosive;
+        }
+        break;
+      case 'staff_wide':
+        if (scraps >= 15 && playerClass == PlayerClass.malleus) {
+          scraps -= 15;
+          loadout.staffFocus = StaffFocusMod.wideSphere;
+        }
+        break;
+      case 'staff_focus':
+        if (scraps >= 15 && playerClass == PlayerClass.malleus) {
+          scraps -= 15;
+          loadout.staffFocus = StaffFocusMod.focusCore;
+        }
+        break;
+      case 'staff_dissipator':
+        if (scraps >= 14 && playerClass == PlayerClass.malleus) {
+          scraps -= 14;
+          loadout.staffFocus = StaffFocusMod.dissipator;
+        }
+        break;
+      case 'blade_serrated':
+        if (scraps >= 14 && playerClass == PlayerClass.hereticus) {
+          scraps -= 14;
+          loadout.bladeEdge = BladeEdgeMod.serrated;
+        }
+        break;
+      case 'blade_mono':
+        if (scraps >= 16 && playerClass == PlayerClass.hereticus) {
+          scraps -= 16;
+          loadout.bladeEdge = BladeEdgeMod.monomolecular;
+        }
         break;
     }
+    recomputeStats();
+  }
+
+  void startNewRun({
+    required String name,
+    required Difficulty diff,
+    required PlayerClass cls,
+    RankChallenge challenge = RankChallenge.none,
+  }) {
+    playerName = name;
+    difficulty = diff;
+    playerClass = cls;
+    activeChallenge = challenge;
+    achievements.classesPlayed.add(cls.name);
+    if (achievements.classesPlayed.length >= 3) unlockAchievement(AchievementId.allClasses);
+
+    score = 0;
+    scraps = rank.startScraps;
+    skillPoints = rank.startSpBonus;
+    skills = SkillTree();
+    mastery = WeaponMastery();
+    loadout = WeaponLoadout();
+    relics.clear();
+    currentFloor = 1;
+    currentLevel = 1;
+    pathIndex = 0;
+    runSeconds = 0;
+    isArena = false;
+    lastBossEcho = EchoBossKind.none;
+
+    rangedWeapon = switch (cls) {
+      PlayerClass.xenos => RangedWeapon.bolter,
+      PlayerClass.malleus => RangedWeapon.staff,
+      PlayerClass.hereticus => RangedWeapon.daggers,
+    };
+    meleeWeapon = switch (cls) {
+      PlayerClass.xenos => MeleeWeapon.sword,
+      PlayerClass.malleus => MeleeWeapon.forceBlade,
+      PlayerClass.hereticus => MeleeWeapon.katana,
+    };
+    usingMelee = false;
+    activeArtifact = ActiveArtifact.fragGrenade;
+
+    _buildFloorPath();
+    for (final o in overlays.activeOverlays.toList()) {
+      overlays.remove(o);
+    }
+    recomputeStats();
+    _startLevel();
   }
 }
+// ─── WORLD PROPS ──────────────────────────────────────────────
 
-class Floor extends PositionComponent {
-  Floor({required Vector2 size}) : super(size: size, priority: 0);
+class FloorLayer extends PositionComponent {
+  FloorLayer({required Vector2 size})
+      : super(position: Vector2.zero(), size: size, priority: 0);
+
   @override
   void render(Canvas canvas) {
-    canvas.drawRect(size.toRect(), Paint()..color = const Color(0xFF3A3A3A));
-    final grid = Paint()..color = const Color(0xFF4A4A4A)..strokeWidth = 1;
-    for (double x = 0; x < size.x; x += 64) {
+    canvas.drawRect(size.toRect(), Paint()..color = const Color(0xFF2A2A2E));
+    final grid = Paint()
+      ..color = const Color(0xFF3A3A40)
+      ..strokeWidth = 1;
+    for (double x = 0; x < size.x; x += 48) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.y), grid);
     }
-    for (double y = 0; y < size.y; y += 64) {
+    for (double y = 0; y < size.y; y += 48) {
       canvas.drawLine(Offset(0, y), Offset(size.x, y), grid);
     }
   }
 }
 
 class Wall extends PositionComponent with CollisionCallbacks {
-  final Color color;
-  Wall({required Vector2 position, required Vector2 size, this.color = const Color(0xFF5D4037)})
-      : super(position: position, size: size, priority: 2);
+  Wall({required Vector2 position, required Vector2 size})
+      : super(position: position, size: size, anchor: Anchor.center, priority: 5);
+
   @override
   Future<void> onLoad() async => add(RectangleHitbox());
+
   @override
   void render(Canvas canvas) {
-    canvas.drawRect(size.toRect(), Paint()..color = color);
+    canvas.drawRect(size.toRect(), Paint()..color = const Color(0xFF5D4037));
+    canvas.drawRect(
+      size.toRect().deflate(3),
+      Paint()
+        ..color = const Color(0xFF3E2723)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
   }
 }
 
 class Obstacle extends PositionComponent with CollisionCallbacks {
-  Obstacle({required Vector2 position}) : super(position: position, size: Vector2(48, 48), anchor: Anchor.center, priority: 8);
+  Obstacle({required Vector2 position})
+      : super(position: position, size: Vector2(40, 40), anchor: Anchor.center, priority: 7);
+
   @override
-  Future<void> onLoad() async => add(CircleHitbox());
+  Future<void> onLoad() async => add(CircleHitbox(radius: 18));
+
   @override
   void render(Canvas canvas) {
-    canvas.drawRRect(RRect.fromRectAndRadius(size.toRect(), const Radius.circular(6)), Paint()..color = const Color(0xFF6D4C41));
-  }
-}
-
-class Portal extends PositionComponent with CollisionCallbacks {
-  double t = 0;
-  Portal({required Vector2 position}) : super(position: position, size: Vector2(56, 56), anchor: Anchor.center, priority: 9);
-  @override
-  Future<void> onLoad() async => add(CircleHitbox());
-  @override
-  void update(double dt) {
-    super.update(dt);
-    t += dt;
-  }
-  @override
-  void render(Canvas canvas) {
-    final pulse = 0.7 + 0.3 * sin(t * 4);
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 24 * pulse, Paint()..color = const Color(0xFFE91E63).withOpacity(0.7));
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 14, Paint()..color = const Color(0xFFF48FB1));
-  }
-}
-
-class SpawnPortalMarker extends PositionComponent {
-  double life = 0.8;
-  SpawnPortalMarker({required Vector2 position}) : super(position: position, size: Vector2(40, 40), anchor: Anchor.center, priority: 7);
-  @override
-  void update(double dt) {
-    super.update(dt);
-    life -= dt;
-    if (life <= 0) removeFromParent();
-  }
-  @override
-  void render(Canvas canvas) {
-    final a = (life / 0.8).clamp(0.0, 1.0);
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 16, Paint()..color = Color.fromRGBO(255, 152, 0, 0.55 * a));
-  }
-}
-
-class PlayerSpawnMarker extends PositionComponent {
-  double t = 0;
-  PlayerSpawnMarker({required Vector2 position}) : super(position: position, size: Vector2(36, 36), anchor: Anchor.center, priority: 6);
-  @override
-  void update(double dt) {
-    super.update(dt);
-    t += dt;
-    if (t > 2.5) removeFromParent();
-  }
-  @override
-  void render(Canvas canvas) {
-    final a = (1 - t / 2.5).clamp(0.0, 1.0);
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 14, Paint()..color = Color.fromRGBO(156, 39, 176, 0.5 * a));
-  }
-}
-
-class HudLabel extends PositionComponent {
-  final String text;
-  final PositionComponent target;
-  HudLabel({required this.text, required this.target}) : super(priority: 201);
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (!target.isMounted) {
-      removeFromParent();
-      return;
-    }
-    position = target.position.clone();
-  }
-  @override
-  void render(Canvas canvas) {
-    final tp = TextPainter(
-      text: TextSpan(text: text, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 2)])),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
-  }
-}
-
-class AttackCooldownRing extends PositionComponent {
-  final InquisitorGame game;
-  final JoystickComponent joystick;
-  AttackCooldownRing({required this.game, required this.joystick}) : super(priority: 199);
-  @override
-  void update(double dt) {
-    super.update(dt);
-    position = joystick.position.clone();
-  }
-  @override
-  void render(Canvas canvas) {
-    final r = game.hud.joystickSize * 0.55;
-    if (game.bolterHeat > 0.05 && game.playerClass == PlayerClass.xenos) {
-      final paint = Paint()
-        ..color = Color.lerp(const Color(0xFFFFEB3B), const Color(0xFFFF1744), game.bolterHeat)!
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3;
-      canvas.drawArc(Rect.fromCircle(center: Offset.zero, radius: r), -pi / 2, game.bolterHeat * 2 * pi, false, paint);
-    }
-    if (game.staffWarpStress > 0.05 && game.playerClass == PlayerClass.malleus) {
-      final paint = Paint()
-        ..color = const Color(0xFF9C27B0)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3;
-      canvas.drawArc(Rect.fromCircle(center: Offset.zero, radius: r + 4), -pi / 2, game.staffWarpStress * 2 * pi, false, paint);
-    }
-  }
-}
-
-mixin SmartMover on PositionComponent {
-  double stuckTimer = 0;
-  void smartMove(Vector2 target, double speed, double dt, {double radius = 22, bool kite = false, double preferDist = 180}) {
-    final game = findGame() as InquisitorGame?;
-    if (game == null) return;
-    Vector2 desired;
-    final dist = position.distanceTo(target);
-    if (kite && dist < preferDist) {
-      desired = (position - target).normalized();
-    } else {
-      desired = (target - position).normalized();
-    }
-    // separation
-    for (final e in game.world.children.whereType<Enemy>()) {
-      if (identical(e, this)) continue;
-      final d = position.distanceTo(e.position);
-      if (d > 0 && d < radius * 2.2) {
-        desired += (position - e.position).normalized() * 0.6;
-      }
-    }
-    if (desired.length2 > 0.001) desired = desired.normalized();
-    final next = position + desired * speed * dt;
-    if (_canStand(game, next, radius)) {
-      position = next;
-      stuckTimer = 0;
-    } else {
-      // slide axes
-      final nx = Vector2(next.x, position.y);
-      final ny = Vector2(position.x, next.y);
-      if (_canStand(game, nx, radius)) {
-        position = nx;
-      } else if (_canStand(game, ny, radius)) {
-        position = ny;
-      } else {
-        stuckTimer += dt;
-        if (stuckTimer > 0.5) {
-          position += Vector2(Random().nextDouble() - 0.5, Random().nextDouble() - 0.5).normalized() * 20;
-          stuckTimer = 0;
-        }
-      }
-    }
-    position.x = position.x.clamp(80, game.mapWidth - 80);
-    position.y = position.y.clamp(80, game.mapHeight - 80);
-  }
-
-  bool _canStand(InquisitorGame game, Vector2 p, double radius) {
-    for (final w in game.world.children.whereType<Wall>()) {
-      if (w.toAbsoluteRect().inflate(radius * 0.6).contains(p.toOffset())) return false;
-    }
-    for (final o in game.world.children.whereType<Obstacle>()) {
-      if (p.distanceTo(o.position) < radius + 22) return false;
-    }
-    for (final b in game.world.children.whereType<BreakableBarrel>()) {
-      if (p.distanceTo(b.position) < radius + 20) return false;
-    }
-    return true;
-  }
-
-  void pushOutOfWalls(double radius) {
-    final game = findGame() as InquisitorGame?;
-    if (game == null) return;
-    for (final w in game.world.children.whereType<Wall>()) {
-      final r = w.toAbsoluteRect().inflate(radius * 0.5);
-      if (r.contains(position.toOffset())) {
-        final cx = r.center.dx, cy = r.center.dy;
-        position += (position - Vector2(cx, cy)).normalized() * 8;
-      }
-    }
+    WHDraw.barrel(canvas, size.x / 2, size.y / 2);
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 16, Paint()..color = const Color(0xFF6D4C41));
   }
 }
 
 class BreakableBarrel extends PositionComponent with CollisionCallbacks, HasGameReference<InquisitorGame> {
   int hp = 2;
-  BreakableBarrel({required Vector2 position}) : super(position: position, size: Vector2(36, 40), anchor: Anchor.center, priority: 8);
+  BreakableBarrel({required Vector2 position})
+      : super(position: position, size: Vector2(36, 40), anchor: Anchor.center, priority: 8);
+
   @override
   Future<void> onLoad() async => add(CircleHitbox(radius: 16));
+
   void hit() {
     hp--;
     if (hp <= 0) {
-      final pos = position.clone();
-      removeFromParent();
-      game.scraps += 1 + Random().nextInt(2);
-      if (Random().nextDouble() < 0.15) {
-        game.world.add(MedkitPickup(position: pos)..priority = 10);
-      } else if (Random().nextDouble() < 0.1) {
-        game.world.add(ShieldPickup(position: pos)..priority = 10);
+      if (Random().nextDouble() < 0.4) {
+        game.scraps += game.hasScavenger ? 3 : 1;
       }
+      if (Random().nextDouble() < 0.08) {
+        game.world.add(KillExplosion(position: position.clone(), radius: 55, damage: 5, applyBurn: true));
+      }
+      removeFromParent();
     }
   }
+
   @override
-  void render(Canvas canvas) => WHDraw.barrel(canvas, size.x / 2, size.y / 2);
+  void render(Canvas canvas) {
+    WHDraw.barrel(canvas, size.x / 2, size.y / 2);
+  }
 }
 
-class EventAltarProp extends PositionComponent with HasGameReference<InquisitorGame> {
+class Portal extends PositionComponent with CollisionCallbacks, HasGameReference<InquisitorGame> {
   double t = 0;
-  EventAltarProp({required Vector2 position}) : super(position: position, size: Vector2(50, 50), anchor: Anchor.center, priority: 10);
+  Portal({required Vector2 position})
+      : super(position: position, size: Vector2(70, 70), anchor: Anchor.center, priority: 9);
+
+  @override
+  Future<void> onLoad() async => add(CircleHitbox(radius: 28));
+
   @override
   void update(double dt) {
     super.update(dt);
     t += dt;
   }
+
+  @override
+  void render(Canvas canvas) {
+    final cx = size.x / 2, cy = size.y / 2;
+    final pulse = 0.6 + 0.4 * sin(t * 4);
+    canvas.drawCircle(Offset(cx, cy), 30 * pulse, Paint()..color = const Color(0xFFE040FB).withOpacity(0.35));
+    canvas.drawCircle(Offset(cx, cy), 18, Paint()..color = const Color(0xFF9C27B0));
+    canvas.drawCircle(Offset(cx, cy), 10, Paint()..color = const Color(0xFFF3E5F5));
+  }
+}
+
+class CorruptionPuddle extends PositionComponent with CollisionCallbacks, HasGameReference<InquisitorGame> {
+  double life = 8;
+  double tick = 0;
+  CorruptionPuddle({required Vector2 position})
+      : super(position: position, size: Vector2(90, 90), anchor: Anchor.center, priority: 5);
+
+  @override
+  Future<void> onLoad() async => add(CircleHitbox(radius: 40));
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    life -= dt;
+    tick += dt;
+    if (tick >= 0.5) {
+      tick = 0;
+      if (game.player.position.distanceTo(position) < 45 && game.invulnTimer <= 0) {
+        game.player.applyStatus(StatusType.corruption, 1.2, tickDamage: 1);
+      }
+    }
+    if (life <= 0) removeFromParent();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final a = (life / 8).clamp(0.0, 1.0);
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 40, Paint()..color = Color.fromRGBO(156, 39, 176, 0.35 * a));
+  }
+}
+
+class EventAltar extends PositionComponent with HasGameReference<InquisitorGame> {
+  double t = 0;
+  EventAltar({required Vector2 position})
+      : super(position: position, size: Vector2(50, 50), anchor: Anchor.center, priority: 9);
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    t += dt;
+  }
+
   @override
   void render(Canvas canvas) => WHDraw.altar(canvas, size.x / 2, size.y / 2, t);
 }
 
-class EventMerchantProp extends PositionComponent {
+class EventMerchant extends PositionComponent with HasGameReference<InquisitorGame> {
   double t = 0;
-  EventMerchantProp({required Vector2 position}) : super(position: position, size: Vector2(56, 50), anchor: Anchor.center, priority: 10);
+  EventMerchant({required Vector2 position})
+      : super(position: position, size: Vector2(56, 48), anchor: Anchor.center, priority: 9);
+
   @override
   void update(double dt) {
     super.update(dt);
     t += dt;
   }
+
   @override
   void render(Canvas canvas) => WHDraw.merchantStall(canvas, size.x / 2, size.y / 2, t);
 }
 
-class MedkitPickup extends PositionComponent with CollisionCallbacks, HasGameReference<InquisitorGame> {
-  MedkitPickup({required Vector2 position}) : super(position: position, size: Vector2(28, 28), anchor: Anchor.center, priority: 10);
-  @override
-  Future<void> onLoad() async => add(CircleHitbox());
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Player) {
-      other.health = min(game.maxHealth, other.health + 2);
-      removeFromParent();
-    }
-  }
-  @override
-  void render(Canvas canvas) {
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 12, Paint()..color = const Color(0xFFE53935));
-    canvas.drawRect(Rect.fromCenter(center: Offset(size.x / 2, size.y / 2), width: 12, height: 4), Paint()..color = Colors.white);
-    canvas.drawRect(Rect.fromCenter(center: Offset(size.x / 2, size.y / 2), width: 4, height: 12), Paint()..color = Colors.white);
-  }
-}
-
-class ShieldPickup extends PositionComponent with CollisionCallbacks, HasGameReference<InquisitorGame> {
-  ShieldPickup({required Vector2 position}) : super(position: position, size: Vector2(28, 28), anchor: Anchor.center, priority: 10);
-  @override
-  Future<void> onLoad() async => add(CircleHitbox());
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Player) {
-      game.shieldTimer = max(game.shieldTimer, 6);
-      removeFromParent();
-    }
-  }
-  @override
-  void render(Canvas canvas) {
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 12, Paint()..color = const Color(0xFF42A5F5).withOpacity(0.8));
-  }
-}
-
-class FragGrenade extends PositionComponent with HasGameReference<InquisitorGame> {
-  final Vector2 direction;
-  double life = 0.7;
-  FragGrenade({required Vector2 position, required this.direction})
-      : super(position: position.clone(), size: Vector2(16, 16), anchor: Anchor.center, priority: 15);
-  @override
-  void update(double dt) {
-    super.update(dt);
-    position += direction.normalized() * 220 * dt;
-    life -= dt;
-    if (life <= 0) {
-      game.world.add(KillExplosion(position: position.clone(), radius: 90, damage: 18 + game.currentFloor * 2, applyBurn: true)..priority = 12);
-      removeFromParent();
-    }
-  }
-  @override
-  void render(Canvas canvas) {
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 6, Paint()..color = const Color(0xFF795548));
-  }
-}
-
 class ServoTurret extends PositionComponent with HasGameReference<InquisitorGame> {
   double life = 8;
-  double shootTimer = 0;
-  ServoTurret({required Vector2 position}) : super(position: position.clone(), size: Vector2(36, 36), anchor: Anchor.center, priority: 12);
+  double fireCd = 0;
+  ServoTurret({required Vector2 position})
+      : super(position: position, size: Vector2(36, 36), anchor: Anchor.center, priority: 20);
+
   @override
   void update(double dt) {
     super.update(dt);
     life -= dt;
+    fireCd -= dt;
     if (life <= 0) {
       removeFromParent();
       return;
     }
-    shootTimer -= dt;
-    if (shootTimer <= 0) {
-      shootTimer = 0.45;
-      final t = _nearestHostile();
-      if (t != null) {
-        final dir = (t - position).normalized();
-        game.world.add(Bullet(
-          position: position.clone(),
-          direction: dir,
-          damage: game.scaleDamage(6),
-          color: const Color(0xFF90CAF9),
-          speed: 480,
-          radius: 4,
-        )..priority = 13);
-      }
-    }
-  }
-
-  Vector2? _nearestHostile() {
-    Vector2? best;
-    double bestD = 400;
-    void consider(PositionComponent c) {
+    if (fireCd > 0) return;
+    PositionComponent? target;
+    double best = 400;
+    void consider(PositionComponent c, double hpHint) {
       final d = position.distanceTo(c.position);
-      if (d < bestD) {
-        bestD = d;
-        best = c.position.clone();
+      if (d < best) {
+        best = d;
+        target = c;
       }
     }
     for (final e in game.world.children.whereType<Enemy>()) {
-      consider(e);
+      consider(e, 1);
     }
     for (final e in game.world.children.whereType<MiniBoss>()) {
-      consider(e);
+      consider(e, 1);
     }
     for (final e in game.world.children.whereType<Boss>()) {
-      consider(e);
+      consider(e, 1);
     }
     for (final e in game.world.children.whereType<KnightBoss>()) {
-      consider(e);
+      consider(e, 1);
     }
     for (final e in game.world.children.whereType<KingBoss>()) {
-      consider(e);
+      consider(e, 1);
     }
     for (final e in game.world.children.whereType<PlagueLordBoss>()) {
-      consider(e);
+      consider(e, 1);
     }
     for (final e in game.world.children.whereType<BloodChampionBoss>()) {
-      consider(e);
+      consider(e, 1);
     }
     for (final e in game.world.children.whereType<TentacleBoss>()) {
-      consider(e);
+      consider(e, 1);
     }
     for (final e in game.world.children.whereType<CyclopsBoss>()) {
-      consider(e);
+      consider(e, 1);
     }
-    return best;
+    if (target != null) {
+      fireCd = 0.45;
+      final dir = (target!.position - position).normalized();
+      game.world.add(Bullet(
+        position: position.clone(),
+        direction: dir,
+        damage: game.scaleDamage(5).toDouble(),
+        color: const Color(0xFF90CAF9),
+        speed: 420,
+        radius: 4,
+      )..priority = 16);
+    }
   }
 
   @override
   void render(Canvas canvas) {
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 14, Paint()..color = const Color(0xFF546E7A));
-    canvas.drawRect(Rect.fromCenter(center: Offset(size.x / 2 + 10, size.y / 2), width: 14, height: 5), Paint()..color = const Color(0xFF90CAF9));
+    final cx = size.x / 2, cy = size.y / 2;
+    canvas.drawCircle(Offset(cx, cy), 14, Paint()..color = const Color(0xFF546E7A));
+    canvas.drawRect(Rect.fromCenter(center: Offset(cx + 10, cy), width: 16, height: 6), Paint()..color = const Color(0xFF90CAF9));
   }
 }
-// ═══════════════════════════════════════════════════════════════
-// MENUS
-// ═══════════════════════════════════════════════════════════════
 
-class MainMenu extends StatefulWidget {
-  final InquisitorGame game;
-  const MainMenu(this.game, {super.key});
+// ─── MENUS ────────────────────────────────────────────────────
+
+class MatrixBackground extends StatefulWidget {
+  const MatrixBackground({super.key});
   @override
-  State<MainMenu> createState() => _MainMenuState();
+  State<MatrixBackground> createState() => _MatrixBackgroundState();
 }
 
-class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  final symbols = <_MS>[];
+class _MatrixBackgroundState extends State<MatrixBackground> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
   final _rnd = Random();
-  static const _chars = '01アイウエオカキクケコABCDEFXYZ';
+  final _chars = '01ИНКВИЗИТОРΞΨ†';
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
-    for (int i = 0; i < 70; i++) {
-      symbols.add(_MS(_rnd.nextDouble(), _rnd.nextDouble(), 0.25 + _rnd.nextDouble() * 1.2, _chars[_rnd.nextInt(_chars.length)], 0.2 + _rnd.nextDouble() * 0.7));
-    }
-    _controller.addListener(() {
-      setState(() {
-        for (final s in symbols) {
-          s.y += s.speed * 0.013;
-          if (s.y > 1.15) {
-            s.y = -0.1;
-            s.x = _rnd.nextDouble();
-            s.char = _chars[_rnd.nextInt(_chars.length)];
-            s.opacity = 0.2 + _rnd.nextDouble() * 0.7;
-          }
-        }
-      });
-    });
+    _c = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _c.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final rank = widget.game.inquisitionRank;
-    final ach = widget.game.achievements.unlocked.length;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          Positioned.fill(child: CustomPaint(painter: _MP(symbols))),
-          Center(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    'SOUL OF THE\nINQUISITOR',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFFFFD700), fontSize: 32, fontWeight: FontWeight.w900, height: 1.15, shadows: [Shadow(color: Colors.redAccent, blurRadius: 14)]),
-                  ),
-                  const Text('by Инквизитор Данте', style: TextStyle(color: Color(0xFFB8860B), fontSize: 14)),
-                  if (rank.rank > 0) Text('${rank.title} • побед ${rank.wins}', style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 12)),
-                  Text('Достижения: $ach / ${AchievementId.values.length}', style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                  const SizedBox(height: 20),
-                  _btn('НАЧАТЬ ИГРУ', () {
-                    widget.game.playClick();
-                    widget.game.openNameInput();
-                  }),
-                  const SizedBox(height: 8),
-                  _btn('ЗАГРУЗИТЬ', () {
-                    widget.game.playClick();
-                    widget.game.openLoadSave();
-                  }),
-                  const SizedBox(height: 8),
-                  _btn('ДОСТИЖЕНИЯ', () {
-                    widget.game.playClick();
-                    widget.game.openAchievements();
-                  }),
-                  const SizedBox(height: 8),
-                  _btn('КОДЕКС', () {
-                    widget.game.playClick();
-                    widget.game.openCodex();
-                  }),
-                  const SizedBox(height: 8),
-                  _btn('РЕКОРДЫ', () {
-                    widget.game.playClick();
-                    widget.game.overlays.remove('mainMenu');
-                    widget.game.overlays.add('records');
-                  }),
-                  const SizedBox(height: 8),
-                  _btn('НАСТРОЙКИ', () {
-                    widget.game.playClick();
-                    widget.game.openSettings();
-                  }),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) {
+        return CustomPaint(
+          painter: _MatrixPainter(_c.value, _rnd, _chars),
+          size: Size.infinite,
+        );
+      },
     );
   }
-
-  Widget _btn(String text, VoidCallback onTap) => SizedBox(
-        width: 260,
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1A1A1A),
-            side: const BorderSide(color: Color(0xFFB8860B)),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-          ),
-          onPressed: onTap,
-          child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))),
-        ),
-      );
 }
 
-class _MS {
-  double x, y, speed, opacity;
-  String char;
-  _MS(this.x, this.y, this.speed, this.char, this.opacity);
-}
+class _MatrixPainter extends CustomPainter {
+  final double t;
+  final Random rnd;
+  final String chars;
+  _MatrixPainter(this.t, this.rnd, this.chars);
 
-class _MP extends CustomPainter {
-  final List<_MS> symbols;
-  _MP(this.symbols);
   @override
   void paint(Canvas canvas, Size size) {
     final tp = TextPainter(textDirection: TextDirection.ltr);
-    for (final s in symbols) {
-      tp.text = TextSpan(text: s.char, style: TextStyle(color: Color.fromRGBO(0, 255, 70, s.opacity), fontSize: 14 + s.speed * 4, fontFamily: 'monospace'));
+    for (int i = 0; i < 40; i++) {
+      final x = (i * 37 + t * 20) % size.width;
+      final y = (i * 53 + t * size.height * 0.5) % size.height;
+      final ch = chars[i % chars.length];
+      tp.text = TextSpan(
+        text: ch,
+        style: TextStyle(color: Color.fromRGBO(0, 255, 70, 0.15 + (i % 5) * 0.05), fontSize: 14),
+      );
       tp.layout();
-      tp.paint(canvas, Offset(s.x * size.width, s.y * size.height));
+      tp.paint(canvas, Offset(x, y));
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _MatrixPainter old) => true;
 }
 
-class AchievementsMenu extends StatelessWidget {
+Widget _goldBtn(String label, VoidCallback onTap, {double width = 260}) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: SizedBox(
+      width: width,
+      height: 48,
+      child: ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF1A1A1A),
+          foregroundColor: const Color(0xFFFFD700),
+          side: const BorderSide(color: Color(0xFFB8860B), width: 1.5),
+        ),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+      ),
+    ),
+  );
+}
+
+class MainMenu extends StatelessWidget {
   final InquisitorGame game;
-  const AchievementsMenu(this.game, {super.key});
+  const MainMenu(this.game, {super.key});
+
   @override
   Widget build(BuildContext context) {
-    final unlocked = game.achievements.unlocked;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('ДОСТИЖЕНИЯ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-            ),
-            Text('${unlocked.length} / ${AchievementId.values.length}', style: const TextStyle(color: Colors.white54)),
-            Expanded(
-              child: ListView.builder(
-                itemCount: AchievementId.values.length,
-                itemBuilder: (_, i) {
-                  final id = AchievementId.values[i];
-                  final ok = unlocked.contains(id.name);
-                  return Card(
-                    color: const Color(0xFF1A1A1A),
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: ListTile(
-                      leading: Icon(ok ? Icons.emoji_events : Icons.lock, color: ok ? const Color(0xFFFFD700) : Colors.white24),
-                      title: Text(ok ? id.title : '???', style: TextStyle(color: ok ? const Color(0xFFFFD700) : Colors.white38, fontWeight: FontWeight.bold)),
-                      subtitle: Text(ok ? id.desc : 'Скрыто', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                    ),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const MatrixBackground(),
+        Container(color: Colors.black.withOpacity(0.55)),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'SOUL OF THE\nINQUISITOR',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFFFFD700),
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  height: 1.1,
+                  shadows: [Shadow(color: Color(0xFFB71C1C), blurRadius: 12)],
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text('Инквизитор Данте', style: TextStyle(color: Color(0xFFB8860B), fontSize: 13)),
+              const SizedBox(height: 28),
+              _goldBtn('Начать игру', () {
+                game.overlays.remove('mainMenu');
+                game.overlays.add('nameInput');
+              }),
+              _goldBtn('Загрузить сохранение', () {
+                game.overlays.remove('mainMenu');
+                game.overlays.add('loadSave');
+              }),
+              _goldBtn('Рекорды', () {
+                game.overlays.remove('mainMenu');
+                game.overlays.add('records');
+              }),
+              _goldBtn('Достижения', () {
+                game.overlays.remove('mainMenu');
+                game.overlays.add('achievements');
+              }),
+              _goldBtn('Настройки', () {
+                game.overlays.remove('mainMenu');
+                game.overlays.add('settings');
+              }),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class NameInputMenu extends StatefulWidget {
+  final InquisitorGame game;
+  const NameInputMenu(this.game, {super.key});
+  @override
+  State<NameInputMenu> createState() => _NameInputMenuState();
+}
+
+class _NameInputMenuState extends State<NameInputMenu> {
+  final ctrl = TextEditingController(text: 'Аколит');
+  Difficulty diff = Difficulty.normal;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Имя инквизитора', style: TextStyle(color: Color(0xFFFFD700), fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  filled: true,
+                  fillColor: Color(0xFF1A1A1A),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Сложность', style: TextStyle(color: Colors.white70)),
+              Wrap(
+                spacing: 8,
+                children: Difficulty.values.map((d) {
+                  final sel = diff == d;
+                  return ChoiceChip(
+                    label: Text(d.labelRu),
+                    selected: sel,
+                    onSelected: (_) => setState(() => diff = d),
+                    selectedColor: const Color(0xFFB71C1C),
+                    labelStyle: TextStyle(color: sel ? Colors.white : Colors.white70),
                   );
-                },
+                }).toList(),
               ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                game.playClick();
-                game.closeAchievements();
-              },
-              child: const Text('НАЗАД'),
-            ),
+              const SizedBox(height: 20),
+              _goldBtn('Далее', () {
+                widget.game.playerName = ctrl.text.trim().isEmpty ? 'Аколит' : ctrl.text.trim();
+                widget.game.difficulty = diff;
+                widget.game.overlays.remove('nameInput');
+                widget.game.overlays.add('challengeSelect');
+              }),
+              _goldBtn('Назад', () {
+                widget.game.overlays.remove('nameInput');
+                widget.game.overlays.add('mainMenu');
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ChallengeSelectMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const ChallengeSelectMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Ранговое испытание', style: TextStyle(color: Color(0xFFFFD700), fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            ...RankChallenge.values.map((c) => _goldBtn('${c.title}\n${c.desc}', () {
+                  game.activeChallenge = c;
+                  game.overlays.remove('challengeSelect');
+                  game.overlays.add('classSelect');
+                }, width: 320)),
           ],
         ),
       ),
@@ -4139,114 +3711,50 @@ class AchievementsMenu extends StatelessWidget {
   }
 }
 
-class LoadSaveMenu extends StatefulWidget {
+class ClassSelectMenu extends StatelessWidget {
   final InquisitorGame game;
-  const LoadSaveMenu(this.game, {super.key});
-  @override
-  State<LoadSaveMenu> createState() => _LoadSaveMenuState();
-}
+  const ClassSelectMenu(this.game, {super.key});
 
-class _LoadSaveMenuState extends State<LoadSaveMenu> {
   @override
   Widget build(BuildContext context) {
-    final g = widget.game;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const Padding(padding: EdgeInsets.all(16), child: Text('ЗАГРУЗИТЬ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold))),
-            Expanded(
-              child: g.saves.isEmpty
-                  ? const Center(child: Text('Нет сохранений', style: TextStyle(color: Colors.white54)))
-                  : ListView.builder(
-                      itemCount: g.saves.length,
-                      itemBuilder: (_, i) {
-                        final s = g.saves[i];
-                        return Card(
-                          color: const Color(0xFF1A1A1A),
-                          child: ListTile(
-                            title: Text(s.name, style: const TextStyle(color: Color(0xFFFFD700))),
-                            subtitle: Text('${s.playerClass} • F${s.floor}/L${s.level} • ${s.difficulty}\n${s.dateStr}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                            isThreeLine: true,
-                            onTap: () {
-                              g.playClick();
-                              g.loadSave(s);
-                            },
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.redAccent),
-                              onPressed: () async {
-                                g.playClick();
-                                await g.deleteSaveAt(i);
-                                setState(() {});
-                              },
-                            ),
-                          ),
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: Center(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Выбор ордо', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              ...PlayerClass.values.map((cls) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 24),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        game.overlays.remove('classSelect');
+                        game.startNewRun(
+                          name: game.playerName,
+                          diff: game.difficulty,
+                          cls: cls,
+                          challenge: game.activeChallenge,
                         );
                       },
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          children: [
+                            Text(cls.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            Text(cls.subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                          ],
+                        ),
+                      ),
                     ),
-            ),
-            if (g.saves.isNotEmpty)
-              TextButton(
-                onPressed: () async {
-                  g.playClick();
-                  await g.deleteAllSaves();
-                  setState(() {});
-                },
-                child: const Text('УДАЛИТЬ ВСЕ СОХРАНЕНИЯ', style: TextStyle(color: Colors.redAccent)),
-              ),
-            ElevatedButton(
-              onPressed: () {
-                g.overlays.remove('loadSave');
-                g.overlays.add('mainMenu');
-              },
-              child: const Text('НАЗАД'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class RecordsMenu extends StatelessWidget {
-  final InquisitorGame game;
-  const RecordsMenu(this.game, {super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const Text('РЕКОРДЫ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 28, fontWeight: FontWeight.bold)),
-            Expanded(
-              child: game.highScores.isEmpty
-                  ? const Center(child: Text('Пусто', style: TextStyle(color: Colors.white54)))
-                  : ListView.builder(
-                      itemCount: game.highScores.length,
-                      itemBuilder: (_, i) {
-                        final e = game.highScores[i];
-                        return ListTile(
-                          title: Text('${i + 1}. ${e.name} • ${e.playerClass}', style: const TextStyle(color: Colors.white)),
-                          subtitle: Text(
-                            '${e.progressStr}${e.relicsStr.isNotEmpty ? "\n${e.relicsStr}" : ""}',
-                            style: const TextStyle(color: Colors.white54, fontSize: 12),
-                          ),
-                          isThreeLine: e.relicsStr.isNotEmpty,
-                          trailing: Text('${e.score}\n${e.timeStr}', textAlign: TextAlign.right, style: const TextStyle(color: Color(0xFFFFD700), fontSize: 13)),
-                        );
-                      },
-                    ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                game.overlays.remove('records');
-                game.overlays.add('mainMenu');
-              },
-              child: const Text('НАЗАД'),
-            ),
-          ],
+                  )),
+              _goldBtn('Назад', () {
+                game.overlays.remove('classSelect');
+                game.overlays.add('challengeSelect');
+              }),
+            ],
+          ),
         ),
       ),
     );
@@ -4261,211 +3769,75 @@ class SettingsMenu extends StatefulWidget {
 }
 
 class _SettingsMenuState extends State<SettingsMenu> {
-  String? _saveMsg;
   @override
   Widget build(BuildContext context) {
     final g = widget.game;
-    final c = g.custom;
     final h = g.hud;
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.92),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            const Text('НАСТРОЙКИ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            const Text('РАЗМЕРЫ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 14)),
-            Text('Джойстик ${h.joystickSize.toInt()}', style: const TextStyle(color: Colors.white)),
-            Slider(
-              value: h.joystickSize,
-              min: 55,
-              max: 130,
-              activeColor: const Color(0xFFFFD700),
-              onChanged: (v) => setState(() => h.joystickSize = v),
-            ),
-            Text('Кнопки ${h.buttonSize.toInt()}', style: const TextStyle(color: Colors.white)),
-            Slider(
-              value: h.buttonSize,
-              min: 28,
-              max: 70,
-              activeColor: const Color(0xFFFFD700),
-              onChanged: (v) => setState(() => h.buttonSize = v),
-            ),
-            const Text('ПОЗИЦИИ (0–1 от краёв)', style: TextStyle(color: Color(0xFFFFD700), fontSize: 14)),
-            _xy('Движение M', h.moveX, h.moveY, (x, y) => setState(() {
-                  h.moveX = x;
-                  h.moveY = y;
-                })),
-            _xy('Атака F', h.atkX, h.atkY, (x, y) => setState(() {
-                  h.atkX = x;
-                  h.atkY = y;
-                })),
-            _xy('Настройки S', h.settingsX, h.settingsY, (x, y) => setState(() {
-                  h.settingsX = x;
-                  h.settingsY = y;
-                })),
-            _xy('Рюкзак B', h.backpackX, h.backpackY, (x, y) => setState(() {
-                  h.backpackX = x;
-                  h.backpackY = y;
-                })),
-            _xy('Рывок U', h.dashX, h.dashY, (x, y) => setState(() {
-                  h.dashX = x;
-                  h.dashY = y;
-                })),
-            TextButton(
-              onPressed: () => setState(() => h.reset()),
-              child: const Text('СБРОС ПОЗИЦИЙ', style: TextStyle(color: Colors.white54)),
-            ),
-            SwitchListTile(
-              title: const Text('Звуки', style: TextStyle(color: Colors.white)),
-              value: g.soundEnabled,
-              activeColor: const Color(0xFFFFD700),
-              onChanged: (v) => setState(() => g.soundEnabled = v),
-            ),
-            SwitchListTile(
-              title: const Text('Музыка', style: TextStyle(color: Colors.white)),
-              value: g.musicEnabled,
-              activeColor: const Color(0xFFFFD700),
-              onChanged: (v) {
-                setState(() {
-                  g.musicEnabled = v;
-                  g.applyMusicSetting();
-                });
-              },
-            ),
-            Slider(
-              value: g.musicVolume,
-              min: 0,
-              max: 1,
-              activeColor: const Color(0xFFFFD700),
-              onChanged: g.musicEnabled
-                  ? (v) {
-                      setState(() => g.musicVolume = v);
-                      try {
-                        FlameAudio.bgm.play('bgm.mp3', volume: v);
-                      } catch (_) {}
-                    }
-                  : null,
-            ),
-            const Text('ЦВЕТА', style: TextStyle(color: Color(0xFFFFD700))),
-            Slider(value: c.armorHue.toDouble(), min: 0, max: 360, activeColor: c.armorColor(0.4), onChanged: (v) => setState(() => c.armorHue = v.round())),
-            Slider(value: c.capeHue.toDouble(), min: 0, max: 360, activeColor: c.capeColor(0.4), onChanged: (v) => setState(() => c.capeHue = v.round())),
-            Slider(value: c.weaponHue.toDouble(), min: 0, max: 360, activeColor: c.weaponColor(0.45), onChanged: (v) => setState(() => c.weaponHue = v.round())),
-            if (g.isPlaying) ...[
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-                onPressed: () async {
-                  await g.saveGame();
-                  setState(() => _saveMsg = 'Сохранено');
-                },
-                child: const Text('СОХРАНИТЬ ИГРУ'),
-              ),
-              if (_saveMsg != null) Text(_saveMsg!, style: const TextStyle(color: Colors.greenAccent)),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C)),
-                onPressed: () {
-                  g.playClick();
-                  g.exitMatch();
-                },
-                child: const Text('ВЫХОД ИЗ МАТЧА'),
-              ),
-            ],
-            ElevatedButton(
-              onPressed: () {
-                g.playClick();
-                if (g.isPlaying) {
-                  g.closeSettings(); // rebuildHud inside
-                } else {
-                  g.persistCustomization();
-                  g.overlays.remove('settings');
-                  g.overlays.add('mainMenu');
-                }
-              },
-              child: Text(g.isPlaying ? 'В БОЙ (применить HUD)' : 'НАЗАД'),
-            ),
-            const SizedBox(height: 16),
-            const Divider(color: Colors.white24),
-            const Text('1-5 left top 33s', textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 12, fontFamily: 'monospace')),
-            const Text('2-5 left top 33s', textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 12, fontFamily: 'monospace')),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _xy(String label, double x, double y, void Function(double, double) onChange) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('$label  X=${x.toStringAsFixed(2)}  Y=${y.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          Row(
-            children: [
-              const Text('X', style: TextStyle(color: Colors.white38, fontSize: 11)),
-              Expanded(
-                child: Slider(value: x, min: 0.05, max: 0.95, activeColor: const Color(0xFFB8860B), onChanged: (v) => onChange(v, y)),
-              ),
-              const Text('Y', style: TextStyle(color: Colors.white38, fontSize: 11)),
-              Expanded(
-                child: Slider(value: y, min: 0.05, max: 0.95, activeColor: const Color(0xFFB8860B), onChanged: (v) => onChange(x, v)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class NameInputMenu extends StatefulWidget {
-  final InquisitorGame game;
-  const NameInputMenu(this.game, {super.key});
-  @override
-  State<NameInputMenu> createState() => _NameInputMenuState();
-}
-
-class _NameInputMenuState extends State<NameInputMenu> {
-  final c = TextEditingController();
-  Difficulty diff = Difficulty.normal;
-  @override
-  void dispose() {
-    c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('ИМЯ ИНКВИЗИТОРА', style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-              TextField(controller: c, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Имя...', hintStyle: TextStyle(color: Colors.white38))),
-              const SizedBox(height: 16),
+              const Text('Настройки', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('Музыка ${(g.musicVol * 100).round()}%', style: const TextStyle(color: Colors.white70)),
+              Slider(
+                value: g.musicVol,
+                onChanged: (v) => setState(() {
+                  g.musicVol = v;
+                  try {
+                    FlameAudio.bgm.audioPlayer.setVolume(v);
+                  } catch (_) {}
+                }),
+              ),
+              Text('Звуки ${(g.sfxVol * 100).round()}%', style: const TextStyle(color: Colors.white70)),
+              Slider(value: g.sfxVol, onChanged: (v) => setState(() => g.sfxVol = v)),
+              const Divider(color: Colors.white24),
+              Text('Размер джойстика ${h.joystickSize.round()}', style: const TextStyle(color: Colors.white70)),
+              Slider(value: h.joystickSize, min: 60, max: 130, onChanged: (v) => setState(() => h.joystickSize = v)),
+              Text('Размер кнопок ${h.buttonSize.round()}', style: const TextStyle(color: Colors.white70)),
+              Slider(value: h.buttonSize, min: 32, max: 64, onChanged: (v) => setState(() => h.buttonSize = v)),
+              const Text('Позиции (0..1)', style: TextStyle(color: Color(0xFFFFD700))),
+              _posSlider('Move X', h.moveX, (v) => setState(() => h.moveX = v)),
+              _posSlider('Move Y (снизу)', h.moveY, (v) => setState(() => h.moveY = v)),
+              _posSlider('Attack X', h.atkX, (v) => setState(() => h.atkX = v)),
+              _posSlider('Attack Y (снизу)', h.atkY, (v) => setState(() => h.atkY = v)),
               Row(
                 children: [
-                  _d(Difficulty.easy, Colors.green, '5 эт.'),
-                  const SizedBox(width: 8),
-                  _d(Difficulty.normal, const Color(0xFFB8860B), '7 эт.'),
-                  const SizedBox(width: 8),
-                  _d(Difficulty.hard, Colors.redAccent, '10 эт.'),
+                  Expanded(child: _goldBtn('Сброс HUD', () => setState(() => h.reset()), width: 140)),
+                  Expanded(
+                    child: _goldBtn('Применить', () {
+                      if (g.isPlaying) g.rebuildHud();
+                      g._saveMeta();
+                      setState(() {});
+                    }, width: 140),
+                  ),
                 ],
               ),
-              const SizedBox(height: 20),
-              ElevatedButton(onPressed: () => widget.game.confirmName(c.text, diff), child: const Text('ДАЛЕЕ — ИСПЫТАНИЕ')),
-              TextButton(
-                onPressed: () {
-                  widget.game.overlays.remove('nameInput');
-                  widget.game.overlays.add('mainMenu');
-                },
-                child: const Text('НАЗАД', style: TextStyle(color: Colors.white54)),
-              ),
+              if (g.isPlaying) ...[
+                _goldBtn('Сохранить игру', () async {
+                  await g.saveGame();
+                }),
+                _goldBtn('Выход из матча', () {
+                  g.overlays.remove('settings');
+                  g.backToMenu();
+                }),
+              ],
+              _goldBtn('Закрыть', () {
+                if (g.isPlaying) {
+                  g.closeSettings();
+                } else {
+                  g.overlays.remove('settings');
+                  g.overlays.add('mainMenu');
+                  g._saveMeta();
+                }
+              }),
+              const SizedBox(height: 12),
+              const Text('1-5 left top 33s', textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 12)),
+              const Text('2-5 left top 33s', textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 12)),
             ],
           ),
         ),
@@ -4473,16 +3845,52 @@ class _NameInputMenuState extends State<NameInputMenu> {
     );
   }
 
-  Widget _d(Difficulty d, Color color, String sub) {
-    final sel = diff == d;
-    return Expanded(
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(backgroundColor: sel ? color : const Color(0xFF1A1A1A), side: BorderSide(color: color), padding: const EdgeInsets.symmetric(vertical: 10)),
-        onPressed: () => setState(() => diff = d),
+  Widget _posSlider(String label, double value, ValueChanged<double> onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('$label ${value.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        Slider(value: value, min: 0.05, max: 0.95, onChanged: onChanged),
+      ],
+    );
+  }
+}
+
+class RecordsMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const RecordsMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final list = game.highScores;
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: SafeArea(
         child: Column(
           children: [
-            Text(d.labelRu, style: TextStyle(color: sel ? Colors.white : color, fontSize: 13)),
-            Text(sub, style: TextStyle(color: sel ? Colors.white70 : color.withOpacity(0.7), fontSize: 10)),
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('Рекорды', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+            ),
+            Expanded(
+              child: list.isEmpty
+                  ? const Center(child: Text('Пусто', style: TextStyle(color: Colors.white54)))
+                  : ListView.builder(
+                      itemCount: list.length,
+                      itemBuilder: (_, i) {
+                        final e = list[i];
+                        return ListTile(
+                          title: Text('${e.name} — ${e.score}', style: const TextStyle(color: Colors.white)),
+                          subtitle: Text('${e.progressStr} • ${e.timeStr} • ${e.playerClass}${e.keyRelics.isEmpty ? '' : ' • ${e.keyRelics.join(", ")}'}',
+                              style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                        );
+                      },
+                    ),
+            ),
+            _goldBtn('Назад', () {
+              game.overlays.remove('records');
+              game.overlays.add('mainMenu');
+            }),
           ],
         ),
       ),
@@ -4490,445 +3898,185 @@ class _NameInputMenuState extends State<NameInputMenu> {
   }
 }
 
-class ChallengeSelectMenu extends StatelessWidget {
+class AchievementsMenu extends StatelessWidget {
   final InquisitorGame game;
-  const ChallengeSelectMenu(this.game, {super.key});
+  const AchievementsMenu(this.game, {super.key});
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('ИСПЫТАНИЕ РАНГА', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-              Text('${game.difficulty.labelRu} — ${game.difficulty.maxFloors} этажей', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView(
-                  children: RankChallenge.values.map((ch) {
-                    return Card(
-                      color: const Color(0xFF1A1A1A),
-                      child: ListTile(
-                        title: Text(ch.title, style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
-                        subtitle: Text(ch.desc, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                        onTap: () {
-                          game.playClick();
-                          game.confirmChallenge(ch);
-                        },
-                      ),
-                    );
-                  }).toList(),
-                ),
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: SafeArea(
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('Достижения', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+            ),
+            Expanded(
+              child: ListView(
+                children: AchievementId.values.map((id) {
+                  final on = game.achievements.has(id);
+                  return ListTile(
+                    leading: Icon(on ? Icons.star : Icons.star_border, color: on ? const Color(0xFFFFD700) : Colors.white24),
+                    title: Text(id.title, style: TextStyle(color: on ? Colors.white : Colors.white54)),
+                    subtitle: Text(id.desc, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                  );
+                }).toList(),
               ),
-            ],
-          ),
+            ),
+            _goldBtn('Назад', () {
+              game.overlays.remove('achievements');
+              game.overlays.add('mainMenu');
+            }),
+          ],
         ),
       ),
     );
   }
 }
 
-class ClassSelectMenu extends StatelessWidget {
+class LoadSaveMenu extends StatelessWidget {
   final InquisitorGame game;
-  const ClassSelectMenu(this.game, {super.key});
+  const LoadSaveMenu(this.game, {super.key});
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('ВЫБОР ОРДО', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
-              Text(game.playerName, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              Expanded(
-                child: ListView(
-                  children: [
-                    _card(PlayerClass.xenos, const Color(0xFFB71C1C), 'HP 6 • Болтер'),
-                    _card(PlayerClass.malleus, const Color(0xFF1A237E), 'HP 5 • Посох Ψ'),
-                    _card(PlayerClass.hereticus, const Color(0xFF4A148C), 'HP 5 • Рывок U'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _card(PlayerClass cls, Color accent, String stats) {
-    return Card(
-      color: const Color(0xFF1A1A1A),
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        title: Text(cls.title, style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 18)),
-        subtitle: Text('${cls.subtitle}\n$stats', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-        isThreeLine: true,
-        trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
-        onTap: () {
-          game.playClick();
-          game.confirmClass(cls);
-        },
-      ),
-    );
-  }
-}
-
-class RankPerkMenu extends StatelessWidget {
-  final InquisitorGame game;
-  const RankPerkMenu(this.game, {super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.94),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('ПЕРК РАНГА', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-              Card(
-                color: const Color(0xFF1A1A1A),
-                child: ListTile(
-                  title: const Text('+1 стартовое SP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  onTap: () {
-                    game.playClick();
-                    game.chooseRankPerk(RankPerk.startSp);
-                  },
-                ),
-              ),
-              Card(
-                color: const Color(0xFF1A1A1A),
-                child: ListTile(
-                  title: const Text('+5% обломков', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  onTap: () {
-                    game.playClick();
-                    game.chooseRankPerk(RankPerk.scrapBonus);
-                  },
-                ),
-              ),
-              TextButton(onPressed: () => game.chooseRankPerk(RankPerk.none), child: const Text('ПРОПУСТИТЬ', style: TextStyle(color: Colors.white38))),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class PathSelectMenu extends StatelessWidget {
-  final InquisitorGame game;
-  const PathSelectMenu(this.game, {super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.94),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('ВЫБОР ПУТИ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-              ...List.generate(game.pendingPathChoices.length, (i) {
-                final n = game.pendingPathChoices[i];
-                return Card(
-                  color: const Color(0xFF1A1A1A),
-                  child: ListTile(
-                    title: Text(n.label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    onTap: () {
-                      game.playClick();
-                      game.choosePathNode(i);
-                    },
-                  ),
-                );
+    final list = game.saves;
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: SafeArea(
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('Сохранения', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+            ),
+            Expanded(
+              child: list.isEmpty
+                  ? const Center(child: Text('Нет сохранений', style: TextStyle(color: Colors.white54)))
+                  : ListView.builder(
+                      itemCount: list.length,
+                      itemBuilder: (_, i) {
+                        final s = list[i];
+                        return ListTile(
+                          title: Text('${s.name} — этаж ${s.floor}, ур.${s.level}', style: const TextStyle(color: Colors.white)),
+                          subtitle: Text('${s.dateStr} • ${s.difficulty} • ${s.playerClass}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.redAccent),
+                            onPressed: () async {
+                              await game.deleteSave(i);
+                              (context as Element).markNeedsBuild();
+                            },
+                          ),
+                          onTap: () {
+                            game.overlays.remove('loadSave');
+                            game.loadSave(s);
+                          },
+                        );
+                      },
+                    ),
+            ),
+            if (list.isNotEmpty)
+              _goldBtn('Удалить все', () async {
+                await game.deleteAllSaves();
+                (context as Element).markNeedsBuild();
               }),
-            ],
-          ),
+            _goldBtn('Назад', () {
+              game.overlays.remove('loadSave');
+              game.overlays.add('mainMenu');
+            }),
+          ],
         ),
       ),
     );
   }
 }
-
-class LorePopupMenu extends StatelessWidget {
-  final InquisitorGame game;
-  const LorePopupMenu(this.game, {super.key});
-  @override
-  Widget build(BuildContext context) {
-    final id = game.pendingLoreId;
-    if (id == null) return const SizedBox.shrink();
-    final rank = game.loreRankOf(id);
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.92),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('КОДЕКС', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
-              Text(id.title, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18)),
-              Text('Знание: $rank / 2', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              const SizedBox(height: 12),
-              Expanded(child: SingleChildScrollView(child: Text(id.lore, style: const TextStyle(color: Colors.white70, height: 1.4, fontSize: 14)))),
-              Text(id.knowledgeBonus, textAlign: TextAlign.center, style: const TextStyle(color: Colors.greenAccent, fontSize: 13)),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-                onPressed: () => game.acceptLore(id),
-                child: Text(rank == 0 ? 'ПРИНЯТЬ ЗНАНИЕ' : 'УГЛУБИТЬ (1 SP)'),
-              ),
-              TextButton(onPressed: game.skipLore, child: const Text('ПОЗЖЕ', style: TextStyle(color: Colors.white54))),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class EventAltarMenu extends StatelessWidget {
-  final InquisitorGame game;
-  const EventAltarMenu(this.game, {super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.92),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('АЛТАРЬ КРОВИ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
-              const Text('Пожертвуй 1 HP — получи реликвию.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C)),
-                onPressed: game.player.health > 1 ? () => game.resolveAltar(accept: true) : null,
-                child: const Text('ПОЖЕРТВОВАТЬ'),
-              ),
-              TextButton(onPressed: () => game.resolveAltar(accept: false), child: const Text('ОТКАЗАТЬСЯ', style: TextStyle(color: Colors.white54))),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class EventMerchantMenu extends StatefulWidget {
-  final InquisitorGame game;
-  const EventMerchantMenu(this.game, {super.key});
-  @override
-  State<EventMerchantMenu> createState() => _EventMerchantMenuState();
-}
-
-class _EventMerchantMenuState extends State<EventMerchantMenu> {
-  @override
-  Widget build(BuildContext context) {
-    final g = widget.game;
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.92),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('ТОРГОВЕЦ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
-              Text('Обломки: ${g.scraps}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              Expanded(
-                child: ListView(
-                  children: [
-                    _item('+2 HP', 10, () {
-                      g.resolveMerchantBuy('heal');
-                      setState(() {});
-                    }),
-                    _item('+1 SP', 18, () {
-                      g.resolveMerchantBuy('scraps_sp');
-                      setState(() {});
-                    }),
-                    _item('Реликвия', 25, () {
-                      g.resolveMerchantBuy('relic');
-                      setState(() {});
-                    }),
-                    if (g.playerClass == PlayerClass.xenos) ...[
-                      _item('Ствол: очередь', 14, () {
-                        g.resolveMerchantBuy('gun_rapid');
-                        setState(() {});
-                      }),
-                      _item('Ствол: тяжёлый', 14, () {
-                        g.resolveMerchantBuy('gun_heavy');
-                        setState(() {});
-                      }),
-                      _item('Прицел: точность', 12, () {
-                        g.resolveMerchantBuy('gun_precision');
-                        setState(() {});
-                      }),
-                      _item('Боезапас: взрывной', 16, () {
-                        g.resolveMerchantBuy('gun_explosive');
-                        setState(() {});
-                      }),
-                    ],
-                    if (g.playerClass == PlayerClass.malleus) ...[
-                      _item('Сфера: +радиус', 14, () {
-                        g.resolveMerchantBuy('staff_wide');
-                        setState(() {});
-                      }),
-                      _item('Фокус: +урон', 14, () {
-                        g.resolveMerchantBuy('staff_focus');
-                        setState(() {});
-                      }),
-                      _item('Диссипатор Ψ', 12, () {
-                        g.resolveMerchantBuy('staff_dissipator');
-                        setState(() {});
-                      }),
-                    ],
-                    if (g.playerClass == PlayerClass.hereticus) ...[
-                      _item('Зазубрины', 12, () {
-                        g.resolveMerchantBuy('blade_serrated');
-                        setState(() {});
-                      }),
-                      _item('Мономолекула', 14, () {
-                        g.resolveMerchantBuy('blade_mono');
-                        setState(() {});
-                      }),
-                    ],
-                  ],
-                ),
-              ),
-              ElevatedButton(onPressed: g.closeMerchant, child: const Text('УЙТИ')),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _item(String title, int cost, VoidCallback buy) {
-    final can = widget.game.scraps >= cost;
-    return Card(
-      color: const Color(0xFF1A1A1A),
-      child: ListTile(
-        title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 13)),
-        trailing: Text('$cost', style: TextStyle(color: can ? const Color(0xFFFFD700) : Colors.white24)),
-        onTap: can
-            ? () {
-                widget.game.playClick();
-                buy();
-              }
-            : null,
-      ),
-    );
-  }
-}
-
 class RewardMenu extends StatelessWidget {
   final InquisitorGame game;
   const RewardMenu(this.game, {super.key});
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.94),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('НАГРАДА', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-              ...game.pendingRewards.map(
-                (o) => Card(
-                  color: const Color(0xFF1A1A1A),
-                  child: ListTile(
-                    title: Text(o.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    subtitle: Text(o.subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                    onTap: () {
-                      game.playClick();
-                      o.apply(game);
-                      game.finishRewardThenShop();
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
+    final options = <Map<String, dynamic>>[
+      {'id': 'skill', 'title': 'Очко навыка', 'desc': '+1 SP'},
+      {'id': 'scraps', 'title': 'Обломки', 'desc': '+10 обломков'},
+      {'id': 'heal', 'title': 'Аптечка', 'desc': '+3 HP'},
+      {'id': 'relic', 'title': 'Реликвия', 'desc': 'Случайная пассивка'},
+    ]..shuffle();
+    final three = options.take(3).toList();
+
+    return Container(
+      color: Colors.black.withOpacity(0.9),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Награда уровня', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            ...three.map((o) => _goldBtn('${o['title']}\n${o['desc']}', () {
+                  switch (o['id']) {
+                    case 'skill':
+                      game.skillPoints++;
+                      break;
+                    case 'scraps':
+                      game.scraps += 10;
+                      break;
+                    case 'heal':
+                      game.player.heal(3);
+                      break;
+                    case 'relic':
+                      game._grantRandomRelic();
+                      break;
+                  }
+                  game.finishRewardThenShop();
+                }, width: 300)),
+          ],
         ),
       ),
     );
   }
 }
 
-class ShopMenu extends StatefulWidget {
+class ShopMenu extends StatelessWidget {
   final InquisitorGame game;
   const ShopMenu(this.game, {super.key});
-  @override
-  State<ShopMenu> createState() => _ShopMenuState();
-}
 
-class _ShopMenuState extends State<ShopMenu> {
   @override
   Widget build(BuildContext context) {
-    final g = widget.game;
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.94),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
+    final g = game;
+    return Container(
+      color: Colors.black.withOpacity(0.9),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('МАГАЗИН', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 24, fontWeight: FontWeight.bold)),
-              Text('Обломки: ${g.scraps}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              _item('+2 HP', 8, () {
-                if (g.scraps < 8) return;
-                g.scraps -= 8;
-                g.player.health = min(g.maxHealth, g.player.health + 2);
-                setState(() {});
-              }),
-              _item('+1 SP', 15, () {
-                if (g.scraps < 15) return;
-                g.scraps -= 15;
-                g.skillPoints++;
-                setState(() {});
-              }),
-              const Spacer(),
-              ElevatedButton(
-                onPressed: () {
-                  g.playClick();
-                  g.finishShopThenSkills();
-                },
-                child: const Text('ДАЛЬШЕ'),
-              ),
+              Text('Лавка • обломки: ${g.scraps}', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              _goldBtn('Хил +3 (8)', () => g.resolveMerchantBuy('heal')),
+              _goldBtn('+1 SP (12)', () => g.resolveMerchantBuy('scraps_sp')),
+              _goldBtn('Реликвия (20)', () => g.resolveMerchantBuy('relic')),
+              if (g.playerClass == PlayerClass.xenos) ...[
+                _goldBtn('Ствол: очередь (15)', () => g.resolveMerchantBuy('gun_rapid')),
+                _goldBtn('Ствол: тяжёлый (15)', () => g.resolveMerchantBuy('gun_heavy')),
+                _goldBtn('Прицел (12)', () => g.resolveMerchantBuy('gun_precision')),
+                _goldBtn('Взрывной боезапас (18)', () => g.resolveMerchantBuy('gun_explosive')),
+              ],
+              if (g.playerClass == PlayerClass.malleus) ...[
+                _goldBtn('Сфера (шире, −урон) (15)', () => g.resolveMerchantBuy('staff_wide')),
+                _goldBtn('Фокус (15)', () => g.resolveMerchantBuy('staff_focus')),
+                _goldBtn('Диссипатор Ψ (14)', () => g.resolveMerchantBuy('staff_dissipator')),
+              ],
+              if (g.playerClass == PlayerClass.hereticus) ...[
+                _goldBtn('Зазубрины (bleed) (14)', () => g.resolveMerchantBuy('blade_serrated')),
+                _goldBtn('Мономолекула (16)', () => g.resolveMerchantBuy('blade_mono')),
+              ],
+              const SizedBox(height: 8),
+              _goldBtn('Далее → навыки', () => g.finishShopThenSkills()),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _item(String title, int cost, VoidCallback buy) {
-    final can = widget.game.scraps >= cost;
-    return Card(
-      color: const Color(0xFF1A1A1A),
-      child: ListTile(
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        trailing: Text('$cost', style: TextStyle(color: can ? const Color(0xFFFFD700) : Colors.white24)),
-        onTap: can
-            ? () {
-                widget.game.playClick();
-                buy();
-              }
-            : null,
       ),
     );
   }
@@ -4942,92 +4090,82 @@ class SkillsMenu extends StatefulWidget {
 }
 
 class _SkillsMenuState extends State<SkillsMenu> {
+  Widget _row(String name, int val, VoidCallback onAdd) {
+    return ListTile(
+      title: Text('$name: $val', style: const TextStyle(color: Colors.white)),
+      trailing: IconButton(
+        icon: const Icon(Icons.add_circle, color: Color(0xFFFFD700)),
+        onPressed: widget.game.skillPoints > 0
+            ? () {
+                onAdd();
+                setState(() {});
+              }
+            : null,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final g = widget.game;
     final s = g.skills;
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.94),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
+    return Container(
+      color: Colors.black.withOpacity(0.9),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Text('Навыки • SP: ${g.skillPoints}', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 20, fontWeight: FontWeight.bold)),
+            _row('HP', s.hp, () => g.spendSkill('hp')),
+            _row('Скорость', s.speed, () => g.spendSkill('speed')),
+            _row('Скор. атаки', s.attackSpeed, () => g.spendSkill('attackSpeed')),
+            _row('Защита', s.defense, () => g.spendSkill('defense')),
+            _row('Урон', s.damage, () => g.spendSkill('damage')),
+            _goldBtn('Продолжить', () => g.finishSkillsAndContinue()),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class BackpackMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const BackpackMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final g = game;
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('НАВЫКИ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
-              Text('SP: ${g.skillPoints}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              Expanded(
-                child: ListView(
-                  children: [
-                    _row('HP', s.hp, () => setState(() => g.spendSkill('hp'))),
-                    _row('Скорость', s.speed, () => setState(() => g.spendSkill('speed'))),
-                    _row('Скор. атаки', s.attackSpeed, () => setState(() => g.spendSkill('attackSpeed'))),
-                    _row('Защита', s.defense, () => setState(() => g.spendSkill('defense'))),
-                    _row('Урон', s.damage, () => setState(() => g.spendSkill('damage'))),
-                  ],
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  g.playClick();
-                  g.finishSkillsAndContinue();
-                },
-                child: const Text('ПРОДОЛЖИТЬ'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _row(String t, int rank, VoidCallback onAdd) {
-    final can = widget.game.skillPoints > 0;
-    return Card(
-      color: const Color(0xFF1A1A1A),
-      child: ListTile(
-        title: Text(t, style: const TextStyle(color: Colors.white)),
-        subtitle: Text('ранг $rank', style: const TextStyle(color: Colors.white54)),
-        trailing: ElevatedButton(
-          onPressed: can
-              ? () {
-                  widget.game.playClick();
-                  onAdd();
-                }
-              : null,
-          child: const Text('+1'),
-        ),
-      ),
-    );
-  }
-}
-
-class BackpackMenu extends StatefulWidget {
-  final InquisitorGame game;
-  const BackpackMenu(this.game, {super.key});
-  @override
-  State<BackpackMenu> createState() => _BackpackMenuState();
-}
-
-class _BackpackMenuState extends State<BackpackMenu> {
-  @override
-  Widget build(BuildContext context) {
-    final g = widget.game;
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.92),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: ListView(
-            children: [
-              const Text('РЮКЗАК', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
-              Text('${g.playerName} • ${g.playerClass.title}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              if (g.relics.isNotEmpty) ...[
-                const Text('Реликвии', style: TextStyle(color: Color(0xFFFFD700))),
-                ...g.relics.map((r) => Text('• ${r.title}', style: const TextStyle(color: Colors.white70, fontSize: 12))),
-              ],
-              const SizedBox(height: 12),
-              ElevatedButton(onPressed: g.closeBackpack, child: const Text('ЗАКРЫТЬ')),
+              const Text('Рюкзак', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+              Text('${g.playerClass.title} • HP ${g.player.health.round()}/${g.maxHealth}', style: const TextStyle(color: Colors.white70)),
+              Text('Урон R/M: ${g.rangedDamage}/${g.meleeDamage} • Скорость ${g.playerSpeed.round()}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              Text('Обломки ${g.scraps} • SP ${g.skillPoints} • Очки ${g.score}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              const Divider(color: Colors.white24),
+              const Text('Оружие', style: TextStyle(color: Color(0xFFFFD700))),
+              Text('Дальний: ${g.rangedWeapon.name} ${g.usingMelee ? '' : '◀'}', style: const TextStyle(color: Colors.white)),
+              Text('Ближний: ${g.meleeWeapon.name} ${g.usingMelee ? '◀' : ''}', style: const TextStyle(color: Colors.white)),
+              if (g.currentFloor >= 2)
+                _goldBtn('Сменить тип (A)', () {
+                  g.usingMelee = !g.usingMelee;
+                }),
+              const Divider(color: Colors.white24),
+              const Text('Реликвии', style: TextStyle(color: Color(0xFFFFD700))),
+              if (g.relics.isEmpty)
+                const Text('—', style: TextStyle(color: Colors.white38))
+              else
+                ...g.relics.map((r) => Text('• ${r.title}', style: const TextStyle(color: Colors.white70))),
+              const Divider(color: Colors.white24),
+              const Text('Мастерство', style: TextStyle(color: Color(0xFFFFD700))),
+              Text('bolter: ${g.mastery.getCount('bolter')} • staff: ${g.mastery.getCount('staff')}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              const SizedBox(height: 8),
+              _goldBtn('Закрыть', () => g.closeBackpack()),
             ],
           ),
         ),
@@ -5039,33 +4177,122 @@ class _BackpackMenuState extends State<BackpackMenu> {
 class CodexMenu extends StatelessWidget {
   final InquisitorGame game;
   const CodexMenu(this.game, {super.key});
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: SafeArea(
         child: Column(
           children: [
-            const Padding(padding: EdgeInsets.all(16), child: Text('КОДЕКС', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold))),
+            const Text('Кодекс Инквизиции', style: TextStyle(color: Color(0xFFFFD700), fontSize: 20, fontWeight: FontWeight.bold)),
             Expanded(
-              child: ListView.builder(
-                itemCount: CodexId.values.length,
-                itemBuilder: (_, i) {
-                  final id = CodexId.values[i];
+              child: ListView(
+                children: CodexId.values.map((id) {
                   final open = game.codexUnlocked.contains(id);
-                  return Card(
-                    color: const Color(0xFF1A1A1A),
-                    child: ExpansionTile(
-                      title: Text(open ? id.title : '???', style: TextStyle(color: open ? const Color(0xFFFFD700) : Colors.white38)),
-                      children: open
-                          ? [Padding(padding: const EdgeInsets.all(12), child: Text(id.lore, style: const TextStyle(color: Colors.white70, fontSize: 13)))]
-                          : const [Padding(padding: EdgeInsets.all(12), child: Text('Убейте цель.', style: TextStyle(color: Colors.white38)))],
-                    ),
+                  final rank = game.loreRanks[id.name] ?? 0;
+                  return ListTile(
+                    title: Text(open ? id.title : '???', style: TextStyle(color: open ? Colors.white : Colors.white24)),
+                    subtitle: open
+                        ? Text('${id.knowledgeBonus} • знание $rank/2', style: const TextStyle(color: Colors.white54, fontSize: 12))
+                        : null,
                   );
-                },
+                }).toList(),
               ),
             ),
-            ElevatedButton(onPressed: game.closeCodex, child: const Text('НАЗАД')),
+            _goldBtn('Назад', () => game.closeCodex()),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class LorePopupMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const LorePopupMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final id = game.codexUnlocked.isEmpty ? CodexId.shooter : game.codexUnlocked.last;
+    return Container(
+      color: Colors.black.withOpacity(0.85),
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            border: Border.all(color: const Color(0xFFB8860B)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(id.title, style: const TextStyle(color: Color(0xFFFFD700), fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(id.lore, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+              const SizedBox(height: 8),
+              Text(id.knowledgeBonus, style: const TextStyle(color: Color(0xFF69F0AE), fontSize: 12)),
+              const SizedBox(height: 12),
+              _goldBtn('Принять знание', () {
+                final r = game.loreRanks[id.name] ?? 0;
+                if (r < 2) {
+                  final cost = r == 0 ? 0 : 1;
+                  if (cost == 0 || game.skillPoints >= cost) {
+                    if (cost > 0) game.skillPoints -= cost;
+                    game.loreRanks[id.name] = r + 1;
+                  }
+                }
+                if (game.codexUnlocked.length >= CodexId.values.length) {
+                  game.unlockAchievement(AchievementId.fullCodex);
+                }
+                game.overlays.remove('lorePopup');
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PathSelectMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const PathSelectMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black.withOpacity(0.9),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Этаж ${game.currentFloor} — путь', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: List.generate(game.floorPath.length, (i) {
+                final n = game.floorPath[i];
+                final done = i < game.pathIndex;
+                final cur = i == game.pathIndex;
+                return Chip(
+                  label: Text(n.label),
+                  backgroundColor: cur
+                      ? const Color(0xFFB71C1C)
+                      : done
+                          ? const Color(0xFF2E7D32)
+                          : const Color(0xFF333333),
+                  labelStyle: const TextStyle(color: Colors.white),
+                );
+              }),
+            ),
+            const SizedBox(height: 16),
+            _goldBtn('Вперёд', () {
+              game.overlays.remove('pathSelect');
+              game._startLevel();
+            }),
           ],
         ),
       ),
@@ -5076,17 +4303,17 @@ class CodexMenu extends StatelessWidget {
 class LevelCompleteMenu extends StatelessWidget {
   final InquisitorGame game;
   const LevelCompleteMenu(this.game, {super.key});
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.85),
-      body: Center(
+    return Container(
+      color: Colors.black.withOpacity(0.85),
+      child: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('УЗЕЛ ПРОЙДЕН', style: TextStyle(color: Colors.greenAccent, fontSize: 26, fontWeight: FontWeight.bold)),
-            Text('Этаж ${game.currentFloor}/${game.maxFloors} • Ур.${game.currentLevel}', style: const TextStyle(color: Colors.white70)),
-            ElevatedButton(onPressed: game.nextLevel, child: const Text('ДАЛЬШЕ')),
+            const Text('Уровень очищен', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+            _goldBtn('Дальше', () => game.nextLevel()),
           ],
         ),
       ),
@@ -5097,30 +4324,19 @@ class LevelCompleteMenu extends StatelessWidget {
 class VictoryMenu extends StatelessWidget {
   final InquisitorGame game;
   const VictoryMenu(this.game, {super.key});
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.93),
-      body: Center(
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('ИСПЫТАНИЕ ПРОЙДЕНО', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
-            Text('${game.playerName} • ${game.difficulty.labelRu}', style: const TextStyle(color: Colors.white)),
-            ElevatedButton(
-              onPressed: () {
-                game.playClick();
-                game.finishAfterVictory();
-              },
-              child: const Text('ЗАКОНЧИТЬ'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                game.playClick();
-                game.startArena();
-              },
-              child: Text('АРЕНА (${game.difficulty.labelRu})'),
-            ),
+            const Text('Вы закончили прохождение\nиспытания ИНКВИЗИТОРА', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            _goldBtn('Закончить', () => game.finishAfterVictory()),
+            _goldBtn('Продолжить арену', () => game.startArena()),
           ],
         ),
       ),
@@ -5131,63 +4347,290 @@ class VictoryMenu extends StatelessWidget {
 class GameOverMenu extends StatelessWidget {
   final InquisitorGame game;
   const GameOverMenu(this.game, {super.key});
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.85),
-      body: Center(
+    return Container(
+      color: Colors.black.withOpacity(0.92),
+      child: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('ИНКВИЗИТОР ПАЛ', style: TextStyle(color: Colors.redAccent, fontSize: 26, fontWeight: FontWeight.bold)),
-            Text('${game.playerName}: ${game.score}', style: const TextStyle(color: Colors.white)),
-            if (game.isArena) Text('Арена: ${game.arenaKills} убийств', style: const TextStyle(color: Colors.white54)),
-            ElevatedButton(onPressed: game.openNameInput, child: const Text('СНОВА')),
-            ElevatedButton(onPressed: game.backToMenu, child: const Text('МЕНЮ')),
+            const Text('ГИБЕЛЬ', style: TextStyle(color: Color(0xFFB71C1C), fontSize: 28, fontWeight: FontWeight.w900)),
+            Text('${game.playerName} • ${game.score} очков', style: const TextStyle(color: Colors.white70)),
+            Text('Этаж ${game.currentFloor} • ${game.difficulty.labelRu}', style: const TextStyle(color: Colors.white54)),
+            const SizedBox(height: 16),
+            _goldBtn('Снова', () => game.openNameInput()),
+            _goldBtn('Меню', () => game.backToMenu()),
           ],
         ),
       ),
     );
   }
 }
-// ═══════════════════════════════════════════════════════════════
-// PLAYER + COMBAT
-// ═══════════════════════════════════════════════════════════════
 
-class Player extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final JoystickComponent moveJoystick;
-  late int health;
-  late int maxHealth;
-  double attackTimer = 0;
+class EventAltarMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const EventAltarMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black.withOpacity(0.85),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Алтарь', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
+            const Text('−2 HP → случайная реликвия', style: TextStyle(color: Colors.white70)),
+            _goldBtn('Принести в жертву', () {
+              game.player.takeDamage(2);
+              game._grantRandomRelic();
+              game.overlays.remove('eventAltar');
+              game.isPaused = false;
+              game.eventResolved = true;
+              game._forceSpawnPortal();
+            }),
+            _goldBtn('Уйти', () {
+              game.overlays.remove('eventAltar');
+              game.isPaused = false;
+              game.eventResolved = true;
+              game._forceSpawnPortal();
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class EventMerchantMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const EventMerchantMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final g = game;
+    return Container(
+      color: Colors.black.withOpacity(0.9),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Text('Торговец • ${g.scraps} обломков', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 20, fontWeight: FontWeight.bold)),
+              _goldBtn('Хил (8)', () => g.resolveMerchantBuy('heal')),
+              _goldBtn('SP (12)', () => g.resolveMerchantBuy('scraps_sp')),
+              _goldBtn('Реликвия (20)', () => g.resolveMerchantBuy('relic')),
+              if (g.playerClass == PlayerClass.xenos) ...[
+                _goldBtn('Очередь (15)', () => g.resolveMerchantBuy('gun_rapid')),
+                _goldBtn('Тяжёлый (15)', () => g.resolveMerchantBuy('gun_heavy')),
+                _goldBtn('Прицел (12)', () => g.resolveMerchantBuy('gun_precision')),
+                _goldBtn('Взрывной (18)', () => g.resolveMerchantBuy('gun_explosive')),
+              ],
+              if (g.playerClass == PlayerClass.malleus) ...[
+                _goldBtn('Сфера (15)', () => g.resolveMerchantBuy('staff_wide')),
+                _goldBtn('Фокус (15)', () => g.resolveMerchantBuy('staff_focus')),
+                _goldBtn('Диссипатор (14)', () => g.resolveMerchantBuy('staff_dissipator')),
+              ],
+              if (g.playerClass == PlayerClass.hereticus) ...[
+                _goldBtn('Зазубрины (14)', () => g.resolveMerchantBuy('blade_serrated')),
+                _goldBtn('Мономолекула (16)', () => g.resolveMerchantBuy('blade_mono')),
+              ],
+              _goldBtn('Уйти', () {
+                g.closeMerchant();
+                g._forceSpawnPortal();
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class RankPerkMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const RankPerkMenu(this.game, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black.withOpacity(0.9),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Перк ранга', style: TextStyle(color: Color(0xFFFFD700), fontSize: 20, fontWeight: FontWeight.bold)),
+            _goldBtn('+1 старт SP', () {
+              game.rank.chosenPerk = RankPerk.startSp;
+              game.overlays.remove('rankPerk');
+              game._saveMeta();
+            }),
+            _goldBtn('+5% обломков', () {
+              game.rank.chosenPerk = RankPerk.scrapBonus;
+              game.overlays.remove('rankPerk');
+              game._saveMeta();
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── ENTRY ────────────────────────────────────────────────────
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const SoulOfTheInquisitorApp());
+}
+
+class SoulOfTheInquisitorApp extends StatelessWidget {
+  const SoulOfTheInquisitorApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Soul of the Inquisitor',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: Colors.black,
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFFFD700),
+          secondary: Color(0xFFB71C1C),
+        ),
+      ),
+      home: const GameHost(),
+    );
+  }
+}
+
+class GameHost extends StatefulWidget {
+  const GameHost({super.key});
+  @override
+  State<GameHost> createState() => _GameHostState();
+}
+
+class _GameHostState extends State<GameHost> {
+  late final InquisitorGame game;
+
+  @override
+  void initState() {
+    super.initState();
+    game = InquisitorGame();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: GameWidget(
+        game: game,
+        overlayBuilderMap: {
+          'mainMenu': (_, g) => MainMenu(g as InquisitorGame),
+          'nameInput': (_, g) => NameInputMenu(g as InquisitorGame),
+          'challengeSelect': (_, g) => ChallengeSelectMenu(g as InquisitorGame),
+          'classSelect': (_, g) => ClassSelectMenu(g as InquisitorGame),
+          'settings': (_, g) => SettingsMenu(g as InquisitorGame),
+          'backpack': (_, g) => BackpackMenu(g as InquisitorGame),
+          'loadSave': (_, g) => LoadSaveMenu(g as InquisitorGame),
+          'records': (_, g) => RecordsMenu(g as InquisitorGame),
+          'achievements': (_, g) => AchievementsMenu(g as InquisitorGame),
+          'codex': (_, g) => CodexMenu(g as InquisitorGame),
+          'reward': (_, g) => RewardMenu(g as InquisitorGame),
+          'shop': (_, g) => ShopMenu(g as InquisitorGame),
+          'skills': (_, g) => SkillsMenu(g as InquisitorGame),
+          'levelComplete': (_, g) => LevelCompleteMenu(g as InquisitorGame),
+          'victory': (_, g) => VictoryMenu(g as InquisitorGame),
+          'gameOver': (_, g) => GameOverMenu(g as InquisitorGame),
+          'pathSelect': (_, g) => PathSelectMenu(g as InquisitorGame),
+          'lorePopup': (_, g) => LorePopupMenu(g as InquisitorGame),
+          'eventAltar': (_, g) => EventAltarMenu(g as InquisitorGame),
+          'eventMerchant': (_, g) => EventMerchantMenu(g as InquisitorGame),
+          'rankPerk': (_, g) => RankPerkMenu(g as InquisitorGame),
+        },
+        initialActiveOverlays: const ['mainMenu'],
+      ),
+    );
+  }
+}
+// ─── PLAYER ───────────────────────────────────────────────────
+
+class Player extends PositionComponent
+    with CollisionCallbacks, HasGameReference<InquisitorGame>, SmartMover {
+  double health;
+  final PlayerClass pClass;
+  Vector2 velocity = Vector2.zero();
+  Vector2 aimDir = Vector2(1, 0);
+  bool facingRight = true;
+  bool isDashing = false;
+  double dashTimer = 0;
   double hurtFlash = 0;
-  Vector2 aimDir = Vector2(0, -1);
+  double animPhase = 0;
   final List<StatusEffect> statuses = [];
 
-  Player(this.moveJoystick) : super(size: Vector2(76, 86), anchor: Anchor.center, priority: 20);
+  Player({required Vector2 position, required this.pClass})
+      : health = 6,
+        super(position: position, size: Vector2(36, 48), anchor: Anchor.center, priority: 30);
 
   @override
   Future<void> onLoad() async {
-    maxHealth = game.maxHealth;
-    health = maxHealth;
-    position = game.playerSpawnPos.clone();
-    add(CircleHitbox(radius: 26));
+    add(CircleHitbox(radius: 14));
+    health = game.maxHealth.toDouble();
   }
 
-  double get effectiveSpeed {
-    var s = game.playerSpeed;
-    if (game.dashActive > 0) s *= 1.32;
-    if (game._hasteTimer > 0) s *= game.synergyBloodRush ? 1.18 : 1.12;
-    if (statuses.any((e) => e.type == StatusType.slow || e.type == StatusType.plague)) s *= 0.65;
-    return s;
-  }
-
-  void applyStatus(StatusType type, double duration, {int tickDamage = 1}) {
-    final existing = statuses.where((e) => e.type == type).toList();
-    if (existing.isNotEmpty) {
-      existing.first.remaining = max(existing.first.remaining, duration);
+  void applyStatus(StatusType t, double dur, {int tickDamage = 1}) {
+    final ex = statuses.where((e) => e.type == t).toList();
+    if (ex.isNotEmpty) {
+      ex.first.remaining = max(ex.first.remaining, dur);
     } else {
-      statuses.add(StatusEffect(type, duration, tickDamage: tickDamage));
+      statuses.add(StatusEffect(t, dur, tickDamage: tickDamage));
     }
+  }
+
+  void heal(double amount) {
+    health = (health + amount).clamp(0, game.maxHealth.toDouble());
+  }
+
+  void takeDamage(double amount) {
+    if (game.invulnTimer > 0 || game.shieldTimer > 0) return;
+    var dmg = amount * (1 - game.skills.defense * 0.08);
+    if (statuses.any((e) => e.type == StatusType.slow)) {
+      // already slowed — no extra
+    }
+    health -= dmg;
+    hurtFlash = 0.12;
+    game.triggerShake(power: 5, time: 0.12);
+    game.spawnDamageNumber(position, dmg.round(), color: Colors.redAccent);
+
+    if (health <= 0) {
+      if (game.hasIronWill && !game.ironWillUsedThisFloor) {
+        game.ironWillUsedThisFloor = true;
+        health = 1;
+        game.invulnTimer = 1.2;
+        game.unlockAchievement(AchievementId.ironWillProc);
+        game.spawnDamageNumber(position, 0, color: const Color(0xFFFFD700), label: 'ВОЛЯ');
+        return;
+      }
+      health = 0;
+      game.showGameOver();
+    }
+  }
+
+  void dash() {
+    if (game.activeChallenge == RankChallenge.noDash) return;
+    if (game.dashCooldown > 0 || isDashing) return;
+    final cd = game.hasShadowStep ? 1.5 : 1.8;
+    game.dashCooldown = cd;
+    final dir = game.moveJoystick != null && game.moveJoystick!.delta.length2 > 0.01
+        ? game.moveJoystick!.delta.normalized()
+        : aimDir;
+    isDashing = true;
+    dashTimer = 0.22;
+    velocity = dir * 520;
+    game.invulnTimer = game.hasShadowStep ? 0.35 : 0.25;
+    game.world.add(AfterImage(position: position.clone(), size: size.clone()));
   }
 
   void _tickStatuses(double dt) {
@@ -5196,470 +4639,438 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       e.tickAcc += dt;
       if (e.tickAcc >= e.tickEvery) {
         e.tickAcc = 0;
-        if (e.tickDamage > 0 &&
-            (e.type == StatusType.burn || e.type == StatusType.bleed || e.type == StatusType.corruption || e.type == StatusType.plague)) {
-          health = max(0, health - e.tickDamage);
-          hurtFlash = 0.12;
-          if (health <= 0) _tryDeath();
-        }
+        if (e.tickDamage > 0) takeDamage(e.tickDamage.toDouble());
       }
       if (e.remaining <= 0) statuses.remove(e);
     }
   }
 
-  void _tryDeath() {
-    if (game.hasIronWill && !game.ironWillUsedThisFloor) {
-      game.ironWillUsedThisFloor = true;
-      health = 1;
-      game.grantInvuln(1.2);
-      game.spawnDamageNumber(position, 0, color: const Color(0xFFFFD700), label: 'ЖЕЛЕЗНАЯ ВОЛЯ');
-      game.triggerShake(power: 8, time: 0.2);
-      game.unlockAchievement(AchievementId.ironWillProc);
-      return;
-    }
-    game.showGameOver();
-  }
-
   @override
   void update(double dt) {
     super.update(dt);
-    if (!game.isPlaying || game.isPaused) return;
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
+    if (!game.isPlaying || game.isPaused) return;
     _tickStatuses(dt);
 
-    if (moveJoystick.relativeDelta.length2 > 0.01) {
-      final next = position + moveJoystick.relativeDelta.normalized() * effectiveSpeed * dt;
-      if (_canMoveTo(next)) position = next;
-      position.x = position.x.clamp(70, game.mapWidth - 70);
-      position.y = position.y.clamp(70, game.mapHeight - 70);
+    // aim from attack stick, else move stick
+    final atk = game.attackJoystick;
+    final mov = game.moveJoystick;
+    if (atk != null && atk.delta.length2 > 0.02) {
+      aimDir = atk.delta.normalized();
+      facingRight = aimDir.x >= 0;
+    } else if (mov != null && mov.delta.length2 > 0.02) {
+      aimDir = mov.delta.normalized();
+      facingRight = aimDir.x >= 0;
     }
 
-    final atk = game.attackJoystick.relativeDelta;
-    if (atk.length2 > 0.02) {
-      aimDir = atk.normalized();
-      attackTimer -= dt;
-      if (attackTimer <= 0) {
-        _attack();
-        attackTimer = _interval();
+    final moveSpeed = game.playerSpeed * (game.hasteTimer > 0 ? 1.2 : 1.0) *
+        (statuses.any((e) => e.type == StatusType.slow) ? 0.65 : 1.0);
+
+    if (!isDashing) {
+      if (mov != null && mov.delta.length2 > 0.01) {
+        velocity = mov.delta.normalized() * moveSpeed;
+      } else {
+        velocity *= 0.78;
       }
-    } else {
-      attackTimer = max(0, attackTimer - dt * 0.5);
     }
-  }
 
-  double _interval() {
-    if (game.usingMelee) {
-      final base = (game.meleeWeapon == MeleeWeapon.hammer || game.meleeWeapon == MeleeWeapon.daemonHammer) ? 0.78 : 0.42;
-      final weighted = game.loadout.bladeEdge == BladeEdgeMod.weighted ? 1.08 : 1.0;
-      return base * weighted * game.attackSpeedMult;
-    }
-    final base = switch (game.rangedWeapon) {
-      RangedWeapon.bolter => 0.28 + (game.playerClass == PlayerClass.xenos ? game.bolterHeat * 0.35 : 0),
-      RangedWeapon.rifle => 0.55,
-      RangedWeapon.shotgun => 0.72,
-      RangedWeapon.staff => 0.48 + game.staffWarpStress * 0.25,
-      RangedWeapon.stormStaff => 0.55 + game.staffWarpStress * 0.3,
-      RangedWeapon.warpBeam => 0.70,
-      RangedWeapon.daggers => 0.22,
-      RangedWeapon.needles => 0.32,
-      RangedWeapon.sniperNeedle => 0.85,
-    };
-    return base * game.attackSpeedMult;
-  }
-
-  bool _canMoveTo(Vector2 next) {
-    for (final w in game.world.children.whereType<Wall>()) {
-      if (w.toAbsoluteRect().inflate(20).contains(next.toOffset())) return false;
-    }
-    for (final o in game.world.children.whereType<Obstacle>()) {
-      if (next.distanceTo(o.position) < 40) return false;
-    }
-    for (final b in game.world.children.whereType<BreakableBarrel>()) {
-      if (next.distanceTo(b.position) < 36) return false;
-    }
-    return true;
-  }
-
-  void _attack() {
-    final dir = aimDir.length2 < 0.01 ? Vector2(0, -1) : aimDir;
-    if (game.usingMelee) {
-      game.playMelee();
-      final (reach, arc, dmg) = _meleeParams();
-      game.world.add(MeleeAttack(
-        position: position + dir * (reach * 0.4),
-        direction: dir,
-        damage: game.scaleDamage(dmg),
-        radius: reach,
-        arc: arc,
-        weapon: game.meleeWeapon,
-      )..priority = 15);
-    } else {
-      if (game.playerClass == PlayerClass.xenos &&
-          (game.rangedWeapon == RangedWeapon.bolter || game.rangedWeapon == RangedWeapon.rifle)) {
-        final heatGain = game.hasAmmoSavant ? 0.055 : 0.08;
-        game.bolterHeat = min(1.0, game.bolterHeat + heatGain);
-        if (game.bolterHeat >= 0.95) {
-          attackTimer = 0.8;
-          game.spawnDamageNumber(position, 0, color: const Color(0xFFFF6D00), label: 'ПЕРЕГРЕВ');
-          return;
+    smartMove(position + velocity * dt, moveSpeed, dt, radius: 14);
+    // smartMove expects target; for player we apply velocity manually more carefully:
+    final next = position + velocity * dt;
+    next.x = next.x.clamp(30, game.mapWidth - 30);
+    next.y = next.y.clamp(30, game.mapHeight - 30);
+    // block walls
+    var blocked = false;
+    for (final o in game.world.children) {
+      if (o is Wall || o is Obstacle) {
+        if ((next - o.position).length < 28) {
+          blocked = true;
+          break;
         }
       }
-      if (game.playerClass == PlayerClass.malleus &&
-          (game.rangedWeapon == RangedWeapon.staff ||
-              game.rangedWeapon == RangedWeapon.stormStaff ||
-              game.rangedWeapon == RangedWeapon.warpBeam)) {
-        var stressGain = 0.10;
-        if (game.hasWarpAnchor) stressGain *= 0.7;
-        if (game.loadout.staffFocus == StaffFocusMod.dissipator) stressGain *= 0.6;
-        game.staffWarpStress = min(1.0, game.staffWarpStress + stressGain);
-        if (game.staffWarpStress >= 0.85) {
-          takeDamage(1);
-          applyStatus(StatusType.corruption, 1.5, tickDamage: 1);
-          game.spawnDamageNumber(position, 1, color: const Color(0xFF9C27B0), label: 'ВАРП');
-        }
-      }
-      game.playShoot();
-      _ranged(dir);
+    }
+    if (!blocked) position.setFrom(next);
+    pushOutOfWalls(14);
+
+    if (dashTimer > 0) {
+      dashTimer -= dt;
+      if (dashTimer <= 0) isDashing = false;
+    }
+
+    animPhase += dt * (velocity.length > 40 ? 10 : 2);
+
+    // attack while F stick held
+    if (atk != null && atk.delta.length2 > 0.15) {
+      _tryAttack();
     }
   }
 
-  (double, double, int) _meleeParams() {
+  void _tryAttack() {
+    if (game.usingMelee) {
+      _melee();
+    } else {
+      _ranged();
+    }
+  }
+
+  void _melee() {
+    if (game.activeChallenge == RankChallenge.meleeBossOnly) {
+      // always allowed for challenge
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - game.lastMeleeTime < game.meleeCooldownMs) return;
+    game.lastMeleeTime = now;
+    game.playSfx('melee.mp3');
+
+    var reach = 52.0;
+    var arc = 0.9;
+    var dmg = game.scaleDamage(game.meleeDamage).toDouble();
     switch (game.meleeWeapon) {
-      case MeleeWeapon.sword:
-        return (78.0, 1.2, game.swordDamage);
       case MeleeWeapon.axe:
-        return (100.0, 2.6, game.axeDamage);
-      case MeleeWeapon.hammer:
-        return (115.0, 2.0, game.hammerDamage);
-      case MeleeWeapon.forceBlade:
-        return (115.0, 1.5, game.forceDamage);
       case MeleeWeapon.forceSword:
-        return (130.0, 1.7, game.forceSwordDamage);
+        reach = 64;
+        arc = 2.2;
+        break;
+      case MeleeWeapon.hammer:
       case MeleeWeapon.daemonHammer:
-        return (140.0, 2.2, game.daemonDamage);
+        reach = 72;
+        dmg *= 1.35;
+        break;
       case MeleeWeapon.katana:
-        return (95.0, 1.4, game.katanaDamage);
       case MeleeWeapon.powerKatana:
-        return (105.0, 1.5, game.powerKatanaDamage);
+        reach = 58;
+        dmg *= 1.1;
+        break;
       case MeleeWeapon.executioner:
-        return (120.0, 1.8, game.execDamage);
+        reach = 60;
+        dmg *= 1.25;
+        break;
+      default:
+        break;
+    }
+    dmg *= game.mastery.meleeMasteryMult(game.meleeWeapon.name);
+    if (game.loadout.bladeEdge == BladeEdgeMod.weighted) dmg *= 1.15;
+    if (game.loadout.bladeEdge == BladeEdgeMod.monomolecular) dmg *= 1.2;
+
+    final hitPos = position + aimDir * (reach * 0.55);
+    game.world.add(MeleeSlash(position: hitPos, dir: aimDir, radius: reach * 0.45)..priority = 28);
+
+    void tryHit(PositionComponent other, void Function(int) apply) {
+      final d = position.distanceTo(other.position);
+      if (d > reach + 20) return;
+      final to = (other.position - position).normalized();
+      if (to.dot(aimDir) < cos(arc / 2) && d > 40) return;
+      var finalDmg = dmg.round();
+      if (game.hasExecutioner) {
+        // low hp bonus handled inside enemy if possible — flat +20% here for bosses later
+      }
+      apply(finalDmg);
+      if (game.loadout.bladeEdge == BladeEdgeMod.serrated && other is Enemy) {
+        other.applyStatus(StatusType.bleed, 2.0, tickDamage: 1);
+      }
+      // jedi path: clear nearby bullets
+      if (game.hasJediPath) {
+        for (final b in game.world.children.whereType<EnemyBullet>().toList()) {
+          if (b.position.distanceTo(position) < reach) b.removeFromParent();
+        }
+        for (final p in game.world.children.whereType<CorruptionPuddle>().toList()) {
+          if (p.position.distanceTo(position) < reach) p.removeFromParent();
+        }
+      }
+      for (final b in game.world.children.whereType<BreakableBarrel>()) {
+        if (b.position.distanceTo(hitPos) < 40) b.hit();
+      }
+    }
+
+    for (final e in game.world.children.whereType<Enemy>()) {
+      tryHit(e, (d) => e.applyDamage(d));
+    }
+    for (final e in game.world.children.whereType<MiniBoss>()) {
+      tryHit(e, (d) => e.takeDamage(d));
+    }
+    for (final e in game.world.children.whereType<Boss>()) {
+      tryHit(e, (d) => e.takeDamage(d));
+    }
+    for (final e in game.world.children.whereType<KnightBoss>()) {
+      tryHit(e, (d) => e.takeDamage(d));
+    }
+    for (final e in game.world.children.whereType<KingBoss>()) {
+      tryHit(e, (d) => e.takeDamage(d));
+    }
+    for (final e in game.world.children.whereType<PlagueLordBoss>()) {
+      tryHit(e, (d) => e.takeDamage(d));
+    }
+    for (final e in game.world.children.whereType<BloodChampionBoss>()) {
+      tryHit(e, (d) => e.takeDamage(d));
+    }
+    for (final e in game.world.children.whereType<TentacleBoss>()) {
+      tryHit(e, (d) => e.takeDamage(d));
+    }
+    for (final e in game.world.children.whereType<CyclopsBoss>()) {
+      tryHit(e, (d) => e.takeDamage(d));
     }
   }
 
-  void _ranged(Vector2 dir) {
-    final origin = position + dir * 32;
+  void _ranged() {
+    if (game.activeChallenge == RankChallenge.meleeBossOnly) {
+      // still allow ranged on non-boss — challenge checked on boss HP elsewhere
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - game.lastShotTime < game.rangedCooldownMs) return;
+
+    if (game.rangedWeapon == RangedWeapon.bolter ||
+        game.rangedWeapon == RangedWeapon.rifle ||
+        game.rangedWeapon == RangedWeapon.shotgun) {
+      if (game.bolterHeat > 0.92) return;
+      game.bolterHeat = (game.bolterHeat + (game.hasAmmoSavant ? 0.14 : 0.2)).clamp(0.0, 1.0);
+    }
+    if (game.rangedWeapon == RangedWeapon.staff ||
+        game.rangedWeapon == RangedWeapon.stormStaff ||
+        game.rangedWeapon == RangedWeapon.warpBeam) {
+      if (game.staffWarpStress > 0.92) {
+        takeDamage(1); // self-DoT on spam
+        return;
+      }
+      game.staffWarpStress += game.hasWarpAnchor ? 0.12 : 0.18;
+    }
+
+    game.lastShotTime = now;
+    game.playSfx('shoot.mp3');
+
+    final dir = aimDir.length2 > 0.01 ? aimDir : Vector2(1, 0);
+    final spawn = position + dir * 22;
+    var shots = 1;
+    var spread = 0.0;
+    var speed = 480.0;
+    var rad = 5.0;
+    var dmg = game.scaleDamage(game.rangedDamage).toDouble();
+    Color col = const Color(0xFFFF5722);
+
     switch (game.rangedWeapon) {
       case RangedWeapon.bolter:
-        final extra = game.mastery.bolterExtraShots(1, ammoSavant: game.hasAmmoSavant, xenosSynergy: game.synergyXenosMastery);
-        for (int i = 0; i < extra; i++) {
-          final spread = extra > 1 ? (i - (extra - 1) / 2) * 0.08 : 0.0;
-          final a = atan2(dir.y, dir.x) + spread;
-          _bullet(origin, Vector2(cos(a), sin(a)), game.bolterDamage, const Color(0xFFFF6D00), 520, 5);
-        }
-        if (game.loadout.gunBarrel == GunBarrelMod.rapid) {
-          Future.delayed(const Duration(milliseconds: 70), () {
-            if (isMounted) _bullet(origin, dir, game.bolterDamage, const Color(0xFFFF6D00), 520, 5);
-          });
-        }
+        shots = game.mastery.bolterExtraShots(1, ammoSavant: game.hasAmmoSavant, xenosSynergy: game.playerClass == PlayerClass.xenos);
+        col = const Color(0xFFFF5722);
         break;
       case RangedWeapon.rifle:
-        _bullet(origin, dir, game.rifleDamage, const Color(0xFF00E5FF), 680, 4);
+        dmg *= 1.45;
+        speed = 560;
+        game.lastShotTime = now + 80; // slower cadence already via cooldown
+        col = const Color(0xFF00E5FF);
         break;
       case RangedWeapon.shotgun:
-        final n = game.loadout.gunSight == GunSightMod.wide ? 5 : 3;
-        final spread = game.loadout.gunSight == GunSightMod.wide ? 0.32 : 0.22;
-        for (int i = 0; i < n; i++) {
-          final a = atan2(dir.y, dir.x) + (i - (n - 1) / 2) * spread;
-          _bullet(origin, Vector2(cos(a), sin(a)), game.shotgunDamage, const Color(0xFFFFAB40), 480, 5);
-        }
+        shots = 3;
+        spread = 0.28;
+        speed = 420;
+        dmg *= 0.7;
+        col = const Color(0xFFFFAB40);
         break;
       case RangedWeapon.staff:
-        final rad = 160.0 * game.staffRadiusMult();
-        game.world.add(PsyWave(position: origin.clone(), direction: dir, damage: game.scaleDamage(game.staffDamage), maxRadius: rad)..priority = 13);
+        col = const Color(0xFFB388FF);
+        speed = 360;
+        rad = 7;
+        dmg *= 1.15 * game.mastery.staffRadiusMult();
+        if (game.loadout.staffFocus == StaffFocusMod.wideSphere) {
+          rad = 11;
+          dmg *= 0.85;
+        }
+        if (game.loadout.staffFocus == StaffFocusMod.focusCore) {
+          dmg *= 1.25;
+          speed = 400;
+        }
         break;
       case RangedWeapon.stormStaff:
-        final rad = 140.0 * game.staffRadiusMult();
-        for (final o in [-0.35, 0.0, 0.35]) {
-          final a = atan2(dir.y, dir.x) + o;
-          game.world.add(PsyWave(
-            position: origin.clone(),
-            direction: Vector2(cos(a), sin(a)),
-            damage: game.scaleDamage((game.stormDamage * 0.7).round()),
-            maxRadius: rad,
-          )..priority = 13);
-        }
+        shots = 3;
+        spread = 0.35;
+        col = const Color(0xFF7C4DFF);
         break;
       case RangedWeapon.warpBeam:
-        _bullet(origin, dir, game.warpDamage, const Color(0xFFEA80FC), 720, 7, pierce: true);
+        dmg *= 1.6;
+        speed = 600;
+        col = const Color(0xFFEA80FC);
         break;
       case RangedWeapon.daggers:
-        for (final o in [-0.18, 0.18]) {
-          final a = atan2(dir.y, dir.x) + o;
-          _bullet(origin, Vector2(cos(a), sin(a)), game.daggerDamage, const Color(0xFFE0E0E0), 560, 4);
-        }
+        shots = 2;
+        spread = 0.15;
+        col = const Color(0xFFE0E0E0);
+        speed = 500;
         break;
       case RangedWeapon.needles:
-        for (int i = 0; i < 3; i++) {
-          final a = atan2(dir.y, dir.x) + (i - 1) * 0.12;
-          _bullet(origin, Vector2(cos(a), sin(a)), game.needleDamage, const Color(0xFFCE93D8), 600, 3);
-        }
+        shots = 3;
+        spread = 0.2;
+        col = const Color(0xFFCE93D8);
         break;
       case RangedWeapon.sniperNeedle:
-        _bullet(origin, dir, game.sniperNeedleDamage, const Color(0xFFE040FB), 800, 3, pierce: true);
+        dmg *= 1.7;
+        speed = 620;
+        col = const Color(0xFFE040FB);
         break;
     }
-  }
 
-  void _bullet(Vector2 origin, Vector2 dir, int dmg, Color color, double speed, double radius, {bool pierce = false}) {
-    final exp = game.loadout.gunAmmo == GunAmmoMod.explosive;
-    final ric = game.loadout.gunAmmo == GunAmmoMod.ricochet;
-    final prc = pierce || game.loadout.gunAmmo == GunAmmoMod.pierce;
-    game.world.add(Bullet(
-      position: origin.clone(),
-      direction: dir,
-      damage: game.scaleDamage(dmg),
-      color: color,
-      speed: speed,
-      radius: radius,
-      pierce: prc,
-      ricochet: ric,
-      explosive: exp,
-    )..priority = 13);
-  }
+    if (game.loadout.gunAmmo == GunAmmoMod.explosive) dmg *= 1.1;
 
-  void takeDamage(int amount) {
-    if (game.invulnTimer > 0 || game.dashActive > 0) return;
-    if (game.shieldTimer > 0) {
-      game.shieldTimer = 0;
-      return;
+    for (int i = 0; i < shots; i++) {
+      final ang = atan2(dir.y, dir.x) + (i - (shots - 1) / 2) * spread;
+      final d = Vector2(cos(ang), sin(ang));
+      game.world.add(Bullet(
+        position: spawn.clone(),
+        direction: d,
+        damage: dmg,
+        color: col,
+        speed: speed,
+        radius: rad,
+        trail: true,
+        fromPlayer: true,
+      )..priority = 25);
     }
-    if (game.holyAuraTimer > 0) amount = max(1, (amount * 0.7).round());
-    if (game.defenseChance > 0 && Random().nextDouble() < game.defenseChance) {
-      game.spawnDamageNumber(position, 0, color: const Color(0xFF90CAF9), label: 'BLOCK');
-      return;
-    }
-    health = max(0, health - amount);
-    hurtFlash = 0.15;
-    game.triggerShake(power: 5, time: 0.12);
-    game.spawnDamageNumber(position, amount, color: const Color(0xFFFF5252));
-    if (health <= 0) _tryDeath();
   }
 
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Wall || other is Obstacle || other is BreakableBarrel) {
-      position += (position - intersectionPoints.first).normalized() * 8;
+    if (other is EnemyBullet || other is BossProjectile) {
+      // damage handled in bullet
+    }
+    if (other is Portal) {
+      game.nearPortal = true;
     }
   }
 
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
-    final ang = atan2(aimDir.y, aimDir.x);
-    WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.28, flash: hurtFlash / 0.15, custom: game.custom, cls: game.playerClass);
+    WHDraw.inquisitor(
+      canvas,
+      cx: cx,
+      cy: cy,
+      s: 1.15,
+      flash: hurtFlash / 0.12,
+      custom: game.custom,
+      cls: pClass,
+    );
+    // weapon oriented to aim
     canvas.save();
     canvas.translate(cx, cy);
-    canvas.rotate(ang);
-    final wc = game.custom.weaponColor(0.5);
+    canvas.rotate(atan2(aimDir.y, aimDir.x));
+    final accent = game.custom.weaponColor();
     if (game.usingMelee) {
       switch (game.meleeWeapon) {
         case MeleeWeapon.sword:
-          WHDraw.powerSword(canvas, 0, 0, 1.05, accent: wc);
+        case MeleeWeapon.forceBlade:
+        case MeleeWeapon.forceSword:
+          WHDraw.powerSword(canvas, 0, 0, 1.0, accent: accent);
           break;
         case MeleeWeapon.axe:
-          WHDraw.chainAxe(canvas, 0, 0, 1.05, accent: wc);
+          WHDraw.chainAxe(canvas, 0, 0, 1.0, accent: accent);
           break;
         case MeleeWeapon.hammer:
-          WHDraw.thunderHammer(canvas, 0, 0, 1.0, accent: wc);
-          break;
-        case MeleeWeapon.forceBlade:
-          WHDraw.forceBlade(canvas, 0, 0, 1.15, accent: wc);
-          break;
-        case MeleeWeapon.forceSword:
-          WHDraw.forceSword(canvas, 0, 0, 1.15, accent: wc);
-          break;
         case MeleeWeapon.daemonHammer:
-          WHDraw.daemonHammer(canvas, 0, 0, 1.1, accent: wc);
+          WHDraw.thunderHammer(canvas, 0, 0, 1.0, accent: accent);
           break;
         case MeleeWeapon.katana:
-          WHDraw.katana(canvas, 0, 0, 1.05, accent: wc);
-          break;
         case MeleeWeapon.powerKatana:
-          WHDraw.powerKatana(canvas, 0, 0, 1.05, accent: wc);
+          WHDraw.katana(canvas, 0, 0, 1.0, accent: accent);
           break;
         case MeleeWeapon.executioner:
-          WHDraw.executioner(canvas, 0, 0, 1.05, accent: wc);
+          WHDraw.executioner(canvas, 0, 0, 1.0, accent: accent);
           break;
       }
     } else {
       switch (game.rangedWeapon) {
         case RangedWeapon.bolter:
-          WHDraw.bolter(canvas, 0, 0, 1.0, accent: wc);
+          WHDraw.bolter(canvas, 0, 0, 1.0, accent: accent);
           break;
         case RangedWeapon.rifle:
-          WHDraw.rifle(canvas, 0, 0, 1.0, accent: wc);
+          WHDraw.rifle(canvas, 0, 0, 1.0, accent: accent);
           break;
         case RangedWeapon.shotgun:
-          WHDraw.shotgun(canvas, 0, 0, 1.0, accent: wc);
+          WHDraw.shotgun(canvas, 0, 0, 1.0, accent: accent);
           break;
         case RangedWeapon.staff:
-          WHDraw.staff(canvas, 0, 0, 1.15, accent: wc);
-          break;
         case RangedWeapon.stormStaff:
-          WHDraw.stormStaff(canvas, 0, 0, 1.15, accent: wc);
+          WHDraw.staff(canvas, 0, 0, 1.0, accent: accent);
           break;
         case RangedWeapon.warpBeam:
-          WHDraw.warpBeamGun(canvas, 0, 0, 1.05, accent: wc);
+          WHDraw.warpBeamGun(canvas, 0, 0, 1.0, accent: accent);
           break;
         case RangedWeapon.daggers:
-          WHDraw.daggers(canvas, 0, 0, 1.0, accent: wc);
+          WHDraw.daggers(canvas, 0, 0, 1.0, accent: accent);
           break;
         case RangedWeapon.needles:
-          WHDraw.needles(canvas, 0, 0, 1.0, accent: wc);
+          WHDraw.needles(canvas, 0, 0, 1.0, accent: accent);
           break;
         case RangedWeapon.sniperNeedle:
-          WHDraw.sniperNeedle(canvas, 0, 0, 1.0, accent: wc);
+          WHDraw.sniperNeedle(canvas, 0, 0, 1.0, accent: accent);
           break;
       }
     }
     canvas.restore();
+
+    // HP bar
+    final ratio = (health / game.maxHealth).clamp(0.0, 1.0);
+    canvas.drawRect(Rect.fromLTWH(cx - 20, -28, 40, 5), Paint()..color = Colors.black54);
+    canvas.drawRect(Rect.fromLTWH(cx - 20, -28, 40 * ratio, 5), Paint()..color = const Color(0xFF4CAF50));
+    // heat
+    if (game.bolterHeat > 0.05 && !game.usingMelee) {
+      canvas.drawRect(Rect.fromLTWH(cx - 20, -22, 40 * game.bolterHeat, 3), Paint()..color = const Color(0xFFFF6D00));
+    }
+    if (game.staffWarpStress > 0.05 && !game.usingMelee) {
+      canvas.drawRect(Rect.fromLTWH(cx - 20, -22, 40 * game.staffWarpStress, 3), Paint()..color = const Color(0xFFB388FF));
+    }
     if (game.invulnTimer > 0) {
-      canvas.drawCircle(Offset(cx, cy), 40, Paint()..color = const Color(0xFF81D4FA).withOpacity(0.25)..style = PaintingStyle.stroke..strokeWidth = 3);
+      canvas.drawCircle(Offset(cx, cy), 26, Paint()..color = const Color(0xFF81D4FA).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 2);
     }
-    if (game.shieldTimer > 0 || game.holyAuraTimer > 0) {
-      canvas.drawCircle(
-        Offset(cx, cy),
-        38,
-        Paint()
-          ..color = (game.holyAuraTimer > 0 ? const Color(0xFFFFD700) : const Color(0xFF42A5F5)).withOpacity(0.3)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3,
-      );
-    }
-    WHDraw.statusIcons(canvas, cx, -8, statuses);
+    WHDraw.statusIcons(canvas, cx, -36, statuses);
   }
 }
 
-class PsyWave extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 direction;
-  final int damage;
-  double radius = 20;
-  final double maxRadius;
-  final Set<int> hit = {};
-  PsyWave({required Vector2 position, required this.direction, required this.damage, this.maxRadius = 160})
-      : super(position: position.clone(), size: Vector2(40, 40), anchor: Anchor.center, priority: 13);
-  @override
-  Future<void> onLoad() async => add(CircleHitbox());
-  @override
-  void update(double dt) {
-    super.update(dt);
-    radius += 220 * dt;
-    position += direction * 160 * dt;
-    size = Vector2.all(radius * 2);
-    if (radius >= maxRadius) removeFromParent();
-  }
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Enemy && hit.add(other.hashCode)) {
-      other.applyDamage(damage);
-      other.applyStatus(StatusType.corruption, 1.5, tickDamage: 1);
-    }
-    if (other is MiniBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is Boss && hit.add(other.hashCode)) {
-      other.takeDamage(damage);
-      game.noteBossDamagedByRanged();
-    }
-    if (other is KnightBoss && hit.add(other.hashCode)) {
-      other.takeDamage(damage);
-      game.noteBossDamagedByRanged();
-    }
-    if (other is KingBoss && hit.add(other.hashCode)) {
-      other.takeDamage(damage);
-      game.noteBossDamagedByRanged();
-    }
-    if (other is TentacleBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is CyclopsBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is PlagueLordBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is BloodChampionBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is BreakableBarrel) other.hit();
-  }
-  @override
-  void render(Canvas canvas) {
-    final a = (1 - radius / maxRadius).clamp(0.0, 1.0);
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), radius, Paint()..color = Color.fromRGBO(124, 77, 255, 0.35 * a)..style = PaintingStyle.stroke..strokeWidth = 6);
-  }
-}
+class MeleeSlash extends PositionComponent {
+  final Vector2 dir;
+  final double radius;
+  double life = 0.18;
+  MeleeSlash({required Vector2 position, required this.dir, required this.radius})
+      : super(position: position, size: Vector2.all(radius * 2), anchor: Anchor.center, priority: 28);
 
-class CyclopsLaserBeam extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 direction;
-  final int damage;
-  double life = 0.45;
-  final Set<int> hit = {};
-  CyclopsLaserBeam({required Vector2 position, required this.direction, required this.damage})
-      : super(position: position.clone(), size: Vector2(400, 24), anchor: Anchor.centerLeft, priority: 14) {
-    angle = atan2(direction.y, direction.x);
-  }
-  @override
-  Future<void> onLoad() async => add(RectangleHitbox());
   @override
   void update(double dt) {
     super.update(dt);
     life -= dt;
     if (life <= 0) removeFromParent();
   }
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Enemy && hit.add(other.hashCode)) other.applyDamage(damage);
-    if (other is MiniBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is Boss && hit.add(other.hashCode)) {
-      other.takeDamage(damage);
-      game.noteBossDamagedByRanged();
-    }
-    if (other is KnightBoss && hit.add(other.hashCode)) {
-      other.takeDamage(damage);
-      game.noteBossDamagedByRanged();
-    }
-    if (other is KingBoss && hit.add(other.hashCode)) {
-      other.takeDamage(damage);
-      game.noteBossDamagedByRanged();
-    }
-    if (other is TentacleBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is CyclopsBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is PlagueLordBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is BloodChampionBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-  }
+
   @override
   void render(Canvas canvas) {
-    final a = (life / 0.45).clamp(0.0, 1.0);
-    canvas.drawRect(Rect.fromLTWH(0, size.y * 0.25, size.x, size.y * 0.5), Paint()..color = Color.fromRGBO(255, 109, 0, 0.85 * a));
+    final a = (life / 0.18).clamp(0.0, 1.0);
+    final p = Paint()
+      ..color = Color.fromRGBO(0, 229, 255, 0.55 * a)
+      ..strokeWidth = 5
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(Offset.zero, Offset(dir.x * radius, dir.y * radius), p);
   }
 }
 
-class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 velocity;
-  final int damage;
+// ─── PROJECTILES ──────────────────────────────────────────────
+
+class Bullet extends PositionComponent with CollisionCallbacks, HasGameReference<InquisitorGame> {
+  final Vector2 direction;
+  final double damage;
   final Color color;
-  final bool pierce, ricochet, explosive, applyBurn;
-  double life = 2.2;
-  int bounces = 0;
-  final Set<int> hitIds = {};
+  final double speed;
+  final double radius;
+  final bool trail;
+  final bool fromPlayer;
+  double life = 1.8;
+  int ricochets = 0;
 
   Bullet({
     required Vector2 position,
-    required Vector2 direction,
+    required this.direction,
     required this.damage,
     required this.color,
-    double speed = 520,
-    double radius = 5,
-    this.pierce = false,
-    this.ricochet = false,
-    this.explosive = false,
-    this.applyBurn = false,
-  })  : velocity = direction.normalized() * speed,
-        super(position: position.clone(), size: Vector2.all(radius * 2), anchor: Anchor.center, priority: 13);
+    required this.speed,
+    required this.radius,
+    this.trail = false,
+    this.fromPlayer = false,
+  }) : super(position: position, size: Vector2.all(radius * 2), anchor: Anchor.center);
 
   @override
   Future<void> onLoad() async => add(CircleHitbox());
@@ -5667,201 +5078,109 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
   @override
   void update(double dt) {
     super.update(dt);
-    life -= dt;
-    final old = position.clone();
-    position += velocity * dt;
-    if (old.distanceTo(position) > 4) {
-      game.world.add(BulletTrail(from: old, to: position.clone(), color: color)..priority = 12);
+    final prev = position.clone();
+    position += direction.normalized() * speed * dt;
+    if (trail) {
+      game.world.add(BulletTrail(from: prev, to: position.clone(), color: color)..priority = 12);
     }
-    if (life <= 0 || position.x < 0 || position.x > game.mapWidth || position.y < 0 || position.y > game.mapHeight) {
+    life -= dt;
+    if (life <= 0) removeFromParent();
+    if (position.x < 0 || position.y < 0 || position.x > game.mapWidth || position.y > game.mapHeight) {
       removeFromParent();
     }
   }
 
-  void _hitEnemy(Enemy e) {
-    if (!hitIds.add(e.hashCode)) return;
-    if (e.affix == EliteAffix.reflect && Random().nextDouble() < 0.25) {
-      game.world.add(EnemyBullet(position: e.position.clone(), direction: (game.player.position - e.position).normalized(), damage: 1)..priority = 16);
+  void _hitEnemy(void Function(int) apply, Vector2 at) {
+    var dmg = damage.round();
+    if (game.hasExecutioner) {
+      // approximate
+      dmg = (dmg * 1.0).round();
     }
-    final ratio = e.maxHp > 0 ? e.currentHp / e.maxHp : 1.0;
-    final dmg = game.hasExecutionerMark && ratio < 0.3 ? (damage * 1.2).round() : damage;
-    e.applyDamage(dmg);
-    if (applyBurn || explosive) e.applyStatus(StatusType.burn, 2.0 + game.codexBurnBonus, tickDamage: 1);
-    if (explosive) game.world.add(KillExplosion(position: position.clone(), radius: 55, damage: damage ~/ 3)..priority = 12);
-    if (!pierce && !ricochet) removeFromParent();
+    apply(dmg);
+    if (game.loadout.gunAmmo == GunAmmoMod.explosive) {
+      game.world.add(KillExplosion(position: at, radius: 45, damage: (damage * 0.4).round(), applyBurn: true));
+    }
+    if (game.loadout.gunAmmo != GunAmmoMod.pierce) removeFromParent();
   }
 
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (other is Enemy) _hitEnemy(other);
-    if (other is MiniBoss) {
-      other.takeDamage(damage);
-      if (!pierce) removeFromParent();
-    }
-    if (other is Boss) {
-      other.takeDamage(damage);
-      game.noteBossDamagedByRanged();
-      if (!pierce) removeFromParent();
-    }
-    if (other is KnightBoss) {
-      other.takeDamage(damage);
-      game.noteBossDamagedByRanged();
-      if (!pierce) removeFromParent();
-    }
-    if (other is KingBoss) {
-      other.takeDamage(damage);
-      game.noteBossDamagedByRanged();
-      if (!pierce) removeFromParent();
-    }
-    if (other is TentacleBoss) {
-      other.takeDamage(damage);
-      if (!pierce) removeFromParent();
-    }
-    if (other is CyclopsBoss) {
-      other.takeDamage(damage);
-      if (!pierce) removeFromParent();
-    }
-    if (other is PlagueLordBoss) {
-      other.takeDamage(damage);
-      if (!pierce) removeFromParent();
-    }
-    if (other is BloodChampionBoss) {
-      other.takeDamage(damage);
-      if (!pierce) removeFromParent();
-    }
-    if (other is BreakableBarrel) {
-      other.hit();
-      if (!pierce) removeFromParent();
-    }
-    if (other is Wall || other is Obstacle) {
-      if (ricochet && bounces < 2) {
-        bounces++;
-        velocity.setValues(-velocity.x, velocity.y);
+    if (!fromPlayer) return;
+    if (other is Enemy) {
+      _hitEnemy((d) => other.applyDamage(d), other.position);
+    } else if (other is MiniBoss) {
+      _hitEnemy((d) => other.takeDamage(d), other.position);
+    } else if (other is Boss) {
+      _hitEnemy((d) => other.takeDamage(d), other.position);
+    } else if (other is KnightBoss) {
+      _hitEnemy((d) => other.takeDamage(d), other.position);
+    } else if (other is KingBoss) {
+      _hitEnemy((d) => other.takeDamage(d), other.position);
+    } else if (other is PlagueLordBoss) {
+      _hitEnemy((d) => other.takeDamage(d), other.position);
+    } else if (other is BloodChampionBoss) {
+      _hitEnemy((d) => other.takeDamage(d), other.position);
+    } else if (other is TentacleBoss) {
+      _hitEnemy((d) => other.takeDamage(d), other.position);
+    } else if (other is CyclopsBoss) {
+      _hitEnemy((d) => other.takeDamage(d), other.position);
+    } else if (other is Wall || other is Obstacle) {
+      if (game.loadout.gunAmmo == GunAmmoMod.ricochet && ricochets < 2) {
+        ricochets++;
+        // simple reflect
+        direction.x *= -1;
       } else {
-        if (explosive) game.world.add(KillExplosion(position: position.clone(), radius: 50, damage: damage ~/ 3)..priority = 12);
         removeFromParent();
       }
+    } else if (other is BreakableBarrel) {
+      other.hit();
+      removeFromParent();
     }
   }
 
   @override
   void render(Canvas canvas) {
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), size.x / 2, Paint()..color = color);
+    canvas.drawCircle(Offset(radius, radius), radius, Paint()..color = color);
   }
 }
 
-class MeleeAttack extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 direction;
+class EnemyBullet extends PositionComponent with CollisionCallbacks, HasGameReference<InquisitorGame> {
+  Vector2 direction;
   final int damage;
-  final double radius;
-  final double arc;
-  final MeleeWeapon weapon;
-  double life = 0.22;
-  final Set<int> hit = {};
-  MeleeAttack({
-    required Vector2 position,
-    required this.direction,
-    required this.damage,
-    required this.radius,
-    required this.arc,
-    required this.weapon,
-  }) : super(position: position.clone(), size: Vector2.all(radius * 2), anchor: Anchor.center, priority: 15);
-
-  @override
-  Future<void> onLoad() async => add(CircleHitbox());
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    life -= dt;
-    if (life <= 0) removeFromParent();
-  }
-
-  bool _inArc(Vector2 otherPos) {
-    final to = otherPos - position;
-    if (to.length > radius + 30) return false;
-    final a = atan2(direction.y, direction.x);
-    final b = atan2(to.y, to.x);
-    var d = (b - a).abs();
-    if (d > pi) d = 2 * pi - d;
-    return d <= arc / 2 + 0.15;
-  }
-
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (game.hasJediPath && (other is EnemyBullet || other is BossProjectile)) {
-      other.removeFromParent();
-      game.spawnDamageNumber(other.position, 0, color: const Color(0xFF81D4FA), label: '✦');
-      return;
-    }
-    if (game.hasJediPath && other is CorruptionZone) {
-      other.purify();
-      return;
-    }
-    if (other is Enemy && hit.add(other.hashCode) && _inArc(other.position)) {
-      other.applyDamage(damage);
-      if (game.synergyHereticusBleedDash || game.loadout.bladeEdge == BladeEdgeMod.serrated) {
-        other.applyStatus(StatusType.bleed, 2.5, tickDamage: 1);
-      }
-    }
-    if (other is MiniBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is Boss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is KnightBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is KingBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is TentacleBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is CyclopsBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is PlagueLordBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is BloodChampionBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is Obstacle && hit.add(other.hashCode)) other.removeFromParent();
-    if (other is BreakableBarrel) other.hit();
-  }
-
-  @override
-  void render(Canvas canvas) {
-    final a = (life / 0.22).clamp(0.0, 1.0);
-    final ang = atan2(direction.y, direction.x);
-    final path = Path()..moveTo(size.x / 2, size.y / 2);
-    path.arcTo(Rect.fromCircle(center: Offset(size.x / 2, size.y / 2), radius: radius), ang - arc / 2, arc, false);
-    path.close();
-    canvas.drawPath(path, Paint()..color = Color.fromRGBO(0, 188, 212, 0.35 * a));
-  }
-}
-
-class EnemyBullet extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  Vector2 velocity;
-  final int damage;
+  final double speed;
   final BulletMod mod;
-  double life = 3.5;
-  int bounces = 0;
-  bool didSplit = false;
+  double life = 2.2;
 
   EnemyBullet({
     required Vector2 position,
-    required Vector2 direction,
+    required this.direction,
     required this.damage,
-    double speed = 180,
+    this.speed = 200,
     this.mod = BulletMod.normal,
-  })  : velocity = direction.normalized() * speed,
-        super(position: position.clone(), size: Vector2(14, 14), anchor: Anchor.center, priority: 16);
+  }) : super(position: position, size: Vector2(12, 12), anchor: Anchor.center);
 
   @override
   Future<void> onLoad() async => add(CircleHitbox());
 
+  Color get _color {
+    switch (mod) {
+      case BulletMod.slow:
+        return const Color(0xFF4FC3F7);
+      case BulletMod.ricochet:
+        return const Color(0xFFFFEB3B);
+      case BulletMod.split:
+        return const Color(0xFFE040FB);
+      case BulletMod.normal:
+        return const Color(0xFFFF8A65);
+    }
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
+    position += direction.normalized() * speed * dt;
     life -= dt;
-    final old = position.clone();
-    position += velocity * dt;
-    if (old.distanceTo(position) > 6) {
-      Color trailCol = const Color(0xFF76FF03);
-      if (mod == BulletMod.slow) trailCol = const Color(0xFF4FC3F7);
-      if (mod == BulletMod.ricochet) trailCol = const Color(0xFFFFEB3B);
-      if (mod == BulletMod.split) trailCol = const Color(0xFFFF8A65);
-      game.world.add(BulletTrail(from: old, to: position.clone(), color: trailCol)..priority = 12);
-    }
     if (life <= 0) removeFromParent();
   }
 
@@ -5869,105 +5188,110 @@ class EnemyBullet extends PositionComponent with HasGameReference<InquisitorGame
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is Player) {
-      other.takeDamage(damage);
-      if (mod == BulletMod.slow) other.applyStatus(StatusType.slow, 1.8);
-      if (mod == BulletMod.split && !didSplit) {
-        didSplit = true;
-        final base = atan2(velocity.y, velocity.x);
-        for (final o in [-0.4, 0.4]) {
-          game.world.add(EnemyBullet(
-            position: position.clone(),
-            direction: Vector2(cos(base + o), sin(base + o)),
-            damage: max(1, damage - 1),
-            speed: 160,
-          )..priority = 16);
-        }
-      }
+      other.takeDamage(damage.toDouble());
+      if (mod == BulletMod.slow) other.applyStatus(StatusType.slow, 1.5);
       removeFromParent();
-    }
-    if (other is Wall || other is Obstacle) {
-      if (mod == BulletMod.ricochet && bounces < 2) {
-        bounces++;
-        velocity = Vector2(-velocity.x, velocity.y);
+    } else if (other is Wall || other is Obstacle) {
+      if (mod == BulletMod.ricochet) {
+        direction = Vector2(-direction.x, direction.y);
       } else {
         removeFromParent();
       }
-    }
-    if (other is MeleeAttack && game.hasJediPath) removeFromParent();
-  }
-
-  @override
-  void render(Canvas canvas) {
-    Color col = const Color(0xFF76FF03);
-    if (mod == BulletMod.slow) col = const Color(0xFF4FC3F7);
-    if (mod == BulletMod.ricochet) col = const Color(0xFFFFEB3B);
-    if (mod == BulletMod.split) col = const Color(0xFFFF8A65);
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 6, Paint()..color = col);
-  }
-}
-
-class BossProjectile extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  final Vector2 velocity;
-  double life = 4.0;
-  BossProjectile({required Vector2 position, required Vector2 direction, double speed = 200})
-      : velocity = direction.normalized() * speed,
-        super(position: position.clone(), size: Vector2(18, 18), anchor: Anchor.center, priority: 22);
-
-  @override
-  Future<void> onLoad() async => add(CircleHitbox());
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    life -= dt;
-    position += velocity * dt;
-    if (life <= 0) removeFromParent();
-  }
-
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Player) {
-      other.takeDamage((1 * game.difficulty.dmgMult).ceil());
+    } else if (other is MeleeSlash && game.hasJediPath) {
       removeFromParent();
     }
-    if (other is Wall) removeFromParent();
-    if (other is MeleeAttack && game.hasJediPath) removeFromParent();
   }
 
   @override
   void render(Canvas canvas) {
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 8, Paint()..color = const Color(0xFFE53935));
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 5, Paint()..color = _color);
   }
 }
 
-class FlamerCloud extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
-  double life = 1.8;
-  FlamerCloud({required Vector2 position}) : super(position: position.clone(), size: Vector2(70, 70), anchor: Anchor.center, priority: 11);
-  @override
-  Future<void> onLoad() async => add(CircleHitbox());
+class BossProjectile extends EnemyBullet {
+  BossProjectile({
+    required super.position,
+    required super.direction,
+    super.speed = 190,
+    super.damage = 2,
+  });
+}
+
+class CyclopsLaserBeam extends PositionComponent with HasGameReference<InquisitorGame> {
+  final Vector2 direction;
+  final int damage;
+  double life = 0.35;
+
+  CyclopsLaserBeam({required Vector2 position, required this.direction, required this.damage})
+      : super(position: position, size: Vector2(320, 24), anchor: Anchor.centerLeft, priority: 22) {
+    angle = atan2(direction.y, direction.x);
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
     life -= dt;
+    // hit player if aligned
+    final toP = game.player.position - position;
+    final proj = toP.dot(direction.normalized());
+    if (proj > 0 && proj < 300) {
+      final lat = (toP - direction.normalized() * proj).length;
+      if (lat < 22) {
+        game.player.takeDamage(damage.toDouble());
+      }
+    }
+    // damage enemies if from player laser
+    for (final e in game.world.children.whereType<Enemy>()) {
+      final to = e.position - position;
+      final proj2 = to.dot(direction.normalized());
+      if (proj2 > 0 && proj2 < 300 && (to - direction.normalized() * proj2).length < 24) {
+        e.applyDamage(damage);
+      }
+    }
     if (life <= 0) removeFromParent();
   }
-  @override
-  void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollision(intersectionPoints, other);
-    if (other is Player) other.applyStatus(StatusType.burn, 1.5, tickDamage: 1);
-  }
+
   @override
   void render(Canvas canvas) {
-    final a = (life / 1.8).clamp(0.0, 1.0);
-    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 30, Paint()..color = Color.fromRGBO(255, 109, 0, 0.4 * a));
+    final a = (life / 0.35).clamp(0.0, 1.0);
+    canvas.drawRect(
+      Rect.fromLTWH(0, size.y * 0.25, size.x, size.y * 0.5),
+      Paint()..color = Color.fromRGBO(255, 109, 0, 0.75 * a),
+    );
   }
 }
-// ═══════════════════════════════════════════════════════════════
-// ENEMIES
-// ═══════════════════════════════════════════════════════════════
 
-class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
+class FlamerCloud extends PositionComponent with HasGameReference<InquisitorGame> {
+  double life = 1.4;
+  double tick = 0;
+  FlamerCloud({required Vector2 position})
+      : super(position: position, size: Vector2(80, 80), anchor: Anchor.center, priority: 11);
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    life -= dt;
+    tick += dt;
+    if (tick >= 0.4) {
+      tick = 0;
+      if (game.player.position.distanceTo(position) < 45) {
+        game.player.takeDamage(1);
+        game.player.applyStatus(StatusType.burn, 1.5, tickDamage: 1);
+      }
+    }
+    if (life <= 0) removeFromParent();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final a = (life / 1.4).clamp(0.0, 1.0);
+    canvas.drawCircle(Offset(size.x / 2, size.y / 2), 36, Paint()..color = Color.fromRGBO(255, 109, 0, 0.35 * a));
+  }
+}
+// ─── ENEMIES ──────────────────────────────────────────────────
+
+class Enemy extends PositionComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   final EnemyType type;
   final bool isChampion;
@@ -6051,6 +5375,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         dmg = max(1, (dmg * (0.55 + game.codexShieldBonus)).round());
       }
     }
+    if (game.hasExecutioner && currentHp / maxHp < 0.3) {
+      dmg = (dmg * 1.2).round();
+    }
     if (affix == EliteAffix.reflect && !fromStatus && Random().nextDouble() < 0.2) {
       game.player.takeDamage(1);
       game.spawnDamageNumber(position, 0, color: const Color(0xFFE040FB), label: 'F');
@@ -6079,10 +5406,10 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       game.enemiesSpawned++;
       final add = Enemy(floor: floor, type: EnemyType.melee);
       add.position = pos;
+      game.world.add(add);
+      // weaker
       add.maxHp = max(6, (maxHp * 0.25).round());
       add.currentHp = add.maxHp;
-      add.priority = 30;
-      game.world.add(add);
     }
     game.spawnDamageNumber(position, 0, color: const Color(0xFFFFEB3B), label: 'ПРИЗЫВ');
   }
@@ -6176,18 +5503,29 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       case EnemyType.shooter:
       case EnemyType.shieldedShooter:
         if (dist < 420) {
-          game.world.add(EnemyBullet(position: position.clone(), direction: toP, damage: dmg, mod: game.rollBulletMod())..priority = 16);
+          game.world.add(EnemyBullet(
+            position: position.clone(),
+            direction: toP,
+            damage: dmg,
+            mod: game.rollBulletMod(),
+          )..priority = 16);
         }
         break;
       case EnemyType.sniper:
         if (dist < 520) {
-          game.world.add(EnemyBullet(position: position.clone(), direction: toP, damage: dmg + 1, speed: 280, mod: BulletMod.slow)..priority = 16);
+          game.world.add(EnemyBullet(
+            position: position.clone(),
+            direction: toP,
+            damage: dmg + 1,
+            speed: 280,
+            mod: BulletMod.slow,
+          )..priority = 16);
         }
         break;
       case EnemyType.flamer:
         if (dist < 160) {
           game.world.add(FlamerCloud(position: position + toP * 40)..priority = 11);
-          if (dist < 90) game.player.takeDamage(dmg);
+          if (dist < 90) game.player.takeDamage(dmg.toDouble());
         }
         break;
       case EnemyType.cultPsyker:
@@ -6206,7 +5544,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         break;
       case EnemyType.plagueBearer:
         if (dist < 100) {
-          game.player.takeDamage(dmg);
+          game.player.takeDamage(dmg.toDouble());
           game.player.applyStatus(StatusType.plague, 2.5, tickDamage: 1);
         }
         break;
@@ -6216,8 +5554,10 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       case EnemyType.brute:
       case EnemyType.shielded:
         if (dist < (type == EnemyType.brute ? 70 : 55)) {
-          game.player.takeDamage(type == EnemyType.bloodletter || type == EnemyType.brute ? dmg + 1 : dmg);
-          if (type == EnemyType.bloodletter) game.player.applyStatus(StatusType.bleed, 1.5, tickDamage: 1);
+          game.player.takeDamage((type == EnemyType.bloodletter || type == EnemyType.brute ? dmg + 1 : dmg).toDouble());
+          if (type == EnemyType.bloodletter) {
+            game.player.applyStatus(StatusType.bleed, 1.5, tickDamage: 1);
+          }
         }
         break;
     }
@@ -6282,13 +5622,17 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     if (isChampion) {
       WHDraw.championMark(canvas, cx, -10, affix: affix);
       final ratio = currentHp / maxHp;
-      canvas.drawRect(Rect.fromLTWH(cx - 22, -4, 44 * ratio, 5), Paint()..color = affix != EliteAffix.none ? affix.color : const Color(0xFFFFD700));
+      canvas.drawRect(
+        Rect.fromLTWH(cx - 22, -4, 44 * ratio, 5),
+        Paint()..color = affix != EliteAffix.none ? affix.color : const Color(0xFFFFD700),
+      );
     }
     WHDraw.statusIcons(canvas, cx, -18, statuses);
   }
 }
 
-class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
+class MiniBoss extends PositionComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   final bool isEcho;
   late int maxHp;
@@ -6321,6 +5665,10 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   }
 
   void takeDamage(int amount) {
+    if (game.activeChallenge == RankChallenge.meleeBossOnly && !game.usingMelee) {
+      game.spawnDamageNumber(position, 0, color: Colors.white54, label: 'ТОЛЬКО КЛИНОК');
+      return;
+    }
     currentHp -= amount;
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF9800));
@@ -6409,9 +5757,15 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
-    canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy + 40), width: 50, height: 12), Paint()..color = Colors.black.withOpacity(0.22));
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(cx, cy + 40), width: 50, height: 12),
+      Paint()..color = Colors.black.withOpacity(0.22),
+    );
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 8), width: 48, height: 52), const Radius.circular(6)),
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, cy + 8), width: 48, height: 52),
+        const Radius.circular(6),
+      ),
       Paint()..color = const Color(0xFF4A1515),
     );
     canvas.drawCircle(Offset(cx, cy - 22), 16, Paint()..color = const Color(0xFF3E2723));
@@ -6420,18 +5774,27 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       canvas.drawCircle(Offset(cx, cy), 48, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * (hurtFlash / 0.12)));
     }
     if (isEcho) {
-      canvas.drawCircle(Offset(cx, cy), 48, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 3);
+      canvas.drawCircle(
+        Offset(cx, cy),
+        48,
+        Paint()
+          ..color = const Color(0xFF9C27B0).withOpacity(0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
     }
     final ratio = currentHp / maxHp;
-    canvas.drawRect(Rect.fromLTWH(cx - 40, -18, 80 * ratio, 8), Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF9800));
+    canvas.drawRect(
+      Rect.fromLTWH(cx - 40, -18, 80 * ratio, 8),
+      Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF9800),
+    );
     WHDraw.statusIcons(canvas, cx, -28, statuses);
   }
 }
-// ═══════════════════════════════════════════════════════════════
-// BOSSES
-// ═══════════════════════════════════════════════════════════════
+// ─── BOSSES ───────────────────────────────────────────────────
 
-class Boss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
+class Boss extends PositionComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   final bool isEcho;
   late int maxHp;
@@ -6465,6 +5828,10 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   }
 
   void takeDamage(int amount) {
+    if (game.activeChallenge == RankChallenge.meleeBossOnly && !game.usingMelee) {
+      game.spawnDamageNumber(position, 0, color: Colors.white54, label: 'ТОЛЬКО КЛИНОК');
+      return;
+    }
     final bonus = 1.0 + game.codexBossBonus;
     currentHp -= (amount * bonus).round();
     hurtFlash = 0.12;
@@ -6487,7 +5854,9 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.7;
-    final patterns = game.difficulty == Difficulty.hard ? ['ring', 'cone', 'cross', 'ring'] : ['ring', 'cone', 'cross'];
+    final patterns = game.difficulty == Difficulty.hard
+        ? ['ring', 'cone', 'cross', 'ring']
+        : ['ring', 'cone', 'cross'];
     nextPattern = patterns[Random().nextInt(patterns.length)];
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
@@ -6585,15 +5954,26 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.hereticBoss(canvas, cx, cy, 1.35, flash: hurtFlash / 0.12);
     if (isEcho) {
-      canvas.drawCircle(Offset(cx, cy), 55, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 3);
+      canvas.drawCircle(
+        Offset(cx, cy),
+        55,
+        Paint()
+          ..color = const Color(0xFF9C27B0).withOpacity(0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
     }
     final ratio = currentHp / maxHp;
-    canvas.drawRect(Rect.fromLTWH(cx - 50, -24, 100 * ratio, 9), Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFE53935));
+    canvas.drawRect(
+      Rect.fromLTWH(cx - 50, -24, 100 * ratio, 9),
+      Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFE53935),
+    );
     WHDraw.statusIcons(canvas, cx, -36, statuses);
   }
 }
 
-class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
+class KnightBoss extends PositionComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   final bool isEcho;
   late int maxHp;
@@ -6627,6 +6007,10 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   }
 
   void takeDamage(int amount) {
+    if (game.activeChallenge == RankChallenge.meleeBossOnly && !game.usingMelee) {
+      game.spawnDamageNumber(position, 0, color: Colors.white54, label: 'ТОЛЬКО КЛИНОК');
+      return;
+    }
     final bonus = 1.0 + game.codexBossBonus;
     currentHp -= (amount * bonus).round();
     hurtFlash = 0.12;
@@ -6663,11 +6047,11 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     if (nextPattern == 'dash') {
       position += toP * 90;
       if (position.distanceTo(game.player.position) < 80) {
-        game.player.takeDamage((2 * game.difficulty.dmgMult).ceil());
+        game.player.takeDamage((2 * game.difficulty.dmgMult).ceil().toDouble());
       }
     } else {
       if (position.distanceTo(game.player.position) < 120) {
-        game.player.takeDamage((3 * game.difficulty.dmgMult).ceil());
+        game.player.takeDamage((3 * game.difficulty.dmgMult).ceil().toDouble());
         game.triggerShake(power: 8, time: 0.18);
       }
     }
@@ -6729,21 +6113,32 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.knightBoss(canvas, cx, cy, 1.3, flash: hurtFlash / 0.12);
     if (isEcho) {
-      canvas.drawCircle(Offset(cx, cy), 52, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 3);
+      canvas.drawCircle(
+        Offset(cx, cy),
+        52,
+        Paint()
+          ..color = const Color(0xFF9C27B0).withOpacity(0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
     }
     final ratio = currentHp / maxHp;
-    canvas.drawRect(Rect.fromLTWH(cx - 48, -22, 96 * ratio, 9), Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFF90CAF9));
+    canvas.drawRect(
+      Rect.fromLTWH(cx - 48, -22, 96 * ratio, 9),
+      Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFF90CAF9),
+    );
     WHDraw.statusIcons(canvas, cx, -34, statuses);
   }
 }
-class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
+
+class KingBoss extends PositionComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final bool isEcho;
   late int maxHp;
   late int currentHp;
   late int phaseHp;
   int phase = 1;
   double attackTimer = 0;
-  double phase2Timer = 0;
   double telegraphTimer = 0;
   bool telegraphing = false;
   double hurtFlash = 0;
@@ -6779,13 +6174,16 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       game.spawnDamageNumber(position, 0, color: const Color(0xFFFFD700), label: 'СВИТА');
       return;
     }
+    if (game.activeChallenge == RankChallenge.meleeBossOnly && !game.usingMelee) {
+      game.spawnDamageNumber(position, 0, color: Colors.white54, label: 'ТОЛЬКО КЛИНОК');
+      return;
+    }
     final bonus = 1.0 + game.codexBossBonus;
     currentHp -= (amount * bonus).round();
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFFD700));
     if (phase == 1 && currentHp <= phaseHp) {
       phase = 2;
-      phase2Timer = 0;
       game.triggerCinemaZoom();
       game.triggerShake(power: 12, time: 0.35);
       game.spawnDamageNumber(position, 0, color: const Color(0xFFFFD700), label: 'ФАЗА 2');
@@ -6812,22 +6210,24 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
 
   void _executeAttack() {
     if (phase == 1) {
-      // melee + fast chase implied by move; ring volley
       for (int i = 0; i < 10; i++) {
         final a = i / 10 * pi * 2;
         game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 200)..priority = 22);
       }
       if (position.distanceTo(game.player.position) < 90) {
-        game.player.takeDamage((3 * game.difficulty.dmgMult).ceil());
+        game.player.takeDamage((3 * game.difficulty.dmgMult).ceil().toDouble());
       }
     } else {
-      // massed 3-salvo rings
       for (int salvo = 0; salvo < 3; salvo++) {
         Future.delayed(Duration(milliseconds: 180 * salvo), () {
           if (!isMounted) return;
           for (int i = 0; i < 14; i++) {
             final a = i / 14 * pi * 2 + salvo * 0.15;
-            game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 210 + salvo * 15)..priority = 22);
+            game.world.add(BossProjectile(
+              position: position.clone(),
+              direction: Vector2(cos(a), sin(a)),
+              speed: 210 + salvo * 15,
+            )..priority = 22);
           }
         });
       }
@@ -6851,7 +6251,6 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     }
 
     final dist = position.distanceTo(game.player.position);
-    // phase 1 faster, phase 2 slower
     var spd = (phase == 1 ? 115.0 : 70.0) * (isEcho ? 0.85 : 1.0);
     if (statuses.any((e) => e.type == StatusType.slow)) spd *= 0.6;
 
@@ -6866,7 +6265,14 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       return;
     }
 
-    smartMove(game.player.position, spd, dt, radius: 55, kite: game.bossRetreatTimer > 0 || phase == 2, preferDist: phase == 1 ? 120 : 200);
+    smartMove(
+      game.player.position,
+      spd,
+      dt,
+      radius: 55,
+      kite: game.bossRetreatTimer > 0 || phase == 2,
+      preferDist: phase == 1 ? 120 : 200,
+    );
     pushOutOfWalls(55);
 
     attackTimer += dt;
@@ -6892,17 +6298,33 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     WHDraw.kingBossDraw(canvas, cx, cy, 1.55, flash: hurtFlash / 0.12);
     if (invulnByRetinue) {
       final pulse = 0.4 + 0.3 * sin(DateTime.now().millisecondsSinceEpoch / 200);
-      canvas.drawCircle(Offset(cx, cy), 62, Paint()..color = Color.fromRGBO(255, 215, 0, pulse)..style = PaintingStyle.stroke..strokeWidth = 4);
+      canvas.drawCircle(
+        Offset(cx, cy),
+        62,
+        Paint()
+          ..color = Color.fromRGBO(255, 215, 0, pulse)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4,
+      );
       final tp = TextPainter(
-        text: const TextSpan(text: 'СВИТА', style: TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.bold)),
+        text: const TextSpan(
+          text: 'СВИТА',
+          style: TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.bold),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(cx - tp.width / 2, -48));
     }
     if (isEcho) {
-      canvas.drawCircle(Offset(cx, cy), 60, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 3);
+      canvas.drawCircle(
+        Offset(cx, cy),
+        60,
+        Paint()
+          ..color = const Color(0xFF9C27B0).withOpacity(0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
     }
-    // two bars
     final ratio1 = (currentHp > phaseHp ? (currentHp - phaseHp) / (maxHp - phaseHp) : 0.0).clamp(0.0, 1.0);
     final ratio2 = (currentHp <= phaseHp ? currentHp / phaseHp : 1.0).clamp(0.0, 1.0);
     canvas.drawRect(Rect.fromLTWH(cx - 55, -30, 110 * ratio1, 7), Paint()..color = const Color(0xFFFFD700));
@@ -6910,8 +6332,8 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     WHDraw.statusIcons(canvas, cx, -42, statuses);
   }
 }
-
-class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
+class PlagueLordBoss extends PositionComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final bool isEcho;
   late int maxHp;
   late int currentHp;
@@ -6944,6 +6366,10 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
   }
 
   void takeDamage(int amount) {
+    if (game.activeChallenge == RankChallenge.meleeBossOnly && !game.usingMelee) {
+      game.spawnDamageNumber(position, 0, color: Colors.white54, label: 'ТОЛЬКО КЛИНОК');
+      return;
+    }
     final bonus = 1.0 + game.codexBossBonus;
     currentHp -= (amount * bonus).round();
     hurtFlash = 0.12;
@@ -6970,7 +6396,6 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
   }
 
   void _executeAttack() {
-    // spawn 2 plague bearers + cloud
     for (int i = 0; i < 2; i++) {
       final a = Random().nextDouble() * pi * 2;
       final pos = position + Vector2(cos(a) * 90, sin(a) * 90);
@@ -6979,14 +6404,12 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
       game.enemiesSpawned++;
       final e = Enemy(floor: game.currentFloor, type: EnemyType.plagueBearer);
       e.position = pos;
-      e.maxHp = max(8, (e.maxHp * 0.5).round());
-      e.currentHp = e.maxHp;
       game.world.add(e);
     }
-    game.world.add(FlamerCloud(position: position.clone())..priority = 11); // reuse as toxic cloud visually ok
+    game.world.add(FlamerCloud(position: position.clone())..priority = 11);
     game.spawnCorruptionZone(position.clone());
     if (position.distanceTo(game.player.position) < 110) {
-      game.player.takeDamage((2 * game.difficulty.dmgMult).ceil());
+      game.player.takeDamage((2 * game.difficulty.dmgMult).ceil().toDouble());
       game.player.applyStatus(StatusType.plague, 2.5, tickDamage: 1);
     }
     game.markBossRetreat();
@@ -7052,15 +6475,26 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.plagueLord(canvas, cx, cy, 1.4, flash: hurtFlash / 0.12);
     if (isEcho) {
-      canvas.drawCircle(Offset(cx, cy), 55, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 3);
+      canvas.drawCircle(
+        Offset(cx, cy),
+        55,
+        Paint()
+          ..color = const Color(0xFF9C27B0).withOpacity(0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
     }
     final ratio = currentHp / maxHp;
-    canvas.drawRect(Rect.fromLTWH(cx - 52, -26, 104 * ratio, 9), Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFF8BC34A));
+    canvas.drawRect(
+      Rect.fromLTWH(cx - 52, -26, 104 * ratio, 9),
+      Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFF8BC34A),
+    );
     WHDraw.statusIcons(canvas, cx, -38, statuses);
   }
 }
 
-class BloodChampionBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
+class BloodChampionBoss extends PositionComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final bool isEcho;
   late int maxHp;
   late int currentHp;
@@ -7094,6 +6528,10 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
   }
 
   void takeDamage(int amount) {
+    if (game.activeChallenge == RankChallenge.meleeBossOnly && !game.usingMelee) {
+      game.spawnDamageNumber(position, 0, color: Colors.white54, label: 'ТОЛЬКО КЛИНОК');
+      return;
+    }
     final bonus = 1.0 + game.codexBossBonus;
     currentHp -= (amount * bonus).round();
     hurtFlash = 0.12;
@@ -7116,7 +6554,13 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
     telegraphing = true;
     telegraphTimer = 0.55;
     final toP = (game.player.position - position).normalized();
-    game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 150, angle: atan2(toP.y, toP.x), life: 0.55)..priority = 6);
+    game.world.add(TelegraphZone(
+      position: position.clone(),
+      shape: 'cone',
+      radius: 150,
+      angle: atan2(toP.y, toP.x),
+      life: 0.55,
+    )..priority = 6);
   }
 
   void _executeAttack() {
@@ -7124,7 +6568,7 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
     position += toP * (40 + rage * 40);
     final dmg = ((2 + rage * 2) * game.difficulty.dmgMult).ceil();
     if (position.distanceTo(game.player.position) < 85) {
-      game.player.takeDamage(dmg);
+      game.player.takeDamage(dmg.toDouble());
       game.player.applyStatus(StatusType.bleed, 2.0, tickDamage: 1);
     }
     game.markBossRetreat();
@@ -7185,14 +6629,26 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.bloodChampion(canvas, cx, cy, 1.35, flash: hurtFlash / 0.12, rage: rage);
     if (isEcho) {
-      canvas.drawCircle(Offset(cx, cy), 52, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 3);
+      canvas.drawCircle(
+        Offset(cx, cy),
+        52,
+        Paint()
+          ..color = const Color(0xFF9C27B0).withOpacity(0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
     }
     final ratio = currentHp / maxHp;
-    canvas.drawRect(Rect.fromLTWH(cx - 50, -24, 100 * ratio, 9), Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF1744));
+    canvas.drawRect(
+      Rect.fromLTWH(cx - 50, -24, 100 * ratio, 9),
+      Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF1744),
+    );
     WHDraw.statusIcons(canvas, cx, -36, statuses);
   }
 }
-class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
+
+class TentacleBoss extends PositionComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   late int maxHp;
   late int currentHp;
   late int phaseHp;
@@ -7249,7 +6705,6 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
     if (phase == 1) {
       game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 150, life: 0.7)..priority = 6);
     } else {
-      // 6 slam zones around
       for (int i = 0; i < 6; i++) {
         final a = i / 6 * pi * 2 + tentacleAnim * 0.1;
         final p = position + Vector2(cos(a) * 100, sin(a) * 100);
@@ -7260,19 +6715,17 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
 
   void _executeAttack() {
     if (phase == 1) {
-      // ring of projectiles
       for (int i = 0; i < 16; i++) {
         final a = i / 16 * pi * 2;
         game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 170)..priority = 22);
       }
     } else {
-      // 6 melee slams
       for (int i = 0; i < 6; i++) {
         final a = i / 6 * pi * 2 + tentacleAnim * 0.1;
         final p = position + Vector2(cos(a) * 100, sin(a) * 100);
         game.world.add(TentacleSlam(position: p)..priority = 14);
         if (p.distanceTo(game.player.position) < 90) {
-          game.player.takeDamage((3 * game.difficulty.dmgMult).ceil());
+          game.player.takeDamage((3 * game.difficulty.dmgMult).ceil().toDouble());
         }
       }
       game.triggerShake(power: 10, time: 0.25);
@@ -7334,20 +6787,27 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
-    // body core
-    canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy + 50), width: 70, height: 18), Paint()..color = Colors.black.withOpacity(0.25));
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(cx, cy + 50), width: 70, height: 18),
+      Paint()..color = Colors.black.withOpacity(0.25),
+    );
     canvas.drawCircle(Offset(cx, cy), 42, Paint()..color = const Color(0xFF4A148C));
     canvas.drawCircle(Offset(cx, cy), 28, Paint()..color = const Color(0xFF7B1FA2));
-    // tentacles
     for (int i = 0; i < 8; i++) {
       final a = i / 8 * pi * 2 + tentacleAnim * (0.6 + i * 0.05);
       final len = 48 + 12 * sin(tentacleAnim * 2 + i);
       final x2 = cx + cos(a) * len;
       final y2 = cy + sin(a) * len;
-      canvas.drawLine(Offset(cx, cy), Offset(x2, y2), Paint()..color = const Color(0xFF6A1B9A)..strokeWidth = 8..strokeCap = StrokeCap.round);
+      canvas.drawLine(
+        Offset(cx, cy),
+        Offset(x2, y2),
+        Paint()
+          ..color = const Color(0xFF6A1B9A)
+          ..strokeWidth = 8
+          ..strokeCap = StrokeCap.round,
+      );
       canvas.drawCircle(Offset(x2, y2), 8, Paint()..color = const Color(0xFF9C27B0));
     }
-    // eye
     canvas.drawCircle(Offset(cx, cy - 6), 10, Paint()..color = const Color(0xFFE040FB));
     canvas.drawCircle(Offset(cx, cy - 6), 4, Paint()..color = Colors.white);
     if (hurtFlash > 0) {
@@ -7384,7 +6844,8 @@ class TentacleSlam extends CircleComponent with HasGameReference<InquisitorGame>
   }
 }
 
-class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
+class CyclopsBoss extends PositionComponent
+    with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   late int maxHp;
   late int currentHp;
   late int phaseHp;
@@ -7441,8 +6902,13 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
     charge = 0;
     final toP = (game.player.position - position).normalized();
     if (phase == 1) {
-      // laser line
-      game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 320, angle: atan2(toP.y, toP.x), life: telegraphTimer)..priority = 6);
+      game.world.add(TelegraphZone(
+        position: position.clone(),
+        shape: 'cone',
+        radius: 320,
+        angle: atan2(toP.y, toP.x),
+        life: telegraphTimer,
+      )..priority = 6);
     } else {
       game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 140, life: telegraphTimer)..priority = 6);
     }
@@ -7451,15 +6917,18 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
   void _executeAttack() {
     final toP = (game.player.position - position).normalized();
     if (phase == 1) {
-      game.world.add(CyclopsLaserBeam(position: position.clone(), direction: toP, damage: (8 * game.difficulty.dmgMult).ceil())..priority = 14);
+      game.world.add(CyclopsLaserBeam(
+        position: position.clone(),
+        direction: toP,
+        damage: (8 * game.difficulty.dmgMult).ceil(),
+      )..priority = 14);
     } else {
-      // stomp + ring
       for (int i = 0; i < 12; i++) {
         final a = i / 12 * pi * 2;
         game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 200)..priority = 22);
       }
       if (position.distanceTo(game.player.position) < 130) {
-        game.player.takeDamage((4 * game.difficulty.dmgMult).ceil());
+        game.player.takeDamage((4 * game.difficulty.dmgMult).ceil().toDouble());
       }
       game.triggerShake(power: 12, time: 0.3);
     }
@@ -7498,7 +6967,14 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
       return;
     }
 
-    smartMove(game.player.position, spd, dt, radius: 56, kite: game.bossRetreatTimer > 0 || (phase == 1 && dist < 150), preferDist: 200);
+    smartMove(
+      game.player.position,
+      spd,
+      dt,
+      radius: 56,
+      kite: game.bossRetreatTimer > 0 || (phase == 1 && dist < 150),
+      preferDist: 200,
+    );
     pushOutOfWalls(56);
 
     attackTimer += dt;
@@ -7527,90 +7003,5 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
     canvas.drawRect(Rect.fromLTWH(cx - 55, -36, 110 * ratio1, 7), Paint()..color = const Color(0xFFFF6D00));
     canvas.drawRect(Rect.fromLTWH(cx - 55, -26, 110 * ratio2, 7), Paint()..color = const Color(0xFFFFEA00));
     WHDraw.statusIcons(canvas, cx, -48, statuses);
-  }
-}
-// ═══════════════════════════════════════════════════════════════
-// ENTRY
-// ═══════════════════════════════════════════════════════════════
-
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SoulOfTheInquisitorApp());
-}
-
-class SoulOfTheInquisitorApp extends StatelessWidget {
-  const SoulOfTheInquisitorApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Soul of the Inquisitor',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: Colors.black,
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFFFD700),
-          secondary: Color(0xFFB71C1C),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1A1A1A),
-            foregroundColor: const Color(0xFFFFD700),
-            side: const BorderSide(color: Color(0xFFB8860B)),
-          ),
-        ),
-      ),
-      home: const GameHost(),
-    );
-  }
-}
-
-class GameHost extends StatefulWidget {
-  const GameHost({super.key});
-  @override
-  State<GameHost> createState() => _GameHostState();
-}
-
-class _GameHostState extends State<GameHost> {
-  late final InquisitorGame game;
-
-  @override
-  void initState() {
-    super.initState();
-    game = InquisitorGame();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: GameWidget(
-        game: game,
-        overlayBuilderMap: {
-          'mainMenu': (_, g) => MainMenu(g as InquisitorGame),
-          'nameInput': (_, g) => NameInputMenu(g as InquisitorGame),
-          'challengeSelect': (_, g) => ChallengeSelectMenu(g as InquisitorGame),
-          'classSelect': (_, g) => ClassSelectMenu(g as InquisitorGame),
-          'settings': (_, g) => SettingsMenu(g as InquisitorGame),
-          'backpack': (_, g) => BackpackMenu(g as InquisitorGame),
-          'loadSave': (_, g) => LoadSaveMenu(g as InquisitorGame),
-          'records': (_, g) => RecordsMenu(g as InquisitorGame),
-          'achievements': (_, g) => AchievementsMenu(g as InquisitorGame),
-          'codex': (_, g) => CodexMenu(g as InquisitorGame),
-          'reward': (_, g) => RewardMenu(g as InquisitorGame),
-          'shop': (_, g) => ShopMenu(g as InquisitorGame),
-          'skills': (_, g) => SkillsMenu(g as InquisitorGame),
-          'levelComplete': (_, g) => LevelCompleteMenu(g as InquisitorGame),
-          'victory': (_, g) => VictoryMenu(g as InquisitorGame),
-          'gameOver': (_, g) => GameOverMenu(g as InquisitorGame),
-          'pathSelect': (_, g) => PathSelectMenu(g as InquisitorGame),
-          'lorePopup': (_, g) => LorePopupMenu(g as InquisitorGame),
-          'eventAltar': (_, g) => EventAltarMenu(g as InquisitorGame),
-          'eventMerchant': (_, g) => EventMerchantMenu(g as InquisitorGame),
-          'rankPerk': (_, g) => RankPerkMenu(g as InquisitorGame),
-        },
-        initialActiveOverlays: const ['mainMenu'],
-      ),
-    );
   }
 }
