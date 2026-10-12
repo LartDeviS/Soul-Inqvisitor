@@ -77,6 +77,27 @@ extension DiffLabel on Difficulty {
 enum PlayerClass { xenos, malleus, hereticus }
 
 extension ClassLabel on PlayerClass {
+    int get hpMod {
+    switch (this) {
+      case PlayerClass.xenos: return 0;
+      case PlayerClass.malleus: return -1;
+      case PlayerClass.hereticus: return -1;
+    }
+  }
+  double get speedMod {
+    switch (this) {
+      case PlayerClass.xenos: return 0;
+      case PlayerClass.malleus: return -18;
+      case PlayerClass.hereticus: return 28;
+    }
+  }
+  double get dmgMod {
+    switch (this) {
+      case PlayerClass.xenos: return 1.0;
+      case PlayerClass.malleus: return 1.12;
+      case PlayerClass.hereticus: return 1.06;
+    }
+  }
   String get title {
     switch (this) {
       case PlayerClass.xenos:
@@ -141,6 +162,15 @@ enum EnemyType {
 enum StatusType { burn, bleed, slow, corruption, plague }
 
 enum ActiveArtifact { fragGrenade, holyAura, servoTurret }
+extension ArtifactMeta on ActiveArtifact {
+  double get cooldown {
+    switch (this) {
+      case ActiveArtifact.fragGrenade: return 14;
+      case ActiveArtifact.holyAura: return 18;
+      case ActiveArtifact.servoTurret: return 16;
+    }
+  }
+}
 
 enum RelicId {
   crit,
@@ -2127,7 +2157,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     camera.viewport.add(artifactBtn!);
     camera.viewport.add(warpBtn!);
     camera.viewport.add(portalBtn!);
-    portalBtn!.opacity = 0; // shown when near portal
+    portalBtn!.scale = Vector2.zero();
+    portalBtn!.scale = nearPortal ? Vector2.all(1) : Vector2.zero();
   }
 
   void playSfx(String name) {
@@ -2938,7 +2969,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       final ox = (Random().nextDouble() - 0.5) * shakePower * 2;
       final oy = (Random().nextDouble() - 0.5) * shakePower * 2;
       camera.viewfinder.position = player.position + Vector2(ox, oy);
-    } else if (!camera.viewfinder.isFollowing) {
+    } else {
       camera.follow(player);
     }
     if (cinemaZoomTimer > 0) {
