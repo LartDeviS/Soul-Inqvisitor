@@ -5400,17 +5400,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     }
                   : null,
             ),
-            const SizedBox(height: 12),
-            const Text(
-              '1-5 left top 33s',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white38, fontSize: 12),
-            ),
-            const Text(
-              '2-5 left top 33s',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white38, fontSize: 12),
-            ),
             const Text('ЦВЕТА', style: TextStyle(color: Color(0xFFFFD700))),
             Slider(value: c.armorHue.toDouble(), min: 0, max: 360, activeColor: c.armorColor(0.4), onChanged: (v) => setState(() => c.armorHue = v.round())),
             Slider(value: c.capeHue.toDouble(), min: 0, max: 360, activeColor: c.capeColor(0.4), onChanged: (v) => setState(() => c.capeHue = v.round())),
@@ -6895,9 +6884,27 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     WHDraw.statusIcons(canvas, cx, -28, statuses);
   }
 }
+int _bossPhaseForHealth(int currentHp, int maxHp) {
+  if (currentHp <= max(1, maxHp ~/ 3)) return 3;
+  if (currentHp <= max(1, (maxHp * 2) ~/ 3)) return 2;
+  return 1;
+}
+
+void _announceBossPhase(InquisitorGame game, Vector2 position, int phase) {
+  game.spawnDamageNumber(
+    position,
+    0,
+    color: phase >= 3 ? const Color(0xFFFF1744) : const Color(0xFFFFD54F),
+    label: phase >= 3 ? 'ФАЗА III' : 'ФАЗА II',
+  );
+  game.triggerCinemaZoom();
+  game.triggerShake(power: phase >= 3 ? 15 : 11, time: 0.35);
+}
+
 class Boss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   final bool isEcho;
+  int phase = 1;
   late int maxHp;
   late int currentHp;
   int hardBars = 1;
@@ -6936,7 +6943,15 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   }
 
   void takeDamage(int amount) {
-    currentHp -= amount;
+    if (currentHp <= 0) return;
+    currentHp = max(0, currentHp - amount);
+    final nextPhase = _bossPhaseForHealth(currentHp, maxHp);
+    if (nextPhase > phase && currentHp > 0) {
+      phase = nextPhase;
+      attackTimer = 0;
+      telegraphing = false;
+      _announceBossPhase(game, position, phase);
+    }
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF5252));
     if (hardBars > 1 && _barsLeft < _lastBar) {
@@ -6961,7 +6976,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.75;
-    attackMode = Random().nextInt(3);
+    attackMode = Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
@@ -6973,6 +6988,12 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         break;
       case 2:
         game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 150, life: 0.75)..priority = 6);
+        break;
+      case 3:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 180, life: 0.75)..priority = 6);
+        break;
+      case 4:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 270, angle: ang, life: 0.75)..priority = 6);
         break;
     }
   }
@@ -7002,6 +7023,19 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 160)..priority = 22);
         }
         break;
+      case 3:
+        final n = game.difficulty == Difficulty.hard ? 18 : 14;
+        for (int i = 0; i < n; i++) {
+          final a = (i / n) * 2 * pi;
+          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 175)..priority = 22);
+        }
+        break;
+      case 4:
+        for (final o in [-0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6]) {
+          final a = base + o;
+          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 230)..priority = 22);
+        }
+        break;
     }
     game.markBossRetreat();
   }
@@ -7022,7 +7056,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     }
 
     final dist = position.distanceTo(game.player.position);
-    var spd = 85.0 * (isEcho ? 0.8 : 1.0);
+    var spd = 85.0 * (phase == 1 ? 1.0 : phase == 2 ? 1.08 : 1.16) * (isEcho ? 0.8 : 1.0);
     if (statuses.any((e) => e.type == StatusType.slow)) spd *= 0.6;
 
     if (telegraphing) {
@@ -7049,7 +7083,8 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     pushOutOfWalls(50);
 
     attackTimer += dt;
-    final iv = (dist < 160 ? 1.2 : 1.7) * (isEcho ? 1.25 : 1.0) / (game.difficulty == Difficulty.hard ? 1.15 : 1.0);
+    final phaseSpeed = phase == 1 ? 1.0 : phase == 2 ? 0.84 : 0.70;
+    final iv = (dist < 160 ? 1.2 : 1.7) * phaseSpeed * (isEcho ? 1.25 : 1.0) / (game.difficulty == Difficulty.hard ? 1.15 : 1.0);
     if (attackTimer >= iv && !retreating) {
       attackTimer = 0;
       _startTelegraph();
@@ -7093,6 +7128,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
 class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   final bool isEcho;
+  int phase = 1;
   late int maxHp;
   late int currentHp;
   int hardBars = 1;
@@ -7131,7 +7167,15 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   }
 
   void takeDamage(int amount) {
-    currentHp -= amount;
+    if (currentHp <= 0) return;
+    currentHp = max(0, currentHp - amount);
+    final nextPhase = _bossPhaseForHealth(currentHp, maxHp);
+    if (nextPhase > phase && currentHp > 0) {
+      phase = nextPhase;
+      attackTimer = 0;
+      telegraphing = false;
+      _announceBossPhase(game, position, phase);
+    }
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFF90CAF9));
     if (hardBars > 1 && _barsLeft < _lastBar) {
@@ -7156,7 +7200,7 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.7;
-    attackMode = Random().nextInt(3);
+    attackMode = Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
@@ -7168,6 +7212,12 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
         break;
       case 2:
         game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 140, life: 0.7)..priority = 6);
+        break;
+      case 3:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 170, life: 0.7)..priority = 6);
+        break;
+      case 4:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: game.cellSize * 2.0, life: 0.7)..priority = 6);
         break;
     }
   }
@@ -7193,6 +7243,21 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
         }
         break;
+      case 3:
+        final n = game.difficulty == Difficulty.hard ? 12 : 8;
+        for (int i = 0; i < n; i++) {
+          final a = (i / n) * 2 * pi;
+          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 185)..priority = 22);
+        }
+        break;
+      case 4:
+        final slamRadius = game.cellSize * 2.0;
+        game.world.add(TentacleSlam(position: position.clone(), radius: slamRadius)..priority = 27);
+        if (position.distanceTo(game.player.position) < slamRadius + 30) {
+          game.player.takeDamage((2 * game.difficulty.dmgMult).ceil());
+          game.player.applyStatus(StatusType.slow, 1.0);
+        }
+        break;
     }
     game.markBossRetreat();
   }
@@ -7213,7 +7278,7 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     }
 
     final dist = position.distanceTo(game.player.position);
-    var spd = 110.0 * (isEcho ? 0.85 : 1.0);
+    var spd = 110.0 * (phase == 1 ? 1.0 : phase == 2 ? 1.08 : 1.16) * (isEcho ? 0.85 : 1.0);
     if (statuses.any((e) => e.type == StatusType.slow)) spd *= 0.6;
     final retreating = game.bossRetreatTimer > 0;
 
@@ -7239,7 +7304,7 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
     pushOutOfWalls(48);
 
     attackTimer += dt;
-    final iv = (dist < 120 ? 0.9 : 1.4) * (isEcho ? 1.2 : 1.0);
+    final iv = (dist < 120 ? 0.9 : 1.4) * (phase == 1 ? 1.0 : phase == 2 ? 0.84 : 0.70) * (isEcho ? 1.2 : 1.0);
     if (attackTimer >= iv && !retreating) {
       attackTimer = 0;
       _startTelegraph();
@@ -7324,7 +7389,7 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.75;
-    attackMode = phase == 1 ? Random().nextInt(2) : Random().nextInt(3);
+    attackMode = Random().nextInt(phase == 1 ? 2 : phase == 2 ? 3 : 4);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
@@ -7336,6 +7401,9 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
         break;
       case 2:
         game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 160, life: 0.75)..priority = 6);
+        break;
+      case 3:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 190, life: 0.75)..priority = 6);
         break;
     }
   }
@@ -7361,6 +7429,13 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       case 2:
         for (final a in [0.0, pi / 4, pi / 2, 3 * pi / 4, pi, 5 * pi / 4, 3 * pi / 2, 7 * pi / 4]) {
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)))..priority = 22);
+        }
+        break;
+      case 3:
+        final n = game.difficulty == Difficulty.hard ? 20 : 16;
+        for (int i = 0; i < n; i++) {
+          final a = (i / n) * 2 * pi;
+          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 185)..priority = 22);
         }
         break;
     }
@@ -7433,8 +7508,9 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       }
     } else {
       phase2Timer += dt;
-      final volleyGap = game.difficulty == Difficulty.hard ? 0.28 : 0.35;
-      final cycle = game.difficulty == Difficulty.hard ? 2.4 : 3.0;
+      final phase3 = phase >= 3;
+      final volleyGap = (game.difficulty == Difficulty.hard ? 0.28 : 0.35) * (phase3 ? 0.8 : 1.0);
+      final cycle = (game.difficulty == Difficulty.hard ? 2.4 : 3.0) * (phase3 ? 0.78 : 1.0);
       if (phase2VolleyCount > 0) {
         if (phase2Timer >= volleyGap) {
           phase2Timer = 0;
@@ -7444,7 +7520,7 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
         }
       } else if (phase2Timer >= cycle && !retreating) {
         phase2Timer = 0;
-        phase2VolleyCount = game.difficulty == Difficulty.hard ? 3 : 2;
+        phase2VolleyCount = phase3 ? (game.difficulty == Difficulty.hard ? 4 : 3) : (game.difficulty == Difficulty.hard ? 3 : 2);
         _startTelegraph();
       }
     }
@@ -7453,14 +7529,17 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void takeDamage(int amount) {
     // Invulnerable while escort (Boss/Knight/Plague/Blood) alive
     if (!isEcho && game.areOtherBossesAlive) return;
-    currentHp -= amount;
+    if (currentHp <= 0) return;
+    currentHp = max(0, currentHp - amount);
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFFD700));
-    if (phase == 1 && currentHp <= phaseHp) {
-      phase = 2;
+    final nextPhase = _bossPhaseForHealth(currentHp, maxHp);
+    if (nextPhase > phase && currentHp > 0) {
+      phase = nextPhase;
       phase2Timer = 0;
-      game.triggerCinemaZoom();
-      game.triggerShake(power: 12, time: 0.35);
+      phase2VolleyCount = 0;
+      telegraphing = false;
+      _announceBossPhase(game, position, phase);
     }
     if (currentHp <= 0) {
       final pos = position.clone();
@@ -7577,13 +7656,20 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
   }
 
   void takeDamage(int amount) {
-    currentHp -= amount;
+    if (currentHp <= 0) return;
+    currentHp = max(0, currentHp - amount);
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFF8BC34A));
     if (hardBars > 1 && _barsLeft < _lastBar) {
       _lastBar = _barsLeft;
       game.triggerCinemaZoom();
-      phase = 2;
+    }
+    final nextPhase = _bossPhaseForHealth(currentHp, maxHp);
+    if (nextPhase > phase && currentHp > 0) {
+      phase = nextPhase;
+      attackTimer = 0;
+      telegraphing = false;
+      _announceBossPhase(game, position, phase);
     }
     if (currentHp <= 0) {
       final pos = position.clone();
@@ -7604,7 +7690,7 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.8;
-    attackMode = Random().nextInt(phase == 2 ? 3 : 2);
+    attackMode = Random().nextInt(phase == 1 ? 2 : phase == 2 ? 3 : 4);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
@@ -7616,6 +7702,9 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
         break;
       case 2:
         game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 150, life: 0.8)..priority = 6);
+        break;
+      case 3:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 190, life: 0.8)..priority = 6);
         break;
     }
   }
@@ -7645,8 +7734,8 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
         break;
       case 2:
         // Summon 2 plague bearers
-        for (int i = 0; i < 2; i++) {
-          final offset = Vector2((i == 0 ? -80.0 : 80.0), 40);
+        for (int i = 0; i < (phase >= 3 ? 3 : 2); i++) {
+          final offset = Vector2(i == 0 ? -80.0 : i == 1 ? 80.0 : 0.0, 40);
           final pos = position + offset;
           if (pos.x < 100 || pos.x > game.mapWidth - 100) continue;
           game.enemiesAlive++;
@@ -7660,6 +7749,13 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
           game.world.add(e);
         }
         game.spawnDamageNumber(position, 0, color: const Color(0xFF8BC34A), label: 'ГНИЛЬ');
+        break;
+      case 3:
+        final n = game.difficulty == Difficulty.hard ? 16 : 12;
+        for (int i = 0; i < n; i++) {
+          final a = (i / n) * 2 * pi;
+          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 150)..priority = 22);
+        }
         break;
     }
     game.markBossRetreat();
@@ -7707,7 +7803,7 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
     pushOutOfWalls(58);
 
     attackTimer += dt;
-    final iv = (phase == 2 ? 1.4 : 1.9) * (isEcho ? 1.2 : 1.0);
+    final iv = (phase == 1 ? 1.9 : phase == 2 ? 1.4 : 1.05) * (isEcho ? 1.2 : 1.0);
     if (attackTimer >= iv && !retreating) {
       attackTimer = 0;
       _startTelegraph();
@@ -7751,6 +7847,7 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
 /// Blood Champion — Khorne elite: rage scales with missing HP, aggressive melee
 class BloodChampionBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final bool isEcho;
+  int phase = 1;
   late int maxHp;
   late int currentHp;
   int hardBars = 1;
@@ -7791,7 +7888,15 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
   }
 
   void takeDamage(int amount) {
-    currentHp -= amount;
+    if (currentHp <= 0) return;
+    currentHp = max(0, currentHp - amount);
+    final nextPhase = _bossPhaseForHealth(currentHp, maxHp);
+    if (nextPhase > phase && currentHp > 0) {
+      phase = nextPhase;
+      attackTimer = 0;
+      telegraphing = false;
+      _announceBossPhase(game, position, phase);
+    }
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF1744));
     if (hardBars > 1 && _barsLeft < _lastBar) {
@@ -7816,7 +7921,7 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.55 - rage * 0.15;
-    attackMode = Random().nextInt(3);
+    attackMode = Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
@@ -7828,6 +7933,12 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
         break;
       case 2:
         game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 130, life: telegraphTimer)..priority = 6);
+        break;
+      case 3:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 175, life: telegraphTimer)..priority = 6);
+        break;
+      case 4:
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 260, angle: ang, life: telegraphTimer)..priority = 6);
         break;
     }
   }
@@ -7856,6 +7967,19 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
       case 2:
         for (final a in [0.0, pi / 2, pi, 3 * pi / 2]) {
           game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 240)..priority = 22);
+        }
+        break;
+      case 3:
+        final n = game.difficulty == Difficulty.hard ? 16 : 12;
+        for (int i = 0; i < n; i++) {
+          final a = (i / n) * 2 * pi;
+          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 210)..priority = 22);
+        }
+        break;
+      case 4:
+        for (final o in [-0.55, -0.35, -0.15, 0.0, 0.15, 0.35, 0.55]) {
+          final a = atan2(toP.y, toP.x) + o;
+          game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 250)..priority = 22);
         }
         break;
     }
@@ -7905,7 +8029,7 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
     pushOutOfWalls(52);
 
     attackTimer += dt;
-    final iv = (0.7 - rage * 0.25) * (isEcho ? 1.2 : 1.0);
+    final iv = (0.7 - rage * 0.25) * (phase == 1 ? 1.0 : phase == 2 ? 0.86 : 0.72) * (isEcho ? 1.2 : 1.0);
     if (attackTimer >= iv && !retreating) {
       attackTimer = 0;
       _startTelegraph();
@@ -8010,7 +8134,7 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
 
     smartMove(
       game.player.position,
-      (phase == 1 ? 45.0 : 30.0) * hardBoost * (retreating ? 1.1 : 1.0),
+      (phase == 1 ? 45.0 : phase == 2 ? 30.0 : 38.0) * hardBoost * (retreating ? 1.1 : 1.0),
       dt,
       radius: 60,
       kite: retreating,
@@ -8025,18 +8149,11 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
         phaseTimer = 0;
         _startRingTelegraph();
       }
-      if (currentHp <= maxHp ~/ 2) {
-        phase = 2;
-        phaseTimer = 0;
-        meleeHitsLeft = game.difficulty == Difficulty.hard ? 8 : 6;
-        meleeGap = 0;
-        game.triggerCinemaZoom();
-        game.triggerShake(power: 10, time: 0.3);
-      }
     } else {
       if (meleeHitsLeft > 0) {
         meleeGap += dt;
-        if (meleeGap >= (game.difficulty == Difficulty.hard ? 0.42 : 0.55)) {
+        final gap = (game.difficulty == Difficulty.hard ? 0.42 : 0.55) * (phase >= 3 ? 0.78 : 1.0);
+        if (meleeGap >= gap) {
           meleeGap = 0;
           meleeHitsLeft--;
           game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: game.cellSize * 2.4, life: 0.35)..priority = 6);
@@ -8050,7 +8167,7 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
         phaseTimer += dt;
         if (phaseTimer >= 2.2) {
           phaseTimer = 0;
-          meleeHitsLeft = game.difficulty == Difficulty.hard ? 8 : 6;
+          meleeHitsLeft = phase >= 3 ? (game.difficulty == Difficulty.hard ? 12 : 9) : (game.difficulty == Difficulty.hard ? 8 : 6);
           meleeGap = 0;
         }
       }
@@ -8058,7 +8175,16 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
   }
 
   void takeDamage(int amount) {
-    currentHp -= amount;
+    if (currentHp <= 0) return;
+    currentHp = max(0, currentHp - amount);
+    final nextPhase = _bossPhaseForHealth(currentHp, maxHp);
+    if (nextPhase > phase && currentHp > 0) {
+      phase = nextPhase;
+      phaseTimer = 0;
+      meleeHitsLeft = phase == 2 ? (game.difficulty == Difficulty.hard ? 8 : 6) : (game.difficulty == Difficulty.hard ? 12 : 9);
+      meleeGap = 0;
+      _announceBossPhase(game, position, phase);
+    }
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: const Color(0xFF9C27B0));
     if (currentHp <= 0) {
@@ -8267,16 +8393,11 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
           _startTelegraph(Random().nextInt(2));
         }
       }
-      if (currentHp <= maxHp ~/ 2) {
-        phase = 2;
-        phaseTimer = 0;
-        game.triggerCinemaZoom();
-        game.triggerShake(power: 11, time: 0.3);
-      }
     } else {
-      if (phaseTimer >= (game.difficulty == Difficulty.hard ? 1.1 : 1.4) && !retreating) {
+      final phaseThreeInterval = phase >= 3 ? 0.78 : 1.0;
+      if (phaseTimer >= (game.difficulty == Difficulty.hard ? 1.1 : 1.4) * phaseThreeInterval && !retreating) {
         phaseTimer = 0;
-        if (Random().nextDouble() < 0.5) {
+        if (Random().nextDouble() < (phase >= 3 ? 0.68 : 0.5)) {
           chargingLaser = true;
           charge = 0;
         } else {
@@ -8287,8 +8408,16 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
   }
 
   void takeDamage(int amount) {
+    if (currentHp <= 0) return;
     if (chargingLaser && charge > 0.3) amount = (amount * 0.7).round();
-    currentHp -= amount;
+    currentHp = max(0, currentHp - amount);
+    final nextPhase = _bossPhaseForHealth(currentHp, maxHp);
+    if (nextPhase > phase && currentHp > 0) {
+      phase = nextPhase;
+      phaseTimer = 0;
+      telegraphing = false;
+      _announceBossPhase(game, position, phase);
+    }
     hurtFlash = 0.12;
     game.spawnDamageNumber(position, amount, color: const Color(0xFFFF6D00));
     if (currentHp <= 0) {
