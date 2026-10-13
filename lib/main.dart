@@ -5435,6 +5435,17 @@ class _SettingsMenuState extends State<SettingsMenu> {
               },
               child: Text(g.isPlaying ? 'В БОЙ' : 'НАЗАД'),
             ),
+            const SizedBox(height: 12),
+            const Text(
+              '1-5 left top 33s',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+            const Text(
+              '2-5 left top 33s',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
           ],
         ),
       ),
