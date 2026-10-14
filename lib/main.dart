@@ -77,6 +77,13 @@ enum RankChallenge { none, meleeBossOnly, noDash }
 enum BulletMod { normal, slow, ricochet, split }
 enum RankPerk { none, startSp, scrapBonus }
 
+/// Permanent tactical doctrine selected before deployment.
+enum CombatDoctrine { balanced, mobile, heavy, melee, bossHunter, control }
+/// Endless-arena challenge rules. All arena visuals are drawn procedurally.
+enum ArenaModifier { none, swift, armored, swarm, unstable }
+/// Deathwatch ammunition profile.
+enum AmmoDoctrine { standard, armorPiercing, incendiary, suppressive, antiWarp }
+
 /// Class-specific weapon mods (Gungeon / VS style loadout)
 enum GunBarrelMod { none, rapid, heavy }       // Xenos guns
 enum GunSightMod { none, precision, wide }
@@ -429,6 +436,45 @@ class WeaponMastery {
     }
     return m;
   }
+}
+
+extension CombatDoctrineLabel on CombatDoctrine {
+  String get labelRu => switch (this) {
+    CombatDoctrine.balanced => 'Сбалансированная',
+    CombatDoctrine.mobile => 'Мобильность',
+    CombatDoctrine.heavy => 'Тяжёлое оружие',
+    CombatDoctrine.melee => 'Ближний бой',
+    CombatDoctrine.bossHunter => 'Охотник на боссов',
+    CombatDoctrine.control => 'Контроль толпы',
+  };
+  String get descriptionRu => switch (this) {
+    CombatDoctrine.balanced => 'Без штрафов и специальных бонусов.',
+    CombatDoctrine.mobile => '+12% скорость, -6% урон.',
+    CombatDoctrine.heavy => '+12% урон, -8% скорость.',
+    CombatDoctrine.melee => '+15% ближний бой, -8% дальний бой.',
+    CombatDoctrine.bossHunter => '+8% урон всегда, +10% по боссам.',
+    CombatDoctrine.control => 'Контрольные эффекты дольше на 35%.',
+  };
+}
+
+extension ArenaModifierLabel on ArenaModifier {
+  String get labelRu => switch (this) {
+    ArenaModifier.none => 'Стандартная арена',
+    ArenaModifier.swift => 'Быстрые враги',
+    ArenaModifier.armored => 'Бронированные враги',
+    ArenaModifier.swarm => 'Рой',
+    ArenaModifier.unstable => 'Нестабильный Варп',
+  };
+}
+
+extension AmmoDoctrineLabel on AmmoDoctrine {
+  String get labelRu => switch (this) {
+    AmmoDoctrine.standard => 'Стандартные',
+    AmmoDoctrine.armorPiercing => 'Бронебойные',
+    AmmoDoctrine.incendiary => 'Зажигательные',
+    AmmoDoctrine.suppressive => 'Подавляющие',
+    AmmoDoctrine.antiWarp => 'Антиварповые',
+  };
 }
 
 class PathNode {
@@ -1595,11 +1641,20 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   String inquisitionAlignment = 'puritan';
   String specialization = 'balanced';
   String legendaryWeapon = 'none';
+  int legendaryWeaponRank = 0;
   int investigationsResolved = 0;
   int legendaryKillCounter = 0;
   int requisition = 120;
   int permanentSkillBonus = 0;
   bool artifactInvestigationResolved = false;
+  bool showSecretSignals = true;
+  CombatDoctrine combatDoctrine = CombatDoctrine.balanced;
+  AmmoDoctrine ammoDoctrine = AmmoDoctrine.standard;
+  ArenaModifier arenaModifier = ArenaModifier.none;
+  int servoSkullLevel = 0;
+  int secretBossesDefeatedTotal = 0;
+  int tacticalAchievements = 0;
+  double _servoSkullPulse = 0;
 
   /// In the endless arena, every 20 kills add another threat tier.
   int get arenaThreatTier => arenaMode ? arenaKills ~/ 20 : 0;
@@ -1707,7 +1762,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool get unlockedPowerKatana => playerClass == PlayerClass.hereticus && unlockTier11;
   bool get unlockedExecutioner => playerClass == PlayerClass.hereticus && unlockTier21;
 
-  double get worldThreat => 1.0 + overallLevel * 0.055 + skills.totalSpent * 0.02 + (currentFloor - 1) * 0.04 + (arenaMode ? arenaThreatTier * 0.12 : 0) + (warpCorruption >= 60 ? 0.08 : 0) + (warpCorruption >= 90 ? 0.12 : 0);
+  double get worldThreat => 1.0 + overallLevel * 0.055 + skills.totalSpent * 0.02 + (currentFloor - 1) * 0.04 + (arenaMode ? arenaThreatTier * 0.12 : 0) + (warpCorruption >= 60 ? 0.08 : 0) + (warpCorruption >= 90 ? 0.12 : 0) + (arenaMode && arenaModifier == ArenaModifier.armored ? 0.25 : 0) + (arenaMode && arenaModifier == ArenaModifier.unstable ? 0.10 : 0);
   double get comboMult => (1.0 + (combo.clamp(0, 12) * 0.08)).clamp(1.0, 2.0);
   bool get hasCrit => relics.contains(RelicId.crit);
   bool get hasLifesteal => relics.contains(RelicId.lifesteal);
@@ -1869,6 +1924,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (specialization == 'seer' && playerClass == PlayerClass.malleus) hpBonus += 1;
     maxHealth = (baseMaxHealth + hpBonus).clamp(3, 99);
     playerSpeed = baseSpeed + skills.speed * 12.0 + playerClass.speedMod;
+    if (combatDoctrine == CombatDoctrine.mobile) playerSpeed *= 1.12;
+    if (combatDoctrine == CombatDoctrine.heavy) playerSpeed *= 0.92;
     if (specialization == 'assassin' && playerClass == PlayerClass.hereticus) playerSpeed += 24;
     defenseChance = min(0.45, skills.defense * 0.03);
     if (specialization == 'duelist' && playerClass == PlayerClass.hereticus) defenseChance = min(0.50, defenseChance + 0.04);
@@ -1890,6 +1947,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
     attackSpeedMult = aspd;
 
+    var doctrineDamage = 1.0;
+    if (combatDoctrine == CombatDoctrine.heavy) doctrineDamage = 1.12;
+    if (combatDoctrine == CombatDoctrine.mobile) doctrineDamage = 0.94;
+    if (combatDoctrine == CombatDoctrine.bossHunter) doctrineDamage = 1.08;
     var specializationDamage = 1.0;
     if (specialization == 'executioner' && playerClass == PlayerClass.xenos) specializationDamage = 1.12;
     if (specialization == 'exorcist' && playerClass == PlayerClass.malleus) specializationDamage = 1.12;
@@ -1899,9 +1960,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (legendaryWeapon == 'sanctified') legendaryDamage = 1.08;
     if (legendaryWeapon == 'executionerBlade') legendaryDamage = 1.12;
     if (legendaryWeapon == 'warp') legendaryDamage = 1.18;
-    final dmgM = (1.0 + skills.damage * 0.06) * playerClass.dmgMod * setBonusDmg * specializationDamage * legendaryDamage;
+    final legendaryRankDamage = legendaryWeapon == 'none' ? 1.0 : 1.0 + legendaryWeaponRank * 0.04;
+    final dmgM = (1.0 + skills.damage * 0.06) * playerClass.dmgMod * setBonusDmg * specializationDamage * legendaryDamage * doctrineDamage * legendaryRankDamage;
     double rangedM = dmgM * (1 + codexRangedBonus);
     double meleeM = dmgM * (1 + codexMeleeBonus);
+    if (combatDoctrine == CombatDoctrine.melee) { rangedM *= 0.92; meleeM *= 1.15; }
 
     if (playerClass == PlayerClass.xenos) {
       if (loadout.gunBarrel == GunBarrelMod.heavy) rangedM *= 1.18;
@@ -1983,6 +2046,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int scaleDamage(int base, {bool isBoss = false, double targetHpRatio = 1.0}) {
     var d = (base * tempDmgMult).round();
     if (isBoss) d = (d * (1 + codexBossBonus)).round();
+    if (isBoss && combatDoctrine == CombatDoctrine.bossHunter) d = (d * 1.18).round();
+    if (ammoDoctrine == AmmoDoctrine.armorPiercing) d = (d * (isBoss ? 1.12 : 1.06)).round();
+    if (ammoDoctrine == AmmoDoctrine.incendiary) d = (d * 1.08).round();
+    if (ammoDoctrine == AmmoDoctrine.antiWarp) d = (d * 1.12).round();
     if (hasExecutionerMark && targetHpRatio < 0.30) d = (d * 1.20).round();
     if (tryCrit()) d *= 2;
     return d;
@@ -2505,10 +2572,18 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         inquisitionAlignment = data['alignment'] as String? ?? 'puritan';
         specialization = data['specialization'] as String? ?? 'balanced';
         legendaryWeapon = data['legendary'] as String? ?? 'none';
+        legendaryWeaponRank = ((data['legendaryWeaponRank'] as num?)?.toInt() ?? 0).clamp(0, 3);
         investigationsResolved = (data['investigations'] as num?)?.toInt() ?? 0;
         requisition = (data['requisition'] as num?)?.toInt() ?? 120;
         permanentSkillBonus = (data['permanentSkillBonus'] as num?)?.toInt() ?? 0;
         artifactInvestigationResolved = data['artifactInvestigationResolved'] as bool? ?? false;
+        showSecretSignals = data['showSecretSignals'] as bool? ?? true;
+        combatDoctrine = CombatDoctrine.values.firstWhere((e) => e.name == data['combatDoctrine'], orElse: () => CombatDoctrine.balanced);
+        ammoDoctrine = AmmoDoctrine.values.firstWhere((e) => e.name == data['ammoDoctrine'], orElse: () => AmmoDoctrine.standard);
+        arenaModifier = ArenaModifier.values.firstWhere((e) => e.name == data['arenaModifier'], orElse: () => ArenaModifier.none);
+        servoSkullLevel = ((data['servoSkullLevel'] as num?)?.toInt() ?? 0).clamp(0, 3);
+        secretBossesDefeatedTotal = (data['secretBossesDefeatedTotal'] as num?)?.toInt() ?? 0;
+        tacticalAchievements = (data['tacticalAchievements'] as num?)?.toInt() ?? 0;
       }
     } catch (_) {}
   }
@@ -2530,9 +2605,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('inquisition_expansion', jsonEncode({
         'arsenal': arsenalUpgrade, 'shrine': shrineUpgrade, 'archive': archiveUpgrade, 'medicae': medicaeUpgrade,
-        'alignment': inquisitionAlignment, 'specialization': specialization, 'legendary': legendaryWeapon,
+        'alignment': inquisitionAlignment, 'specialization': specialization, 'legendary': legendaryWeapon, 'legendaryWeaponRank': legendaryWeaponRank,
         'investigations': investigationsResolved, 'requisition': requisition,
         'permanentSkillBonus': permanentSkillBonus, 'artifactInvestigationResolved': artifactInvestigationResolved,
+        'showSecretSignals': showSecretSignals, 'combatDoctrine': combatDoctrine.name, 'ammoDoctrine': ammoDoctrine.name,
+        'arenaModifier': arenaModifier.name, 'servoSkullLevel': servoSkullLevel,
+        'secretBossesDefeatedTotal': secretBossesDefeatedTotal, 'tacticalAchievements': tacticalAchievements,
       }));
     } catch (_) {}
   }
@@ -2547,9 +2625,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       await prefs.setString('weapon_mastery', jsonEncode(mastery.toJson()));
       await prefs.setString('inquisition_expansion', jsonEncode({
         'arsenal': arsenalUpgrade, 'shrine': shrineUpgrade, 'archive': archiveUpgrade, 'medicae': medicaeUpgrade,
-        'alignment': inquisitionAlignment, 'specialization': specialization, 'legendary': legendaryWeapon,
+        'alignment': inquisitionAlignment, 'specialization': specialization, 'legendary': legendaryWeapon, 'legendaryWeaponRank': legendaryWeaponRank,
         'investigations': investigationsResolved, 'requisition': requisition,
         'permanentSkillBonus': permanentSkillBonus, 'artifactInvestigationResolved': artifactInvestigationResolved,
+        'showSecretSignals': showSecretSignals, 'combatDoctrine': combatDoctrine.name, 'ammoDoctrine': ammoDoctrine.name,
+        'arenaModifier': arenaModifier.name, 'servoSkullLevel': servoSkullLevel,
+        'secretBossesDefeatedTotal': secretBossesDefeatedTotal, 'tacticalAchievements': tacticalAchievements,
       }));
     } catch (_) {}
   }
@@ -2810,7 +2891,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
 
     final wallColor = Color.lerp(const Color(0xFF5D4037), const Color(0xFF3E2723), ((currentFloor - 1) % 5) / 4)!;
-    world.add(Floor(size: Vector2(mapWidth, mapHeight)));
+    world.add(Floor(size: Vector2(mapWidth, mapHeight), biome: currentFloor + (warpCorruption >= 60 ? 3 : 0)));
     world.add(Wall(position: Vector2(0, 0), size: Vector2(mapWidth, 70), color: wallColor));
     world.add(Wall(position: Vector2(0, mapHeight - 70), size: Vector2(mapWidth, 70), color: wallColor));
     world.add(Wall(position: Vector2(0, 0), size: Vector2(70, mapHeight), color: wallColor));
@@ -3080,7 +3161,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     portalSpawned = false;
     isBossLevel = false;
     isMiniBossLevel = false;
-    world.add(Floor(size: Vector2(mapWidth, mapHeight)));
+    world.add(Floor(size: Vector2(mapWidth, mapHeight), biome: 4));
     final wallColor = const Color(0xFF4A148C);
     world.add(Wall(position: Vector2(0, 0), size: Vector2(mapWidth, 70), color: wallColor));
     world.add(Wall(position: Vector2(0, mapHeight - 70), size: Vector2(mapWidth, 70), color: wallColor));
@@ -3088,6 +3169,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     world.add(Wall(position: Vector2(mapWidth - 70, 0), size: Vector2(70, mapHeight), color: wallColor));
     world.add(PlayerSpawnPoint(position: playerSpawnPos));
     enemiesToSpawn = 6 + arenaWave + (difficulty == Difficulty.hard ? 2 : 0);
+    if (arenaModifier == ArenaModifier.swarm) enemiesToSpawn = (enemiesToSpawn * 1.45).round();
     enemiesAlive = enemiesToSpawn;
     enemiesSpawned = 0;
     spawnTimer = 0.3;
@@ -3260,6 +3342,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (arenaMode) {
       arenaKills++;
       if (arenaKills % 20 == 0) {
+        tacticalAchievements++;
+        persistExpansion();
         spawnDamageNumber(at ?? player.position, 0, color: const Color(0xFFFF5252), label: 'УГРОЗА ${arenaThreatTier + 1}');
         triggerShake(power: 5, time: 0.18);
       }
@@ -3280,6 +3364,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case EnemyType.bloodletter: unlockCodex(CodexId.bloodletter); break;
       }
     }
+    if (isBoss) { tacticalAchievements++; if (tacticalAchievements % 3 == 0) requisition += 5; persistExpansion(); }
     score += ((isBoss ? 200 : (isChampion ? 80 : 20)) * comboMult).round();
     if (legendaryWeapon != 'none') {
       legendaryKillCounter++;
@@ -3331,6 +3416,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       if (enemiesAlive <= 0 && enemiesSpawned >= enemiesToSpawn) {
         arenaWave++;
         enemiesToSpawn = 6 + arenaWave + (difficulty == Difficulty.hard ? 2 : 0);
+        if (arenaModifier == ArenaModifier.swarm) enemiesToSpawn = (enemiesToSpawn * 1.45).round();
         enemiesAlive = enemiesToSpawn;
         spawnInterval = max(0.18, 0.9 - arenaWave * 0.02 - arenaThreatTier * 0.006);
         spawnTimer = 0.15;
@@ -3363,6 +3449,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void onSecretBossKilled({required bool cyclops}) {
     secretBossDefeated = true;
+    secretBossesDefeatedTotal++;
+    tacticalAchievements++;
+    persistExpansion();
     score += 6666;
     scraps += 20;
     skillPoints += 1;
@@ -3408,6 +3497,24 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         warpCorruption = min(100, warpCorruption + 1);
         if (warpCorruption == 60 || warpCorruption == 90) {
           spawnDamageNumber(player.position, 0, color: const Color(0xFFCE93D8), label: 'ВАРП: $warpCorruption%');
+        }
+      }
+    }
+
+    if (servoSkullLevel > 0 && isPlaying && !isPaused) {
+      _servoSkullPulse += dt;
+      if (_servoSkullPulse >= max(0.55, 1.65 - servoSkullLevel * 0.25)) {
+        _servoSkullPulse = 0;
+        Enemy? target;
+        var best = 250.0 + servoSkullLevel * 55.0;
+        for (final e in world.children.whereType<Enemy>()) {
+          final d = e.position.distanceTo(player.position);
+          if (d < best) { best = d; target = e; }
+        }
+        if (target != null) {
+          target.applyDamage(1 + servoSkullLevel);
+          if (servoSkullLevel >= 2) target.applyStatus(StatusType.slow, 0.45, tickDamage: 0);
+          spawnDamageNumber(target.position, 1 + servoSkullLevel, color: const Color(0xFF80DEEA), label: 'ЧЕРЕП');
         }
       }
     }
@@ -3474,10 +3581,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
     if (!secretBossSpawned && !secretBossUnlockedThisLevel) {
       final inCorner = player.position.x < 140 && player.position.y < 140;
-      final needLevel = (currentLevel == 5 && currentFloor == 1) || (currentLevel == 5 && currentFloor == 2);
+      final needLevel = overallLevel == 5 || overallLevel == 10;
       if (needLevel && inCorner && countLivingHostiles() <= 0) {
         cornerStandTimer += dt;
-        if (cornerStandTimer >= 33) _spawnSecretBoss(cyclops: currentFloor == 2);
+        if (cornerStandTimer >= 33) _spawnSecretBoss(cyclops: overallLevel == 10);
       } else {
         cornerStandTimer = 0;
       }
@@ -3520,7 +3627,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         : '';
     final lines = [
       'Этаж $currentFloor/$maxFloors • $nodeLabel  $hp  Очки:$score  Обл:$scraps$heatBar$warpBar',
-      if (arenaMode) 'АРЕНА W$arenaWave • Убито:$arenaKills • Угроза ${arenaThreatTier + 1} • ${difficulty.labelRu}',
+      if (arenaMode) 'АРЕНА W$arenaWave • Убито:$arenaKills • Угроза ${arenaThreatTier + 1} • ${difficulty.labelRu} • ${arenaModifier.labelRu}',
+      'Доктрина: ${combatDoctrine.labelRu} • Боеприпасы: ${ammoDoctrine.labelRu}',
       if (isSurvivalNode && !arenaMode) 'ЗАДАНИЕ: ВЫЖИВАНИЕ • ВОЛНА x2',
       if (!arenaMode && warpCorruption >= 25) 'Порча Варпа: $warpCorruption%${warpCorruption >= 60 ? ' • Враги усилены' : ''}',
       if (combo >= 2) 'COMBO x$combo',
@@ -4219,11 +4327,26 @@ class PlayerSpawnPoint extends PositionComponent {
 }
 
 class Floor extends PositionComponent {
-  Floor({required Vector2 size}) : super(size: size, position: Vector2.zero(), priority: 0);
+  final int biome;
+  Floor({required Vector2 size, this.biome = 0}) : super(size: size, position: Vector2.zero(), priority: 0);
   @override
   void render(Canvas canvas) {
-    canvas.drawRect(size.toRect(), Paint()..color = const Color(0xFFB0BEC5));
-    final grid = Paint()..color = const Color(0xFF90A4AE)..strokeWidth = 1;
+    final base = switch (biome % 5) {
+      0 => const Color(0xFFB0BEC5),
+      1 => const Color(0xFF263238),
+      2 => const Color(0xFF3E2723),
+      3 => const Color(0xFF1B2635),
+      _ => const Color(0xFF30243A),
+    };
+    final gridColor = switch (biome % 5) {
+      0 => const Color(0xFF90A4AE),
+      1 => const Color(0xFF455A64),
+      2 => const Color(0xFF5D4037),
+      3 => const Color(0xFF37474F),
+      _ => const Color(0xFF5E35B1),
+    };
+    canvas.drawRect(size.toRect(), Paint()..color = base);
+    final grid = Paint()..color = gridColor..strokeWidth = 1;
     for (double x = 0; x < size.x; x += 60) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.y), grid);
     }
@@ -5358,6 +5481,17 @@ class _InquisitionHubMenuState extends State<InquisitionHubMenu> {
             _upgradeTile('Святилище', 'Уровень ${g.shrineUpgrade}/5 • лечение в начале забега', 'shrine', g.shrineUpgrade, inRun),
             _upgradeTile('Архив дознаний', 'Уровень ${g.archiveUpgrade}/5 • дополнительные очки навыка', 'archive', g.archiveUpgrade, inRun),
             _upgradeTile('Медикаэ', 'Уровень ${g.medicaeUpgrade}/5 • дополнительный максимум здоровья', 'medicae', g.medicaeUpgrade, inRun),
+            Card(color: const Color(0xFF171717), child: ListTile(
+              title: const Text('Сервочереп-разведчик', style: TextStyle(color: Colors.white)),
+              subtitle: Text('Уровень ${g.servoSkullLevel}/3 • каждый уровень усиливает автоматическую поддержку. Стоимость следующего: ${(g.servoSkullLevel + 1) * 45} реквизиции.', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              trailing: ElevatedButton(
+                onPressed: inRun || g.servoSkullLevel >= 3 || g.requisition < (g.servoSkullLevel + 1) * 45 ? null : () async {
+                  final cost = (g.servoSkullLevel + 1) * 45;
+                  g.requisition -= cost; g.servoSkullLevel++; await g.persistExpansion(); if (mounted) setState(() {});
+                },
+                child: const Text('УЛУЧШИТЬ'),
+              ),
+            )),
             const Divider(color: Colors.white24),
             const Text('СПЕЦИАЛИЗАЦИЯ ОРДО', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
             Wrap(spacing: 6, runSpacing: 6, children: [
@@ -5370,6 +5504,12 @@ class _InquisitionHubMenuState extends State<InquisitionHubMenu> {
               _choice('Дуэлянт', 'duelist', g.specialization),
             ]),
             const SizedBox(height: 12),
+            const Text('ТАКТИЧЕСКАЯ ДОКТРИНА', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+            Wrap(spacing: 6, runSpacing: 6, children: CombatDoctrine.values.map((d) => ChoiceChip(
+              label: Text(d.labelRu, style: const TextStyle(fontSize: 11)), selected: g.combatDoctrine == d,
+              onSelected: inRun ? null : (_) async { g.combatDoctrine = d; g.recomputeStats(); await g.persistExpansion(); if (mounted) setState(() {}); },
+            )).toList()),
+            const SizedBox(height: 12),
             const Text('ЛЕГЕНДАРНОЕ ОРУЖИЕ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
             const Text('Выбери реликтовую настройку. Бонус урона действует на все оружие; это мета-прогрессия, не замена существующим модам.', style: TextStyle(color: Colors.white54, fontSize: 12)),
             Wrap(spacing: 6, runSpacing: 6, children: [
@@ -5379,6 +5519,17 @@ class _InquisitionHubMenuState extends State<InquisitionHubMenu> {
               _choice('Клинок палача', 'executionerBlade', g.legendaryWeapon),
               _choice('Варп-резонатор', 'warp', g.legendaryWeapon),
             ]),
+            Card(color: const Color(0xFF171717), child: ListTile(
+              title: Text('Пробуждение реликвии ${g.legendaryWeaponRank}/3', style: const TextStyle(color: Colors.white)),
+              subtitle: Text(g.legendaryWeapon == 'none' ? 'Сначала выбери легендарное оружие.' : 'Каждый ранг даёт +4% урона. Стоимость: ${(g.legendaryWeaponRank + 1) * 80} реквизиции.', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              trailing: ElevatedButton(
+                onPressed: inRun || g.legendaryWeapon == 'none' || g.legendaryWeaponRank >= 3 || g.requisition < (g.legendaryWeaponRank + 1) * 80 ? null : () async {
+                  final cost = (g.legendaryWeaponRank + 1) * 80;
+                  g.requisition -= cost; g.legendaryWeaponRank++; g.recomputeStats(); await g.persistExpansion(); if (mounted) setState(() {});
+                },
+                child: const Text('ПРОБУДИТЬ'),
+              ),
+            )),
             const Divider(color: Colors.white24),
             const Text('ДОЗНАНИЕ: КСЕНО-АРТЕФАКТ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
             Text(g.artifactInvestigationResolved ? 'Артефакт уже исследован. Решение сохранено между забегами.' : 'Пуританский путь: уничтожить артефакт — снизить порчу и получить постоянное очко навыка. Радикальный путь: изучить его — получить реквизицию и рискнуть разумом.', style: TextStyle(color: Colors.white70, fontSize: 12)),
@@ -5705,17 +5856,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     }
                   : null,
             ),
-            const SizedBox(height: 12),
-            const Text(
-              '1-5 left top 33s',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white38, fontSize: 12),
-            ),
-            const Text(
-              '2-5 left top 33s',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white38, fontSize: 12),
-            ),
             const Text('ЦВЕТА', style: TextStyle(color: Color(0xFFFFD700))),
             Slider(value: c.armorHue.toDouble(), min: 0, max: 360, activeColor: c.armorColor(0.4), onChanged: (v) => setState(() => c.armorHue = v.round())),
             Slider(value: c.capeHue.toDouble(), min: 0, max: 360, activeColor: c.capeColor(0.4), onChanged: (v) => setState(() => c.capeHue = v.round())),
@@ -5739,6 +5879,55 @@ class _SettingsMenuState extends State<SettingsMenu> {
                 child: const Text('ВЫХОД'),
               ),
             ],
+            const Divider(color: Colors.white24),
+            const Text('БОЕВАЯ ДОКТРИНА', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+            DropdownButtonFormField<CombatDoctrine>(
+              value: g.combatDoctrine,
+              dropdownColor: const Color(0xFF171717),
+              decoration: const InputDecoration(labelText: 'Тактическая подготовка', labelStyle: TextStyle(color: Colors.white70)),
+              items: CombatDoctrine.values.map((d) => DropdownMenuItem(value: d, child: Text('${d.labelRu} — ${d.descriptionRu}', style: const TextStyle(color: Colors.white, fontSize: 12)))).toList(),
+              onChanged: g.isPlaying ? null : (v) { if (v == null) return; setState(() { g.combatDoctrine = v; g.recomputeStats(); }); g.persistExpansion(); },
+            ),
+            DropdownButtonFormField<AmmoDoctrine>(
+              value: g.ammoDoctrine,
+              dropdownColor: const Color(0xFF171717),
+              decoration: const InputDecoration(labelText: 'Боеприпасы Deathwatch', labelStyle: TextStyle(color: Colors.white70)),
+              items: AmmoDoctrine.values.map((a) => DropdownMenuItem(value: a, child: Text(a.labelRu, style: const TextStyle(color: Colors.white)))).toList(),
+              onChanged: g.isPlaying ? null : (v) { if (v == null) return; setState(() => g.ammoDoctrine = v); g.persistExpansion(); },
+            ),
+            DropdownButtonFormField<ArenaModifier>(
+              value: g.arenaModifier,
+              dropdownColor: const Color(0xFF171717),
+              decoration: const InputDecoration(labelText: 'Модификатор бесконечной арены', labelStyle: TextStyle(color: Colors.white70)),
+              items: ArenaModifier.values.map((a) => DropdownMenuItem(value: a, child: Text(a.labelRu, style: const TextStyle(color: Colors.white)))).toList(),
+              onChanged: g.isPlaying ? null : (v) { if (v == null) return; setState(() => g.arenaModifier = v); g.persistExpansion(); },
+            ),
+            ListTile(
+              title: const Text('Сервочереп-разведчик', style: TextStyle(color: Colors.white)),
+              subtitle: Text('Уровень ${g.servoSkullLevel}/3 • автоматические выстрелы по ближайшим врагам. Улучшается за реквизицию на базе Инквизиции.', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              trailing: Text('${g.servoSkullLevel}/3', style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+            ),
+            const Divider(color: Colors.white24),
+            SwitchListTile(
+              title: const Text('Показывать секретные сигналы', style: TextStyle(color: Colors.white)),
+              subtitle: const Text('Подсказки не раскрывают условия полностью.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+              value: g.showSecretSignals,
+              activeColor: const Color(0xFFFFD700),
+              onChanged: (v) { setState(() => g.showSecretSignals = v); g.persistExpansion(); },
+            ),
+            if (g.showSecretSignals)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                decoration: BoxDecoration(color: const Color(0xFF101411), border: Border.all(color: const Color(0xFF536B50)), borderRadius: BorderRadius.circular(6)),
+                child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('1-5 left top 33s', style: TextStyle(color: Color(0xFF9DBB91), fontFamily: 'monospace', fontSize: 14, letterSpacing: 1.0)),
+                  SizedBox(height: 5),
+                  Text('2-5 left top 33s', style: TextStyle(color: Color(0xFF9DBB91), fontFamily: 'monospace', fontSize: 14, letterSpacing: 1.0)),
+                ]),
+              ),
+            const SizedBox(height: 8),
+            Text('Секретные боссы побеждены: ${g.secretBossesDefeatedTotal} • Тактические достижения: ${g.tacticalAchievements}', style: const TextStyle(color: Colors.white38, fontSize: 11), textAlign: TextAlign.center),
             ElevatedButton(
               onPressed: () {
                 g.playClick();
@@ -6770,6 +6959,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     };
     if (isChampion) s *= 1.12;
     if (game.arenaMode) s *= min(1.8, 1.0 + game.arenaThreatTier * 0.025);
+    if (game.arenaMode && game.arenaModifier == ArenaModifier.swift) s *= 1.22;
     if (affix == EliteAffix.swift) s *= 1.35;
     if (statuses.any((e) => e.type == StatusType.slow || e.type == StatusType.plague)) s *= 0.6;
     return s;
@@ -6778,6 +6968,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   bool get isShielded => type == EnemyType.shielded || type == EnemyType.shieldedShooter;
 
   void applyStatus(StatusType t, double dur, {int tickDamage = 1}) {
+    if (game.combatDoctrine == CombatDoctrine.control && (t == StatusType.slow || t == StatusType.burn || t == StatusType.plague)) dur *= 1.35;
     final ex = statuses.where((e) => e.type == t).toList();
     if (ex.isNotEmpty) {
       ex.first.remaining = max(ex.first.remaining, dur);
@@ -6788,7 +6979,11 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
 
   void applyDamage(int amount, {bool fromStatus = false}) {
     var dmg = amount;
-    if (isShielded && !fromStatus) {
+    if (!fromStatus && game.ammoDoctrine == AmmoDoctrine.antiWarp &&
+        (type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter)) {
+      dmg = (dmg * 1.25).round();
+    }
+    if (isShielded && !fromStatus && game.ammoDoctrine != AmmoDoctrine.armorPiercing) {
       final pierce = game.hasShieldPierce || game.codexShieldBonus > 0;
       if (!pierce && !game.usingMelee) {
         dmg = max(1, (dmg * (0.25 + game.codexShieldBonus)).round());
@@ -6801,6 +6996,8 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       game.spawnDamageNumber(position, 0, color: const Color(0xFFE040FB), label: 'F');
     }
     currentHp -= dmg;
+    if (!fromStatus && game.ammoDoctrine == AmmoDoctrine.incendiary) applyStatus(StatusType.burn, 2.0, tickDamage: 1);
+    if (!fromStatus && game.ammoDoctrine == AmmoDoctrine.suppressive) applyStatus(StatusType.slow, game.combatDoctrine == CombatDoctrine.control ? 2.1 : 1.55, tickDamage: 0);
     hurtFlash = 0.12;
     final fromDir = (position - game.player.position).normalized();
     game.spawnDamageNumber(position, dmg);
@@ -6916,7 +7113,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
 
   void _doAttack(double dist) {
     final toP = (game.player.position - position).normalized();
-    final dmg = (1 * game.difficulty.dmgMult * (game.arenaMode ? (1.0 + game.arenaThreatTier * 0.08) : 1.0)).ceil();
+    var incomingMult = game.arenaMode ? (1.0 + game.arenaThreatTier * 0.08) : 1.0;
+    if (game.arenaMode && game.arenaModifier == ArenaModifier.unstable) incomingMult *= 1.15;
+    final dmg = (1 * game.difficulty.dmgMult * incomingMult).ceil();
     switch (type) {
       case EnemyType.shooter:
       case EnemyType.shieldedShooter:
