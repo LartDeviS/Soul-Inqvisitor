@@ -1810,6 +1810,17 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   double buttonSize = 42;
   double currentZoom = 0.85;
 
+  // User-configurable mobile control layout. Values are logical-pixel edge margins.
+  double moveJoystickLeft = 52;
+  double moveJoystickBottom = 52;
+  double attackJoystickRight = 52;
+  double attackJoystickBottom = 52;
+  double abilityClusterLeft = 32;
+  double abilityClusterBottom = 160;
+  double weaponButtonRight = 52;
+  double weaponButtonBottom = 160;
+  final List<HudLabel> _controlHudLabels = [];
+
   bool soundEnabled = true;
   bool musicEnabled = true;
   double soundVolume = 0.8;
@@ -2637,6 +2648,21 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   Future<void> loadPersistedData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      // A damaged control-layout preference must never prevent campaign saves from loading.
+      try {
+        final layoutJson = prefs.getString('control_layout');
+        if (layoutJson != null) {
+          final layout = Map<String, dynamic>.from(jsonDecode(layoutJson) as Map);
+          moveJoystickLeft = ((layout['moveLeft'] as num?)?.toDouble() ?? 52).clamp(0, 220).toDouble();
+          moveJoystickBottom = ((layout['moveBottom'] as num?)?.toDouble() ?? 52).clamp(0, 260).toDouble();
+          attackJoystickRight = ((layout['attackRight'] as num?)?.toDouble() ?? 52).clamp(0, 220).toDouble();
+          attackJoystickBottom = ((layout['attackBottom'] as num?)?.toDouble() ?? 52).clamp(0, 260).toDouble();
+          abilityClusterLeft = ((layout['abilityLeft'] as num?)?.toDouble() ?? 32).clamp(0, 240).toDouble();
+          abilityClusterBottom = ((layout['abilityBottom'] as num?)?.toDouble() ?? 160).clamp(100, 360).toDouble();
+          weaponButtonRight = ((layout['weaponRight'] as num?)?.toDouble() ?? 52).clamp(0, 220).toDouble();
+          weaponButtonBottom = ((layout['weaponBottom'] as num?)?.toDouble() ?? 160).clamp(100, 360).toDouble();
+        }
+      } catch (_) {}
       final hs = prefs.getString('high_scores');
       if (hs != null) {
         highScores = (jsonDecode(hs) as List)
@@ -2756,6 +2782,70 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('game_saves', jsonEncode(saves.map((e) => e.toJson()).toList()));
     } catch (_) {}
+  }
+
+  Future<void> deleteSave(GameSave save) async {
+    saves.remove(save);
+    await _persistSaves();
+  }
+
+  Future<void> persistControlLayout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('control_layout', jsonEncode({
+        'moveLeft': moveJoystickLeft,
+        'moveBottom': moveJoystickBottom,
+        'attackRight': attackJoystickRight,
+        'attackBottom': attackJoystickBottom,
+        'abilityLeft': abilityClusterLeft,
+        'abilityBottom': abilityClusterBottom,
+        'weaponRight': weaponButtonRight,
+        'weaponBottom': weaponButtonBottom,
+      }));
+    } catch (_) {}
+  }
+
+  void applyControlLayout() {
+    // Settings can also be opened from the main menu, before HUD components exist.
+    if (!isPlaying) return;
+    // Flame HUD components read margins when laying out; update them live where possible.
+    if (moveJoystick.isMounted) {
+      moveJoystick.margin = EdgeInsets.only(left: moveJoystickLeft, bottom: moveJoystickBottom);
+    }
+    if (attackJoystick.isMounted) {
+      attackJoystick.margin = EdgeInsets.only(right: attackJoystickRight, bottom: attackJoystickBottom);
+    }
+    if (switchWeaponButton.isMounted) {
+      switchWeaponButton.margin = EdgeInsets.only(right: weaponButtonRight, bottom: weaponButtonBottom);
+    }
+    if (dashButton != null && dashButton!.isMounted) {
+      dashButton!.margin = EdgeInsets.only(left: abilityClusterLeft, bottom: abilityClusterBottom);
+    }
+    if (laserButton != null && laserButton!.isMounted) {
+      laserButton!.margin = EdgeInsets.only(left: abilityClusterLeft + buttonSize * 1.35, bottom: abilityClusterBottom);
+    }
+    if (artifactButton != null && artifactButton!.isMounted) {
+      artifactButton!.margin = EdgeInsets.only(left: abilityClusterLeft + buttonSize * 2.7, bottom: abilityClusterBottom);
+    }
+    if (warpResetButton != null && warpResetButton!.isMounted) {
+      warpResetButton!.margin = EdgeInsets.only(left: abilityClusterLeft + buttonSize * 4.05, bottom: abilityClusterBottom);
+    }
+    for (final label in _controlHudLabels) {
+      switch (label.text) {
+        case 'M': label.updateMargin(EdgeInsets.only(left: moveJoystickLeft + 30, bottom: moveJoystickBottom + 30)); break;
+        case 'F': label.updateMargin(EdgeInsets.only(right: attackJoystickRight + 30, bottom: attackJoystickBottom + 30)); break;
+        case 'A': label.updateMargin(EdgeInsets.only(right: weaponButtonRight + 10, bottom: weaponButtonBottom + 10)); break;
+        case 'U': label.updateMargin(EdgeInsets.only(left: abilityClusterLeft + 10, bottom: abilityClusterBottom + 10)); break;
+        case 'L': label.updateMargin(EdgeInsets.only(left: abilityClusterLeft + buttonSize * 1.35 + 10, bottom: abilityClusterBottom + 10)); break;
+        case 'R': label.updateMargin(EdgeInsets.only(left: abilityClusterLeft + buttonSize * 2.7 + 10, bottom: abilityClusterBottom + 10)); break;
+        case 'Ψ': label.updateMargin(EdgeInsets.only(left: abilityClusterLeft + buttonSize * 4.05 + 10, bottom: abilityClusterBottom + 10)); break;
+      }
+    }
+  }
+
+  void _addControlLabel(HudLabel label) {
+    _controlHudLabels.add(label);
+    camera.viewport.add(label);
   }
 
   int _currentPlaySeconds() {
@@ -3175,17 +3265,17 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     moveJoystick = JoystickComponent(
       knob: CircleComponent(radius: joystickSize * 0.35, paint: Paint()..color = Colors.white54),
       background: CircleComponent(radius: joystickSize * 0.55, paint: Paint()..color = Colors.white24),
-      margin: const EdgeInsets.only(left: 28, bottom: 28),
+      margin: EdgeInsets.only(left: moveJoystickLeft, bottom: moveJoystickBottom),
     );
     attackJoystick = JoystickComponent(
       knob: CircleComponent(radius: joystickSize * 0.35, paint: Paint()..color = const Color(0xFFFF5252).withOpacity(0.8)),
       background: CircleComponent(radius: joystickSize * 0.55, paint: Paint()..color = const Color(0xFFFF5252).withOpacity(0.25)),
-      margin: const EdgeInsets.only(right: 28, bottom: 28),
+      margin: EdgeInsets.only(right: attackJoystickRight, bottom: attackJoystickBottom),
     );
     switchWeaponButton = HudButtonComponent(
       button: CircleComponent(radius: buttonSize * 0.55, paint: Paint()..color = const Color(0xFFB8860B)),
       buttonDown: CircleComponent(radius: buttonSize * 0.55, paint: Paint()..color = const Color(0xFFFFD700)),
-      margin: const EdgeInsets.only(right: 28, bottom: 150),
+      margin: EdgeInsets.only(right: weaponButtonRight, bottom: weaponButtonBottom),
       onPressed: () {
         usingMelee = !usingMelee;
         recomputeStats();
@@ -3234,13 +3324,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     camera.viewport.add(backpackButton);
     camera.viewport.add(zoomInButton);
     camera.viewport.add(zoomOutButton);
-    camera.viewport.add(HudLabel(text: 'M', margin: const EdgeInsets.only(left: 58, bottom: 58)));
-    camera.viewport.add(HudLabel(text: 'F', margin: const EdgeInsets.only(right: 58, bottom: 58)));
-    camera.viewport.add(HudLabel(text: 'A', margin: const EdgeInsets.only(right: 38, bottom: 162)));
-    camera.viewport.add(HudLabel(text: 'S', margin: const EdgeInsets.only(right: 22, top: 22)));
-    camera.viewport.add(HudLabel(text: 'B', margin: const EdgeInsets.only(right: 74, top: 22)));
-    camera.viewport.add(HudLabel(text: '+', margin: const EdgeInsets.only(left: 22, top: 22)));
-    camera.viewport.add(HudLabel(text: '-', margin: const EdgeInsets.only(left: 66, top: 22)));
+    _addControlLabel(HudLabel(text: 'M', margin: EdgeInsets.only(left: moveJoystickLeft + 30, bottom: moveJoystickBottom + 30)));
+    _addControlLabel(HudLabel(text: 'F', margin: EdgeInsets.only(right: attackJoystickRight + 30, bottom: attackJoystickBottom + 30)));
+    _addControlLabel(HudLabel(text: 'A', margin: EdgeInsets.only(right: weaponButtonRight + 10, bottom: weaponButtonBottom + 10)));
+    _addControlLabel(HudLabel(text: 'S', margin: const EdgeInsets.only(right: 22, top: 22)));
+    _addControlLabel(HudLabel(text: 'B', margin: const EdgeInsets.only(right: 74, top: 22)));
+    _addControlLabel(HudLabel(text: '+', margin: const EdgeInsets.only(left: 22, top: 22)));
+    _addControlLabel(HudLabel(text: '-', margin: const EdgeInsets.only(left: 66, top: 22)));
     // Attack joystick cooldown ring overlay
     camera.viewport.add(AttackCooldownRing()..priority = 199);
     _ensureDashButton();
@@ -3328,44 +3418,44 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (!hasDashAbility || dashButton != null) return;
     dashButton = HudButtonComponent(
       button: CircleComponent(radius: buttonSize * 0.45, paint: Paint()..color = const Color(0xFF00838F)),
-      margin: const EdgeInsets.only(right: 116, top: 12),
+      margin: EdgeInsets.only(left: abilityClusterLeft, bottom: abilityClusterBottom),
       onPressed: activateDash,
     );
     camera.viewport.add(dashButton!);
-    camera.viewport.add(HudLabel(text: 'U', margin: const EdgeInsets.only(right: 126, top: 22)));
+    _addControlLabel(HudLabel(text: 'U', margin: EdgeInsets.only(left: abilityClusterLeft + 10, bottom: abilityClusterBottom + 10)));
   }
 
   void _ensureLaserButton() {
     if (!hasLaserAbility || laserButton != null) return;
     laserButton = HudButtonComponent(
       button: CircleComponent(radius: buttonSize * 0.45, paint: Paint()..color = const Color(0xFFE65100)),
-      margin: const EdgeInsets.only(right: 168, top: 12),
+      margin: EdgeInsets.only(left: abilityClusterLeft + buttonSize * 1.35, bottom: abilityClusterBottom),
       onPressed: activateLaser,
     );
     camera.viewport.add(laserButton!);
-    camera.viewport.add(HudLabel(text: 'L', margin: const EdgeInsets.only(right: 178, top: 22)));
+    _addControlLabel(HudLabel(text: 'L', margin: EdgeInsets.only(left: abilityClusterLeft + buttonSize * 1.35 + 10, bottom: abilityClusterBottom + 10)));
   }
 
   void _ensureArtifactButton() {
     if (artifactButton != null) return;
     artifactButton = HudButtonComponent(
       button: CircleComponent(radius: buttonSize * 0.45, paint: Paint()..color = const Color(0xFFBF360C)),
-      margin: const EdgeInsets.only(right: 220, top: 12),
+      margin: EdgeInsets.only(left: abilityClusterLeft + buttonSize * 2.7, bottom: abilityClusterBottom),
       onPressed: activateArtifact,
     );
     camera.viewport.add(artifactButton!);
-    camera.viewport.add(HudLabel(text: 'R', margin: const EdgeInsets.only(right: 230, top: 22)));
+    _addControlLabel(HudLabel(text: 'R', margin: EdgeInsets.only(left: abilityClusterLeft + buttonSize * 2.7 + 10, bottom: abilityClusterBottom + 10)));
   }
 
   void _ensureWarpResetButton() {
     if (playerClass != PlayerClass.malleus || warpResetButton != null) return;
     warpResetButton = HudButtonComponent(
       button: CircleComponent(radius: buttonSize * 0.42, paint: Paint()..color = const Color(0xFF7C4DFF)),
-      margin: const EdgeInsets.only(right: 272, top: 12),
+      margin: EdgeInsets.only(left: abilityClusterLeft + buttonSize * 4.05, bottom: abilityClusterBottom),
       onPressed: () => resetWarpStress(),
     );
     camera.viewport.add(warpResetButton!);
-    camera.viewport.add(HudLabel(text: 'Ψ', margin: const EdgeInsets.only(right: 282, top: 22)));
+    _addControlLabel(HudLabel(text: 'Ψ', margin: EdgeInsets.only(left: abilityClusterLeft + buttonSize * 4.05 + 10, bottom: abilityClusterBottom + 10)));
   }
 
   void activateDash() {
@@ -3770,7 +3860,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         onPressed: goNextLevel,
       );
       camera.viewport.add(portalButton!);
-      camera.viewport.add(HudLabel(text: 'P', margin: const EdgeInsets.only(bottom: 210)));
+      _addControlLabel(HudLabel(text: 'P', margin: const EdgeInsets.only(bottom: 210)));
     } else if (!nearPortal && portalButton != null) {
       portalButton!.removeFromParent();
       portalButton = null;
@@ -3782,6 +3872,19 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     super.render(canvas);
     if (!isPlaying) return;
     final hp = '${player.health}/${player.maxHealth}';
+    final double hpRatio = player.maxHealth <= 0 ? 0.0 : (player.health / player.maxHealth).clamp(0.0, 1.0).toDouble();
+    final hpColor = hpRatio <= 0.25 ? const Color(0xFFFF5252) : hpRatio <= 0.5 ? const Color(0xFFFFC107) : const Color(0xFF76FF03);
+    final hpText = TextPainter(
+      text: TextSpan(text: 'ЖИЗНЬ  $hp', style: TextStyle(color: hpColor, fontSize: 16, fontWeight: FontWeight.bold, shadows: const [Shadow(color: Colors.black, blurRadius: 5)])),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final hpCenterX = (size.x - hpText.width) / 2;
+    final hpY = size.y - 54;
+    final hpBarWidth = min(190.0, max(112.0, size.x * 0.34));
+    final hpBarRect = Rect.fromLTWH((size.x - hpBarWidth) / 2, size.y - 29, hpBarWidth, 7);
+    canvas.drawRRect(RRect.fromRectAndRadius(hpBarRect, const Radius.circular(4)), Paint()..color = const Color(0xCC151515));
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(hpBarRect.left, hpBarRect.top, hpBarWidth * hpRatio, hpBarRect.height), const Radius.circular(4)), Paint()..color = hpColor);
+    hpText.paint(canvas, Offset(hpCenterX, hpY));
     final nodeLabel = floorPath.isNotEmpty && pathIndex < floorPath.length
         ? floorPath[pathIndex].label
         : 'Ур.$currentLevel';
@@ -3792,7 +3895,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         ? ' Ψ${(staffWarpStress * 100).toInt()}%'
         : '';
     final lines = [
-      'Этаж $currentFloor/$maxFloors • $nodeLabel  $hp  Очки:$score  Обл:$scraps$heatBar$warpBar',
+      'Этаж $currentFloor/$maxFloors • $nodeLabel  Очки:$score  Обл:$scraps$heatBar$warpBar',
       if (arenaMode) 'АРЕНА W$arenaWave • Убито:$arenaKills • Угроза ${arenaThreatTier + 1} • ${difficulty.labelRu} • ${arenaModifier.labelRu}',
       'Доктрина: ${combatDoctrine.labelRu} • Боеприпасы: ${ammoDoctrine.labelRu}',
       if (!arenaMode) 'ПРИКАЗ: ${activeContract.labelRu} • ${contractProgress.clamp(0, contractTarget)}/$contractTarget${contractClaimed ? ' ✓' : ''}',
@@ -4114,6 +4217,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     camera.viewport.children.toList().forEach((c) {
       if (c is! CameraComponent) c.removeFromParent();
     });
+    _controlHudLabels.clear();
   }
 
   void openSettings() {
@@ -4332,17 +4436,23 @@ class EventMerchantProp extends PositionComponent with HasGameReference<Inquisit
 
 class HudLabel extends PositionComponent with HasGameReference<InquisitorGame> {
   final String text;
-  final EdgeInsets margin;
+  EdgeInsets margin;
   HudLabel({required this.text, required this.margin}) : super(priority: 200);
+
+  void updateMargin(EdgeInsets value) {
+    margin = value;
+    final screen = game.size;
+    double x = margin.left, y = margin.top;
+    if (margin.right > 0) x = screen.x - margin.right - 12;
+    if (margin.bottom > 0) y = screen.y - margin.bottom - 12;
+    if (margin.left == 0 && margin.right == 0) x = screen.x / 2 - 6;
+    position = Vector2(x, y);
+  }
+
   @override
   void onMount() {
     super.onMount();
-    final size = game.size;
-    double x = margin.left, y = margin.top;
-    if (margin.right > 0) x = size.x - margin.right - 12;
-    if (margin.bottom > 0) y = size.y - margin.bottom - 12;
-    if (margin.left == 0 && margin.right == 0) x = size.x / 2 - 6;
-    position = Vector2(x, y);
+    updateMargin(margin);
   }
   @override
   void render(Canvas canvas) {
@@ -5884,11 +5994,20 @@ class _MP extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-class LoadSaveMenu extends StatelessWidget {
+class LoadSaveMenu extends StatefulWidget {
   final InquisitorGame game;
   const LoadSaveMenu(this.game, {super.key});
+
+  @override
+  State<LoadSaveMenu> createState() => _LoadSaveMenuState();
+}
+
+class _LoadSaveMenuState extends State<LoadSaveMenu> {
+  bool _busy = false;
+
   @override
   Widget build(BuildContext context) {
+    final game = widget.game;
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -5901,21 +6020,31 @@ class LoadSaveMenu extends StatelessWidget {
                   : ListView.builder(
                       itemCount: game.saves.length,
                       itemBuilder: (_, i) {
-                        final s = game.saves[i];
+                        final save = game.saves[i];
                         return Card(
                           color: const Color(0xFF1A1A1A),
                           child: ListTile(
-                            title: Text(s.name, style: const TextStyle(color: Color(0xFFFFD700))),
-                            subtitle: Text('${s.playerClass} • F${s.floor}/${s.difficulty} • ${s.dateStr}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                            onTap: () {
+                            title: Text(save.name, style: const TextStyle(color: Color(0xFFFFD700))),
+                            subtitle: Text('${save.playerClass} • F${save.floor}/${save.difficulty} • ${save.dateStr}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                            onTap: _busy ? null : () {
                               game.playClick();
-                              game.loadSave(s);
+                              game.loadSave(save);
                             },
+                            trailing: IconButton(
+                              tooltip: 'Удалить сохранение',
+                              icon: const Icon(Icons.delete_outline, color: Color(0xFFFF5252)),
+                              onPressed: _busy ? null : () => _confirmDelete(save),
+                            ),
                           ),
                         );
                       },
                     ),
             ),
+            if (game.saves.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text('Сохранений: ${game.saves.length}/8. Удаление не затрагивает рекорды и постоянные улучшения.', style: const TextStyle(color: Colors.white38, fontSize: 11), textAlign: TextAlign.center),
+              ),
             ElevatedButton(
               onPressed: () {
                 game.overlays.remove('loadSave');
@@ -5927,6 +6056,25 @@ class LoadSaveMenu extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(GameSave save) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF171717),
+        title: const Text('Удалить сохранение?', style: TextStyle(color: Color(0xFFFFD700))),
+        content: Text('Будет удалён забег «${save.name}» (этаж ${save.floor}, уровень ${save.level}). Это действие нельзя отменить.', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('ОТМЕНА')),
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('УДАЛИТЬ', style: TextStyle(color: Color(0xFFFF5252)))),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    await widget.game.deleteSave(save);
+    if (mounted) setState(() => _busy = false);
   }
 }
 
@@ -5998,6 +6146,26 @@ class _SettingsMenuState extends State<SettingsMenu> {
             Slider(value: g.joystickSize, min: 55, max: 120, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.joystickSize = v)),
             Text('Кнопки ${g.buttonSize.toInt()}', style: const TextStyle(color: Colors.white)),
             Slider(value: g.buttonSize, min: 28, max: 65, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.buttonSize = v)),
+            const Divider(color: Colors.white24),
+            const Text('РАСКЛАДКА УПРАВЛЕНИЯ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+            const Text('Положение джойстиков и ряда способностей сохраняется для следующих матчей.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            Text('Движение: отступ слева ${g.moveJoystickLeft.toInt()}', style: const TextStyle(color: Colors.white)),
+            Slider(value: g.moveJoystickLeft, min: 0, max: 180, activeColor: const Color(0xFFFFD700), onChanged: (v) { setState(() => g.moveJoystickLeft = v); g.applyControlLayout(); }, onChangeEnd: (_) => g.persistControlLayout()),
+            Text('Движение: отступ снизу ${g.moveJoystickBottom.toInt()}', style: const TextStyle(color: Colors.white)),
+            Slider(value: g.moveJoystickBottom, min: 0, max: 180, activeColor: const Color(0xFFFFD700), onChanged: (v) { setState(() => g.moveJoystickBottom = v); g.applyControlLayout(); }, onChangeEnd: (_) => g.persistControlLayout()),
+            Text('Стрельба: отступ справа ${g.attackJoystickRight.toInt()}', style: const TextStyle(color: Colors.white)),
+            Slider(value: g.attackJoystickRight, min: 0, max: 180, activeColor: const Color(0xFFFFD700), onChanged: (v) { setState(() => g.attackJoystickRight = v); g.applyControlLayout(); }, onChangeEnd: (_) => g.persistControlLayout()),
+            Text('Стрельба: отступ снизу ${g.attackJoystickBottom.toInt()}', style: const TextStyle(color: Colors.white)),
+            Slider(value: g.attackJoystickBottom, min: 0, max: 180, activeColor: const Color(0xFFFFD700), onChanged: (v) { setState(() => g.attackJoystickBottom = v); g.applyControlLayout(); }, onChangeEnd: (_) => g.persistControlLayout()),
+            Text('Способности: отступ слева ${g.abilityClusterLeft.toInt()}', style: const TextStyle(color: Colors.white)),
+            Slider(value: g.abilityClusterLeft, min: 0, max: 160, activeColor: const Color(0xFFFFD700), onChanged: (v) { setState(() => g.abilityClusterLeft = v); g.applyControlLayout(); }, onChangeEnd: (_) => g.persistControlLayout()),
+            Text('Способности: высота ${g.abilityClusterBottom.toInt()}', style: const TextStyle(color: Colors.white)),
+            Slider(value: g.abilityClusterBottom, min: 100, max: 320, activeColor: const Color(0xFFFFD700), onChanged: (v) { setState(() => g.abilityClusterBottom = v); g.applyControlLayout(); }, onChangeEnd: (_) => g.persistControlLayout()),
+            Text('Смена оружия: отступ справа ${g.weaponButtonRight.toInt()}', style: const TextStyle(color: Colors.white)),
+            Slider(value: g.weaponButtonRight, min: 0, max: 180, activeColor: const Color(0xFFFFD700), onChanged: (v) { setState(() => g.weaponButtonRight = v); g.applyControlLayout(); }, onChangeEnd: (_) => g.persistControlLayout()),
+            Text('Смена оружия: высота ${g.weaponButtonBottom.toInt()}', style: const TextStyle(color: Colors.white)),
+            Slider(value: g.weaponButtonBottom, min: 100, max: 320, activeColor: const Color(0xFFFFD700), onChanged: (v) { setState(() => g.weaponButtonBottom = v); g.applyControlLayout(); }, onChangeEnd: (_) => g.persistControlLayout()),
+            Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: () { setState(() { g.moveJoystickLeft = 52; g.moveJoystickBottom = 52; g.attackJoystickRight = 52; g.attackJoystickBottom = 52; g.abilityClusterLeft = 32; g.abilityClusterBottom = 160; g.weaponButtonRight = 52; g.weaponButtonBottom = 160; }); g.applyControlLayout(); g.persistControlLayout(); }, child: const Text('СБРОСИТЬ РАСКЛАДКУ'))),
             SwitchListTile(title: const Text('Звуки', style: TextStyle(color: Colors.white)), value: g.soundEnabled, activeColor: const Color(0xFFFFD700), onChanged: (v) => setState(() => g.soundEnabled = v)),
             SwitchListTile(
               title: const Text('Музыка', style: TextStyle(color: Colors.white)),
