@@ -28,6 +28,7 @@ void main() {
           'shop': (c, g) => ShopMenu(g as InquisitorGame),
           'victory': (c, g) => VictoryMenu(g as InquisitorGame),
           'records': (c, g) => RecordsMenu(g as InquisitorGame),
+          'achievements': (c, g) => AchievementsMenu(g as InquisitorGame),
           'backpack': (c, g) => BackpackMenu(g as InquisitorGame),
           'loadSave': (c, g) => LoadSaveMenu(g as InquisitorGame),
           'codex': (c, g) => CodexMenu(g as InquisitorGame),
@@ -6559,6 +6560,95 @@ class _InquisitionHubMenuState extends State<InquisitionHubMenu> {
   );
 }
 
+class AchievementsMenu extends StatefulWidget {
+  final InquisitorGame game;
+  const AchievementsMenu(this.game, {super.key});
+  @override
+  State<AchievementsMenu> createState() => _AchievementsMenuState();
+}
+
+class _AchievementsMenuState extends State<AchievementsMenu> {
+  @override
+  Widget build(BuildContext context) {
+    final g = widget.game;
+    final wins = g.inquisitionRank.wins;
+    final achievements = <_AchievementEntry>[
+      _AchievementEntry('Первое досье', 'Открыть хотя бы одну запись Кодекса.', Icons.menu_book, g.codexUnlocked.isNotEmpty, 'ЗНАНИЕ'),
+      _AchievementEntry('Охотник за реликвиями', 'Получить первую реликвию.', Icons.auto_awesome, g.relics.isNotEmpty, 'РЕЛИКВИЯ'),
+      _AchievementEntry('Полевой специалист', 'Найти или сохранить предмет в полевом инвентаре.', Icons.backpack, g.fieldInventory.isNotEmpty, 'СНАБЖЕНИЕ'),
+      _AchievementEntry('Мастер оружия', 'Достичь 10 отметок мастерства хотя бы с одним типом оружия.', Icons.gps_fixed, ['bolter','staff','sword','katana'].any((k) => g.mastery.getCount(k) >= 10), 'МАСТЕРСТВО'),
+      _AchievementEntry('Инквизиторский чин', 'Одержать первую победу в операции.', Icons.military_tech, wins >= 1, 'СЛУЖБА'),
+      _AchievementEntry('Ветеран крестового похода', 'Одержать 10 побед.', Icons.shield, wins >= 10, 'СЛУЖБА'),
+      _AchievementEntry('Глубокое проникновение', 'Достичь третьего этажа операции.', Icons.stairs, g.currentFloor >= 3, 'ИССЛЕДОВАНИЕ'),
+      _AchievementEntry('Архивариус', 'Открыть пять записей Кодекса.', Icons.library_books, g.codexUnlocked.length >= 5, 'ЗНАНИЕ'),
+      _AchievementEntry('Реликварий', 'Собрать три разные реликвии.', Icons.workspace_premium, g.relics.length >= 3, 'РЕЛИКВИЯ'),
+      _AchievementEntry('Служитель трёх Ордо', 'Испытать все три доктрины персонажа.', Icons.account_balance, g.inquisitionRank.rank >= 3, 'ДОКТРИНА'),
+      _AchievementEntry('Операция повышенной угрозы', 'Завершить операцию повышенной угрозы.', Icons.warning_amber, g.highThreatOperation && wins >= 1, 'ИСПЫТАНИЕ'),
+      _AchievementEntry('Кузнец арсенала', 'Накопить 100 обломков.', Icons.build, g.scraps >= 100, 'АРСЕНАЛ'),
+      _AchievementEntry('Голос снабжения', 'Активировать полевой терминал.', Icons.terminal, g.terminalsActivated >= 1, 'ОПЕРАЦИЯ'),
+      _AchievementEntry('Снабженец', 'Открыть три тайника снабжения.', Icons.inventory_2, g.supplyCachesOpened >= 3, 'ОПЕРАЦИЯ'),
+      _AchievementEntry('Контракт исполнен', 'Завершить первый тактический контракт.', Icons.assignment_turned_in, g.contractsCompleted >= 1, 'СЛУЖБА'),
+      _AchievementEntry('Контрактор', 'Завершить пять тактических контрактов.', Icons.fact_check, g.contractsCompleted >= 5, 'СЛУЖБА'),
+      _AchievementEntry('Следопыт глубин', 'Добраться до пятого этажа операции.', Icons.travel_explore, g.currentFloor >= 5, 'ИССЛЕДОВАНИЕ'),
+      _AchievementEntry('Охотник на секреты', 'Победить секретного босса.', Icons.visibility, g.secretBossesDefeatedTotal >= 1, 'ИСПЫТАНИЕ'),
+      _AchievementEntry('Арена очищена', 'Устранить 100 противников на арене.', Icons.sports_martial_arts, g.arenaKills >= 100, 'ИСПЫТАНИЕ'),
+      _AchievementEntry('Тактический арсенал', 'Установить три тактических модификации.', Icons.tune, g.tacticalMods.length >= 3, 'АРСЕНАЛ'),
+      _AchievementEntry('Проверка на прочность', 'Начать операцию повышенной угрозы.', Icons.warning, g.highThreatOperation && g.operationThreatLevel >= 1, 'ИСПЫТАНИЕ'),
+      _AchievementEntry('Свидетель Варпа', 'Достичь 50 очков варп-порчи.', Icons.blur_on, g.warpCorruption >= 50, 'РИСК'),
+      _AchievementEntry('Полный рюкзак', 'Увеличить вместимость рюкзака до 24 ячеек.', Icons.backpack, g.backpackCapacity >= 24, 'СНАБЖЕНИЕ'),
+    ];
+    final unlocked = achievements.where((a) => a.unlocked).length;
+    return Scaffold(
+      backgroundColor: const Color(0xFF07090C),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF11161B),
+        foregroundColor: const Color(0xFFFFD700),
+        title: const Text('ДОСТИЖЕНИЯ ИНКВИЗИЦИИ', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () { g.playClick(); g.overlays.remove('achievements'); g.overlays.add('mainMenu'); }),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF121B23), Color(0xFF050607)])),
+        child: Column(children: [
+          Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 8), child: Column(children: [
+            const Icon(Icons.workspace_premium, size: 42, color: Color(0xFFFFD700)),
+            const SizedBox(height: 6),
+            Text('ПРОТОКОЛ ЗАСЛУГ: $unlocked / ${achievements.length}', style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+            const SizedBox(height: 8),
+            ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: unlocked / achievements.length, minHeight: 7, backgroundColor: Colors.white10, valueColor: const AlwaysStoppedAnimation(Color(0xFFB8860B)))),
+            const SizedBox(height: 6),
+            const Text('Заслуги вычисляются по прогрессу профиля. Существующие сохранения не сбрасываются.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 11)),
+          ])),
+          Expanded(child: ListView.builder(padding: const EdgeInsets.fromLTRB(12, 4, 12, 18), itemCount: achievements.length, itemBuilder: (context, index) {
+            final a = achievements[index];
+            final color = a.unlocked ? const Color(0xFFFFD700) : const Color(0xFF59616A);
+            return Card(
+              color: a.unlocked ? const Color(0xFF1B1B16) : const Color(0xFF101317),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: a.unlocked ? const Color(0xFF8D7424) : const Color(0xFF293039))),
+              child: ListTile(
+                leading: Container(width: 46, height: 46, decoration: BoxDecoration(color: color.withOpacity(0.10), border: Border.all(color: color.withOpacity(0.7)), borderRadius: BorderRadius.circular(6)), child: Icon(a.unlocked ? a.icon : Icons.lock, color: color)),
+                title: Text(a.title, style: TextStyle(color: a.unlocked ? Colors.white : Colors.white60, fontWeight: FontWeight.bold)),
+                subtitle: Padding(padding: const EdgeInsets.only(top: 4), child: Text('${a.description}\n${a.category}', style: TextStyle(color: a.unlocked ? Colors.white70 : Colors.white38, fontSize: 11, height: 1.35))),
+                isThreeLine: true,
+                trailing: Icon(a.unlocked ? Icons.verified : Icons.lock_outline, color: color, size: 20),
+              ),
+            );
+          })),
+          SafeArea(top: false, child: Padding(padding: const EdgeInsets.all(12), child: SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () { g.playClick(); g.overlays.remove('achievements'); g.overlays.add('mainMenu'); }, icon: const Icon(Icons.arrow_back), label: const Text('ВЕРНУТЬСЯ В ГЛАВНОЕ МЕНЮ'), style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFFFD700), side: const BorderSide(color: Color(0xFF8D7424))))))),
+        ]),
+      ),
+    );
+  }
+}
+
+class _AchievementEntry {
+  final String title;
+  final String description;
+  final IconData icon;
+  final bool unlocked;
+  final String category;
+  const _AchievementEntry(this.title, this.description, this.icon, this.unlocked, this.category);
+}
+
 class MainMenu extends StatefulWidget {
   final InquisitorGame game;
   const MainMenu(this.game, {super.key});
@@ -6579,18 +6669,18 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
     for (int i = 0; i < 70; i++) {
       symbols.add(_MS(_rnd.nextDouble(), _rnd.nextDouble(), 0.25 + _rnd.nextDouble() * 1.2, _chars[_rnd.nextInt(_chars.length)], 0.2 + _rnd.nextDouble() * 0.7));
     }
+    // Обновляем только данные фонового эффекта. CustomPainter подписан на
+    // AnimationController и перерисовывается без перестроения всего меню.
     _controller.addListener(() {
-      setState(() {
-        for (final s in symbols) {
-          s.y += s.speed * 0.013;
-          if (s.y > 1.15) {
-            s.y = -0.1;
-            s.x = _rnd.nextDouble();
-            s.char = _chars[_rnd.nextInt(_chars.length)];
-            s.opacity = 0.2 + _rnd.nextDouble() * 0.7;
-          }
+      for (final s in symbols) {
+        s.y += s.speed * 0.013;
+        if (s.y > 1.15) {
+          s.y = -0.1;
+          s.x = _rnd.nextDouble();
+          s.char = _chars[_rnd.nextInt(_chars.length)];
+          s.opacity = 0.2 + _rnd.nextDouble() * 0.7;
         }
-      });
+      }
     });
   }
 
@@ -6607,7 +6697,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          Positioned.fill(child: CustomPaint(painter: _MP(symbols))),
+          Positioned.fill(child: CustomPaint(painter: _MP(symbols, repaint: _controller))),
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -6639,6 +6729,12 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
                 _btn('КОДЕКС', () {
                   widget.game.playClick();
                   widget.game.openCodex();
+                }),
+                const SizedBox(height: 8),
+                _btn('ДОСТИЖЕНИЯ', () {
+                  widget.game.playClick();
+                  widget.game.overlays.remove('mainMenu');
+                  widget.game.overlays.add('achievements');
                 }),
                 const SizedBox(height: 8),
                 _btn('РЕКОРДЫ', () {
@@ -6681,7 +6777,7 @@ class _MS {
 
 class _MP extends CustomPainter {
   final List<_MS> symbols;
-  _MP(this.symbols);
+  _MP(this.symbols, {super.repaint});
   @override
   void paint(Canvas canvas, Size size) {
     final tp = TextPainter(textDirection: TextDirection.ltr);
