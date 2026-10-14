@@ -61,6 +61,7 @@ enum EnemyType {
   shooter, melee, shielded, dog, shieldedShooter, flamer, sniper, brute,
   // new
   cultPsyker, plagueBearer, bloodletter,
+  orkBoy, tyranidGaunt, necronWarrior,
 }
 enum Difficulty { easy, normal, hard }
 enum PlayerClass { xenos, malleus, hereticus }
@@ -85,6 +86,42 @@ enum CombatDoctrine { balanced, mobile, heavy, melee, bossHunter, control }
 enum ArenaModifier { none, swift, armored, swarm, unstable }
 /// Deathwatch ammunition profile.
 enum AmmoDoctrine { standard, armorPiercing, incendiary, suppressive, antiWarp }
+
+enum LootRarity { common, uncommon, rare, epic, legendary }
+enum LootKind { ammunition, medicae, requisition, weaponPart, evidence, keycard, relicShard, stim, grenade, mod }
+enum TacticalConsumable { fragGrenade, stim, smoke, auspexPulse }
+enum MapLayout { cruciform, ring, corridors, chambers, openYard }
+
+extension LootRarityMeta on LootRarity {
+  String get labelRu => switch (this) {
+    LootRarity.common => 'Обычный', LootRarity.uncommon => 'Необычный',
+    LootRarity.rare => 'Редкий', LootRarity.epic => 'Эпический', LootRarity.legendary => 'Легендарный',
+  };
+  Color get color => switch (this) {
+    LootRarity.common => const Color(0xFFB0BEC5), LootRarity.uncommon => const Color(0xFF66BB6A),
+    LootRarity.rare => const Color(0xFF42A5F5), LootRarity.epic => const Color(0xFFAB47BC),
+    LootRarity.legendary => const Color(0xFFFFB300),
+  };
+}
+
+class FieldLootItem {
+  final String id;
+  final LootKind kind;
+  final LootRarity rarity;
+  final String name;
+  final int value;
+  final int floorFound;
+  final String mark;
+  FieldLootItem({required this.id, required this.kind, required this.rarity, required this.name, required this.value, required this.floorFound, this.mark = 'AQUILA'});
+  Map<String, dynamic> toJson() => {'id': id, 'kind': kind.name, 'rarity': rarity.name, 'name': name, 'value': value, 'floorFound': floorFound, 'mark': mark};
+  factory FieldLootItem.fromJson(Map<String, dynamic> j) => FieldLootItem(
+    id: j['id']?.toString() ?? 'loot-${DateTime.now().microsecondsSinceEpoch}',
+    kind: LootKind.values.firstWhere((e) => e.name == j['kind'], orElse: () => LootKind.weaponPart),
+    rarity: LootRarity.values.firstWhere((e) => e.name == j['rarity'], orElse: () => LootRarity.common),
+    name: j['name']?.toString() ?? 'Полевой предмет', value: (j['value'] as num?)?.toInt() ?? 1,
+    floorFound: (j['floorFound'] as num?)?.toInt() ?? 1, mark: j['mark']?.toString() ?? 'AQUILA',
+  );
+}
 
 /// Short tactical orders layered over existing campaign nodes; these never replace the path system.
 enum TacticalContract { purge, hunter, ritual, survivor, champion }
@@ -1898,6 +1935,33 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int contractTarget = 5;
   bool contractClaimed = false;
   int contractsCompleted = 0;
+
+  // Additive field-operations layer. Missing keys in old saves are intentionally optional.
+  final List<FieldLootItem> fieldInventory = [];
+  final Set<String> discoveredCacheIds = {};
+  final Set<String> collectedLootIds = {};
+  final Map<TacticalConsumable, int> consumables = {
+    TacticalConsumable.fragGrenade: 2, TacticalConsumable.stim: 1,
+    TacticalConsumable.smoke: 1, TacticalConsumable.auspexPulse: 1,
+  };
+  final List<String> tacticalMods = ['Armor-Seal', 'Auspex Lens', 'Recoil Servo'];
+  int backpackCapacity = 16;
+  int backpackUpgradeLevel = 0;
+  int fieldFloorIndex = 1;
+  int operationSerial = 0;
+  int operationThreatLevel = 0;
+  bool highThreatOperation = false;
+  int evacuationRoute = 0; // 0 safe, 1 rapid, 2 covert
+  int terminalsActivated = 0;
+  int supplyCachesOpened = 0;
+  int randomMissionEvents = 0;
+  double _fieldEventClock = 0;
+  MapLayout get activeMapLayout => MapLayout.values[(currentFloor * 3 + currentLevel + pathIndex) % MapLayout.values.length];
+  String get activeOrdoContract => switch (playerClass) {
+    PlayerClass.malleus => 'Ордо Маллеус: сорвать варп-ритуал и подавить демоническую угрозу',
+    PlayerClass.hereticus => 'Ордо Еретикус: выявить культистов и собрать доказательства',
+    PlayerClass.xenos => 'Ордо Ксенос: ликвидировать ксеноугрозу и добыть образцы',
+  };
   int rangedPressure = 0;
   int meleePressure = 0;
   double _riftSpawnClock = 0;
@@ -2022,7 +2086,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool get unlockedPowerKatana => playerClass == PlayerClass.hereticus && unlockTier11;
   bool get unlockedExecutioner => playerClass == PlayerClass.hereticus && unlockTier21;
 
-  double get worldThreat => 1.0 + overallLevel * 0.055 + skills.totalSpent * 0.02 + (currentFloor - 1) * 0.04 + (arenaMode ? arenaThreatTier * 0.12 : 0) + (warpCorruption >= 60 ? 0.08 : 0) + (warpCorruption >= 90 ? 0.12 : 0) + (arenaMode && arenaModifier == ArenaModifier.armored ? 0.25 : 0) + (arenaMode && arenaModifier == ArenaModifier.unstable ? 0.10 : 0);
+  double get worldThreat => 1.0 + (highThreatOperation ? operationThreatLevel * 0.045 : 0) + overallLevel * 0.055 + skills.totalSpent * 0.02 + (currentFloor - 1) * 0.04 + (arenaMode ? arenaThreatTier * 0.12 : 0) + (warpCorruption >= 60 ? 0.08 : 0) + (warpCorruption >= 90 ? 0.12 : 0) + (arenaMode && arenaModifier == ArenaModifier.armored ? 0.25 : 0) + (arenaMode && arenaModifier == ArenaModifier.unstable ? 0.10 : 0);
   double get comboMult => (1.0 + (combo.clamp(0, 12) * 0.08)).clamp(1.0, 2.0);
   bool get hasCrit => relics.contains(RelicId.crit);
   bool get hasLifesteal => relics.contains(RelicId.lifesteal);
@@ -2187,7 +2251,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (combatDoctrine == CombatDoctrine.mobile) playerSpeed *= 1.12;
     if (combatDoctrine == CombatDoctrine.heavy) playerSpeed *= 0.92;
     if (specialization == 'assassin' && playerClass == PlayerClass.hereticus) playerSpeed += 24;
-    defenseChance = min(0.45, skills.defense * 0.03);
+    defenseChance = min(0.45, skills.defense * 0.03 + (tacticalMods.contains('Armor-Seal') ? 0.025 : 0));
     if (specialization == 'duelist' && playerClass == PlayerClass.hereticus) defenseChance = min(0.50, defenseChance + 0.04);
     if (specialization == 'sentinel' && playerClass == PlayerClass.xenos) defenseChance = min(0.50, defenseChance + 0.05);
     var aspd = max(0.55, 1.0 - skills.attackSpeed * 0.04);
@@ -2205,6 +2269,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         bolterHeat > 0.7) {
       aspd *= 1.0 + bolterHeat * 0.5;
     }
+    if (tacticalMods.contains('Recoil Servo')) aspd *= 0.96;
     attackSpeedMult = aspd;
 
     var doctrineDamage = 1.0;
@@ -2225,7 +2290,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final woundSpeedPenalty = campaign.fieldWounds > 0 ? max(0.82, 1.0 - campaign.fieldWounds * 0.04) : 1.0;
     playerSpeed *= woundSpeedPenalty;
     final dmgM = (1.0 + skills.damage * 0.06) * playerClass.dmgMod * setBonusDmg * specializationDamage * legendaryDamage * doctrineDamage * legendaryRankDamage * oathDamage;
-    double rangedM = dmgM * (1 + codexRangedBonus);
+    double rangedM = dmgM * (1 + codexRangedBonus) * (tacticalMods.contains('Auspex Lens') ? 1.05 : 1.0);
     double meleeM = dmgM * (1 + codexMeleeBonus);
     if (combatDoctrine == CombatDoctrine.melee) { rangedM *= 0.92; meleeM *= 1.15; }
 
@@ -2864,6 +2929,28 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         tacticalAchievements = (data['tacticalAchievements'] as num?)?.toInt() ?? 0;
         contractsCompleted = (data['contractsCompleted'] as num?)?.toInt() ?? 0;
         if (data['campaignState'] is Map) campaign.load(Map<String, dynamic>.from(data['campaignState'] as Map));
+        fieldInventory.clear();
+        if (data['fieldInventory'] is List) {
+          for (final e in data['fieldInventory'] as List) { if (e is Map) fieldInventory.add(FieldLootItem.fromJson(Map<String, dynamic>.from(e))); }
+        }
+        collectedLootIds.clear();
+        if (data['collectedLootIds'] is List) collectedLootIds.addAll((data['collectedLootIds'] as List).map((e) => e.toString()));
+        discoveredCacheIds.clear();
+        if (data['discoveredCacheIds'] is List) discoveredCacheIds.addAll((data['discoveredCacheIds'] as List).map((e) => e.toString()));
+        backpackUpgradeLevel = ((data['backpackUpgradeLevel'] as num?)?.toInt() ?? 0).clamp(0, 3).toInt();
+        operationSerial = (data['operationSerial'] as num?)?.toInt() ?? 0;
+        if (data['tacticalMods'] is List) { tacticalMods..clear()..addAll((data['tacticalMods'] as List).map((e) => e.toString()).take(3)); }
+        backpackCapacity = 16 + backpackUpgradeLevel * 4;
+        highThreatOperation = data['highThreatOperation'] as bool? ?? false;
+        operationThreatLevel = ((data['operationThreatLevel'] as num?)?.toInt() ?? 0).clamp(0, 5);
+        evacuationRoute = ((data['evacuationRoute'] as num?)?.toInt() ?? 0).clamp(0, 2).toInt();
+        terminalsActivated = (data['terminalsActivated'] as num?)?.toInt() ?? 0;
+        supplyCachesOpened = (data['supplyCachesOpened'] as num?)?.toInt() ?? 0;
+        randomMissionEvents = (data['randomMissionEvents'] as num?)?.toInt() ?? 0;
+        if (data['consumables'] is Map) {
+          final cm = Map<String, dynamic>.from(data['consumables'] as Map);
+          for (final c in TacticalConsumable.values) { consumables[c] = ((cm[c.name] as num?)?.toInt() ?? consumables[c] ?? 0).clamp(0, 99); }
+        }
       }
     } catch (_) {}
   }
@@ -2880,6 +2967,150 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     } catch (_) {}
   }
 
+  LootRarity _rollLootRarity(Random rng) {
+    final roll = rng.nextDouble();
+    if (roll > 0.992) return LootRarity.legendary;
+    if (roll > 0.955) return LootRarity.epic;
+    if (roll > 0.84) return LootRarity.rare;
+    if (roll > 0.58) return LootRarity.uncommon;
+    return LootRarity.common;
+  }
+
+  void spawnFieldLoot(Vector2 pos, {bool secret = false, Random? random}) {
+    final rng = random ?? Random();
+    final kind = secret ? LootKind.relicShard : LootKind.values[rng.nextInt(LootKind.values.length)];
+    final rarity = secret ? (rng.nextBool() ? LootRarity.rare : LootRarity.epic) : _rollLootRarity(rng);
+    final names = <LootKind, List<String>>{
+      LootKind.ammunition: ['Болт-патроны', 'Энергокассета', 'Прометиевый заряд'],
+      LootKind.medicae: ['Медикаментозный пакет', 'Гель-аутопласт', 'Набор стабилизации'],
+      LootKind.requisition: ['Жетоны реквизиции', 'Имперские кредиты'],
+      LootKind.weaponPart: ['Деталь оружия', 'Сервопривод', 'Усиленный затвор'],
+      LootKind.evidence: ['Запись допроса', 'Культовый шифр', 'Ксенос-образец'],
+      LootKind.keycard: ['Ключ-карта доступа'], LootKind.relicShard: ['Осколок реликвии'],
+      LootKind.stim: ['Боевой стимулятор'], LootKind.grenade: ['Осколочная граната'], LootKind.mod: ['Тактический модуль'],
+    };
+    final nameList = names[kind] ?? ['Полевой предмет'];
+    final id = 'op$operationSerial-f${currentFloor}-n${pathIndex}-${pos.x.round()}-${pos.y.round()}-${kind.name}';
+    if (collectedLootIds.contains(id)) return;
+    world.add(FieldLootPickup(position: pos, item: FieldLootItem(
+      id: id, kind: kind, rarity: rarity, name: nameList[rng.nextInt(nameList.length)],
+      value: (1 + rng.nextInt(3)) * (rarity.index + 1), floorFound: currentFloor,
+      mark: playerClass == PlayerClass.malleus ? 'MALLEUS' : playerClass == PlayerClass.hereticus ? 'HERETICUS' : 'XENOS',
+    ), secret: secret)..priority = 7);
+  }
+
+  bool collectFieldLoot(FieldLootItem item, {bool secret = false}) {
+    if (collectedLootIds.contains(item.id)) return false;
+    if (fieldInventory.length >= backpackCapacity) {
+      spawnDamageNumber(player.position, 0, color: const Color(0xFFFF7043), label: 'РЮКЗАК ПОЛОН');
+      return false;
+    }
+    collectedLootIds.add(item.id);
+    fieldInventory.add(item);
+    if (secret) { discoveredCacheIds.add(item.id); supplyCachesOpened++; }
+    spawnDamageNumber(player.position, 0, color: item.rarity.color, label: '+ ${item.name}');
+    persistExpansion();
+    return true;
+  }
+
+  void salvageFieldItem(FieldLootItem item) {
+    if (!fieldInventory.remove(item)) return;
+    final gain = max(1, item.value * (item.rarity.index + 1));
+    scraps += gain;
+    requisition += item.rarity.index >= 3 ? 1 : 0;
+    spawnDamageNumber(player.position, 0, color: item.rarity.color, label: 'РАЗБОР +$gain ОБЛОМКОВ');
+    persistExpansion();
+  }
+
+  void useFieldConsumable(TacticalConsumable item) {
+    final count = consumables[item] ?? 0;
+    if (count <= 0 || !isPlaying) return;
+    consumables[item] = count - 1;
+    switch (item) {
+      case TacticalConsumable.fragGrenade:
+        world.add(KillExplosion(position: player.position.clone(), radius: 150, damage: 18 + currentFloor * 3)..priority = 12);
+        triggerShake(power: 5, time: 0.18);
+        break;
+      case TacticalConsumable.stim:
+        player.health = min(player.maxHealth, player.health + 2);
+        _hasteTimer = max(_hasteTimer, 4.0);
+        spawnDamageNumber(player.position, 0, color: const Color(0xFF80CBC4), label: 'СТИМ');
+        break;
+      case TacticalConsumable.smoke:
+        for (final e in world.children.whereType<Enemy>()) {
+          if (e.position.distanceTo(player.position) < 250) e.applyStatus(StatusType.slow, 3.0, tickDamage: 0);
+        }
+        spawnDamageNumber(player.position, 0, color: const Color(0xFFB0BEC5), label: 'ДЫМОВАЯ ЗАВЕСА');
+        break;
+      case TacticalConsumable.auspexPulse:
+        for (final e in world.children.whereType<Enemy>()) {
+          if (e.position.distanceTo(player.position) < 420) { e.suppression = min(100, e.suppression + 35); e.applyStatus(StatusType.slow, 1.5, tickDamage: 0); }
+        }
+        spawnDamageNumber(player.position, 0, color: const Color(0xFF4FC3F7), label: 'АУСПЕКС: ЦЕЛИ ПОМЕЧЕНЫ');
+        break;
+    }
+    persistExpansion();
+  }
+
+  void activateFieldTerminal() {
+    if (!isPlaying || isPaused) return;
+    terminalsActivated++;
+    requisition += 2 + currentFloor;
+    campaign.evidence++;
+    campaign.cluesFound++;
+    campaign.alarm = max(0, campaign.alarm - 5);
+    spawnDamageNumber(player.position, 0, color: const Color(0xFF4FC3F7), label: 'ТЕРМИНАЛ: ДАННЫЕ +РЕКВ.');
+    persistExpansion();
+  }
+
+  void chooseEvacuationRoute(int route) {
+    evacuationRoute = route.clamp(0, 2);
+    spawnDamageNumber(player.position, 0, color: const Color(0xFFFFD54F), label: 'МАРШРУТ ЭВАКУАЦИИ ВЫБРАН');
+    persistExpansion();
+  }
+
+  void cycleTacticalMod(int slot) {
+    const choices = ['Armor-Seal', 'Auspex Lens', 'Recoil Servo', 'Purity Seal', 'Suspensor Rig', 'Null-Field Coil'];
+    if (slot < 0 || slot >= 3) return;
+    while (tacticalMods.length < 3) { tacticalMods.add('Armor-Seal'); }
+    final current = tacticalMods[slot];
+    final idx = choices.indexOf(current);
+    tacticalMods[slot] = choices[(idx + 1) % choices.length];
+    recomputeStats();
+    persistExpansion();
+  }
+
+  void upgradeBackpack() {
+    if (backpackUpgradeLevel >= 3 || requisition < 25 + backpackUpgradeLevel * 20) return;
+    requisition -= 25 + backpackUpgradeLevel * 20;
+    backpackUpgradeLevel++;
+    backpackCapacity = 16 + backpackUpgradeLevel * 4;
+    persistExpansion();
+  }
+
+  void triggerRandomMissionEvent() {
+    randomMissionEvents++;
+    final rng = Random(currentFloor * 997 + pathIndex * 71 + randomMissionEvents);
+    switch (rng.nextInt(4)) {
+      case 0:
+        requisition += 4 + currentFloor;
+        spawnDamageNumber(player.position, 0, color: const Color(0xFFFFD54F), label: 'СБРОС СНАБЖЕНИЯ');
+        break;
+      case 1:
+        campaign.alarm = min(100, campaign.alarm + 6);
+        spawnDamageNumber(player.position, 0, color: const Color(0xFFFF7043), label: 'СИГНАЛ ТРЕВОГИ');
+        break;
+      case 2:
+        player.health = min(player.maxHealth, player.health + 1);
+        spawnDamageNumber(player.position, 0, color: const Color(0xFF80CBC4), label: 'МЕДИЦИНСКИЙ МАЯК');
+        break;
+      default:
+        spawnFieldLoot(player.position + Vector2(70, -50), random: rng);
+        spawnDamageNumber(player.position, 0, color: const Color(0xFF4FC3F7), label: 'СЛУЧАЙНАЯ НАХОДКА');
+    }
+    persistExpansion();
+  }
+
   Future<void> persistExpansion() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -2892,6 +3123,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'arenaModifier': arenaModifier.name, 'servoSkullLevel': servoSkullLevel,
         'secretBossesDefeatedTotal': secretBossesDefeatedTotal, 'tacticalAchievements': tacticalAchievements,
         'contractsCompleted': contractsCompleted,
+        'fieldInventory': fieldInventory.map((e) => e.toJson()).toList(),
+        'collectedLootIds': collectedLootIds.toList(), 'discoveredCacheIds': discoveredCacheIds.toList(),
+        'backpackUpgradeLevel': backpackUpgradeLevel, 'operationSerial': operationSerial, 'tacticalMods': tacticalMods, 'highThreatOperation': highThreatOperation,
+        'operationThreatLevel': operationThreatLevel, 'evacuationRoute': evacuationRoute,
+        'terminalsActivated': terminalsActivated, 'supplyCachesOpened': supplyCachesOpened,
+        'randomMissionEvents': randomMissionEvents, 'consumables': consumables.map((k, v) => MapEntry(k.name, v)),
         'campaignState': campaign.toJson(),
       }));
     } catch (_) {}
@@ -2914,6 +3151,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'arenaModifier': arenaModifier.name, 'servoSkullLevel': servoSkullLevel,
         'secretBossesDefeatedTotal': secretBossesDefeatedTotal, 'tacticalAchievements': tacticalAchievements,
         'contractsCompleted': contractsCompleted,
+        'fieldInventory': fieldInventory.map((e) => e.toJson()).toList(),
+        'collectedLootIds': collectedLootIds.toList(), 'discoveredCacheIds': discoveredCacheIds.toList(),
+        'backpackUpgradeLevel': backpackUpgradeLevel, 'operationSerial': operationSerial, 'tacticalMods': tacticalMods, 'highThreatOperation': highThreatOperation,
+        'operationThreatLevel': operationThreatLevel, 'evacuationRoute': evacuationRoute,
+        'terminalsActivated': terminalsActivated, 'supplyCachesOpened': supplyCachesOpened,
+        'randomMissionEvents': randomMissionEvents, 'consumables': consumables.map((k, v) => MapEntry(k.name, v)),
         'campaignState': campaign.toJson(),
       }));
     } catch (_) {}
@@ -3262,7 +3505,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
 
     final wallColor = Color.lerp(const Color(0xFF5D4037), const Color(0xFF3E2723), ((currentFloor - 1) % 5) / 4)!;
-    world.add(Floor(size: Vector2(mapWidth, mapHeight), biome: currentFloor + (warpCorruption >= 60 ? 3 : 0)));
+    world.add(Floor(size: Vector2(mapWidth, mapHeight), biome: currentFloor + (warpCorruption >= 60 ? 3 : 0), layout: activeMapLayout));
     world.add(Wall(position: Vector2(0, 0), size: Vector2(mapWidth, 70), color: wallColor));
     world.add(Wall(position: Vector2(0, mapHeight - 70), size: Vector2(mapWidth, 70), color: wallColor));
     world.add(Wall(position: Vector2(0, 0), size: Vector2(70, mapHeight), color: wallColor));
@@ -3313,6 +3556,46 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
     }
 
+    // Field loot is deterministic per mission node; the same coordinates keep stable IDs on revisits.
+    if (node != PathNodeKind.rest) {
+      final lootCount = 3 + rng.nextInt(3) + (currentFloor >= 3 ? 1 : 0);
+      for (int i = 0; i < lootCount; i++) {
+        final pos = Vector2(120 + rng.nextDouble() * (mapWidth - 240), 120 + rng.nextDouble() * (mapHeight - 240));
+        if (pos.distanceTo(playerSpawnPos) > 170) spawnFieldLoot(pos, random: rng);
+      }
+      // A rare hidden cache is placed away from the deployment zone. Its seal is procedural geometry.
+      if (rng.nextDouble() < 0.30) {
+        final pos = Vector2(180 + rng.nextDouble() * (mapWidth - 360), 180 + rng.nextDouble() * (mapHeight - 360));
+        if (pos.distanceTo(playerSpawnPos) > 280) spawnFieldLoot(pos, secret: true, random: rng);
+      }
+      // Field terminal / supply point: small rewards, no change to the existing win condition.
+      if (rng.nextDouble() < 0.38) {
+        final pos = Vector2(160 + rng.nextDouble() * (mapWidth - 320), 160 + rng.nextDouble() * (mapHeight - 320));
+        if (pos.distanceTo(playerSpawnPos) > 200) world.add(FieldTerminal(position: pos)..priority = 8);
+      }
+      if (highThreatOperation && rng.nextDouble() < 0.35) spawnFieldLoot(Vector2(mapWidth - 180, 180), secret: true, random: rng);
+    }
+
+    // Procedural layout motifs vary room density while preserving the safe spawn radius and exits.
+    final layout = activeMapLayout;
+    if (layout == MapLayout.cruciform || layout == MapLayout.ring) {
+      for (int i = 0; i < 5; i++) {
+        final x = layout == MapLayout.cruciform ? mapWidth / 2 + (i - 2) * 105 : 170 + i * 215;
+        final y = layout == MapLayout.cruciform ? 280 + i * 285 : (i.isEven ? 340.0 : mapHeight - 340.0);
+        final pos = Vector2(x, y);
+        if (pos.distanceTo(playerSpawnPos) > 210) world.add(Obstacle(position: pos)..priority = 5);
+      }
+    } else if (layout == MapLayout.corridors) {
+      for (int row = 0; row < 5; row++) {
+        final y = 240.0 + row * 300;
+        for (int col = 0; col < 3; col++) {
+          final x = 220.0 + col * 380;
+          final pos = Vector2(x, y);
+          if (pos.distanceTo(playerSpawnPos) > 190) world.add(Obstacle(position: pos)..priority = 5);
+        }
+      }
+    }
+
     // Rest node: heal + portal immediately
     if (node == PathNodeKind.rest) {
       enemiesToSpawn = 0;
@@ -3332,7 +3615,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       enemiesToSpawn++;
       enemiesSpawned++;
     } else {
-      final baseCount = 3 + currentFloor.clamp(1, 10) + currentLevel + (overallLevel ~/ 6) + (isEliteNode ? 2 : 0);
+      final baseCount = 3 + currentFloor.clamp(1, 10) + currentLevel + (overallLevel ~/ 6) + (isEliteNode ? 2 : 0) + (highThreatOperation ? 1 : 0);
       final missionCount = baseCount * (isSurvivalNode ? 2 : 1);
       enemiesToSpawn = (missionCount * (difficulty == Difficulty.hard ? 1.2 : 1.0)).ceil();
       enemiesAlive = enemiesToSpawn;
@@ -3663,8 +3946,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final f = currentFloor;
     if (f >= 6 && r < 0.08) return EnemyType.plagueBearer;
     if (f >= 5 && r < 0.14) return EnemyType.bloodletter;
-    if (f >= 4 && r < 0.20) return EnemyType.cultPsyker;
-    if (overallLevel >= 18 && r < 0.28) return EnemyType.brute;
+    if (f >= 4 && r < 0.12) return EnemyType.cultPsyker;
+    if (currentFloor >= 3 && r < 0.19) return EnemyType.necronWarrior;
+    if (currentFloor >= 2 && r < 0.27) return EnemyType.tyranidGaunt;
+    if (currentFloor >= 2 && r < 0.34) return EnemyType.orkBoy;
+    if (overallLevel >= 18 && r < 0.40) return EnemyType.brute;
     if (overallLevel >= 14 && r < 0.34) return EnemyType.sniper;
     if (overallLevel >= 12 && r < 0.42) return EnemyType.flamer;
     if (overallLevel >= 20 && r < 0.52) return EnemyType.shieldedShooter;
@@ -3681,7 +3967,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final pos = points[Random().nextInt(points.length)].clone();
     world.add(EnemySpawnPortal(position: pos)..priority = 3);
     final forceChamp = isEliteNode && enemiesSpawned < 2;
-    final isChamp = forceChamp || (overallLevel >= 5 && Random().nextDouble() < (0.08 + currentFloor * 0.015));
+    final isChamp = forceChamp || (overallLevel >= 5 && Random().nextDouble() < (0.08 + currentFloor * 0.015 + (highThreatOperation ? 0.08 : 0)));
     final affix = isChamp ? rollAffix() : EliteAffix.none;
     final e = Enemy(floor: currentFloor, type: _chooseEnemyType(), isChampion: isChamp, affix: affix);
     e.position = pos;
@@ -3749,6 +4035,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case EnemyType.cultPsyker: unlockCodex(CodexId.cultPsyker); break;
         case EnemyType.plagueBearer: unlockCodex(CodexId.plagueBearer); break;
         case EnemyType.bloodletter: unlockCodex(CodexId.bloodletter); break;
+        case EnemyType.orkBoy: unlockCodex(CodexId.brute); break;
+        case EnemyType.tyranidGaunt: unlockCodex(CodexId.dog); break;
+        case EnemyType.necronWarrior: unlockCodex(CodexId.shielded); break;
       }
     }
     if (isBoss) { tacticalAchievements++; if (tacticalAchievements % 3 == 0) requisition += 5; persistExpansion(); }
@@ -3757,11 +4046,16 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final countsForContract = switch (activeContract) {
       TacticalContract.purge => true,
       TacticalContract.hunter => isChampion || isBoss || type == EnemyType.sniper || type == EnemyType.brute,
-      TacticalContract.ritual => type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter || isBoss,
+      TacticalContract.ritual => type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter || type == EnemyType.orkBoy || type == EnemyType.tyranidGaunt || type == EnemyType.necronWarrior || isBoss,
       TacticalContract.survivor => true,
       TacticalContract.champion => isChampion || isBoss,
     };
-    if (!contractClaimed && countsForContract) {
+    final ordoContractTarget = switch (playerClass) {
+      PlayerClass.malleus => type == EnemyType.bloodletter || type == EnemyType.plagueBearer || type == EnemyType.cultPsyker || isBoss,
+      PlayerClass.hereticus => type == EnemyType.cultPsyker || type == EnemyType.shooter || type == EnemyType.flamer || type == EnemyType.sniper,
+      PlayerClass.xenos => type == EnemyType.orkBoy || type == EnemyType.tyranidGaunt || type == EnemyType.necronWarrior || type == EnemyType.brute,
+    };
+    if (!contractClaimed && (countsForContract || ordoContractTarget)) {
       contractProgress = min(contractTarget, contractProgress + 1);
       if (contractProgress >= contractTarget) {
         contractClaimed = true;
@@ -3774,7 +4068,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
     }
     // Investigation loop: unusual enemies, champions and bosses can leave actionable evidence.
-    if (!arenaMode && (isChampion || isBoss || type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter) && Random().nextDouble() < 0.34) {
+    if (!arenaMode && (isChampion || isBoss || type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter || type == EnemyType.orkBoy || type == EnemyType.tyranidGaunt || type == EnemyType.necronWarrior) && Random().nextDouble() < 0.34) {
       campaign.evidence++;
       campaign.cluesFound++;
       if (campaign.cluesFound % 3 == 0) {
@@ -3903,6 +4197,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
     bolterHeat = max(0, bolterHeat - dt * 0.18);
     missionAlarmClock += dt;
+    _fieldEventClock += dt;
+    if (!arenaMode && _fieldEventClock >= 72) { _fieldEventClock = 0; if (Random().nextDouble() < 0.48) triggerRandomMissionEvent(); }
     if (fieldMedkitCooldown > 0) fieldMedkitCooldown = max(0, fieldMedkitCooldown - dt);
     // Alarm is a soft pressure system, not a forced spawn: it raises enemy alert and is capped.
     if (!arenaMode && missionAlarmClock >= 45) {
@@ -4067,7 +4363,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         ? ' Ψ${(staffWarpStress * 100).toInt()}%'
         : '';
     final lines = [
-      'Этаж $currentFloor/$maxFloors • $nodeLabel  Очки:$score  Обл:$scraps$heatBar$warpBar',
+      'Этаж $currentFloor/$maxFloors • ${activeMapLayout.name} • $nodeLabel  Очки:$score  Обл:$scraps$heatBar$warpBar',
       if (arenaMode) 'АРЕНА W$arenaWave • Убито:$arenaKills • Угроза ${arenaThreatTier + 1} • ${difficulty.labelRu} • ${arenaModifier.labelRu}',
       'Доктрина: ${combatDoctrine.labelRu} • Боеприпасы: ${ammoDoctrine.labelRu}',
       if (oathAcceptedThisRun && !arenaMode) 'КЛЯТВА: ${playerClass.title} • Тревога ${campaign.alarm}% • Улики ${campaign.evidence} • Подозрение ${campaign.suspicion}%',
@@ -4203,6 +4499,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void showVictory() {
+    final evacReward = evacuationRoute == 0 ? 8 : evacuationRoute == 1 ? 14 : 5;
+    requisition += evacReward;
+    if (evacuationRoute == 2) campaign.suspicion = max(0, campaign.suspicion - 4);
+    if (evacuationRoute == 1) campaign.alarm = min(100, campaign.alarm + 8);
+    persistExpansion();
     isPlaying = false;
     isPaused = true;
     stopMusic();
@@ -4378,8 +4679,14 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void startNewRun() {
+    operationSerial++;
+    consumables[TacticalConsumable.fragGrenade] = 2;
+    consumables[TacticalConsumable.stim] = 1;
+    consumables[TacticalConsumable.smoke] = 1;
+    consumables[TacticalConsumable.auspexPulse] = 1;
     score = 0;
     missionAlarmClock = 0;
+    _fieldEventClock = 0;
     fieldMedkitCooldown = 0;
     scraps = inquisitionRank.startScraps + arsenalUpgrade * 5;
     warpCorruption = 0;
@@ -4418,6 +4725,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     camera.viewfinder.zoom = currentZoom;
     _clearEverything();
     _startLevel();
+    persistExpansion();
     startMusic();
   }
 
@@ -4813,9 +5121,77 @@ class PlayerSpawnPoint extends PositionComponent {
   }
 }
 
+class FieldLootPickup extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final FieldLootItem item;
+  final bool secret;
+  double pulse = 0;
+  FieldLootPickup({required Vector2 position, required this.item, this.secret = false})
+      : super(position: position, size: Vector2(38, 38), anchor: Anchor.center, priority: 7);
+  @override
+  Future<void> onLoad() async => add(CircleHitbox(radius: secret ? 22 : 16));
+  @override
+  void update(double dt) { super.update(dt); pulse += dt; }
+  @override
+  void onCollisionStart(Set<Vector2> points, PositionComponent other) {
+    super.onCollisionStart(points, other);
+    if (other is Player) {
+      if (secret && !game.discoveredCacheIds.contains(item.id) && game.scraps < 5) {
+        game.spawnDamageNumber(position, 0, color: const Color(0xFFFF7043), label: 'ЗАПЕРТО: НУЖНО 5 ОБЛОМКОВ');
+        return;
+      }
+      if (secret && !game.discoveredCacheIds.contains(item.id) && game.fieldInventory.length >= game.backpackCapacity) {
+        game.spawnDamageNumber(position, 0, color: const Color(0xFFFF7043), label: 'СНАЧАЛА ОСВОБОДИ МЕСТО');
+        return;
+      }
+      if (secret && !game.discoveredCacheIds.contains(item.id)) game.scraps -= 5;
+      if (game.collectFieldLoot(item, secret: secret)) removeFromParent();
+    }
+  }
+  @override
+  void render(Canvas canvas) {
+    final cx = size.x / 2, cy = size.y / 2;
+    final glow = 0.55 + sin(pulse * 3) * 0.18;
+    final color = secret ? const Color(0xFFFFB300) : item.rarity.color;
+    canvas.drawCircle(Offset(cx, cy), secret ? 15 : 11, Paint()..color = color.withOpacity(glow * 0.24));
+    final path = Path()..moveTo(cx, cy - 11)..lineTo(cx + 10, cy)..lineTo(cx, cy + 11)..lineTo(cx - 10, cy)..close();
+    canvas.drawPath(path, Paint()..color = const Color(0xFF101820));
+    canvas.drawPath(path, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2);
+    canvas.drawCircle(Offset(cx, cy), 3, Paint()..color = color);
+    if (secret) {
+      canvas.drawLine(Offset(cx - 5, cy - 15), Offset(cx + 5, cy - 15), Paint()..color = color..strokeWidth = 2);
+      canvas.drawLine(Offset(cx, cy - 20), Offset(cx, cy - 10), Paint()..color = color..strokeWidth = 2);
+    }
+  }
+}
+
+class FieldTerminal extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  double pulse = 0;
+  FieldTerminal({required Vector2 position}) : super(position: position, size: Vector2(46, 54), anchor: Anchor.center, priority: 8);
+  @override
+  Future<void> onLoad() async => add(CircleHitbox(radius: 22));
+  @override
+  void update(double dt) { super.update(dt); pulse += dt; }
+  @override
+  void onCollisionStart(Set<Vector2> points, PositionComponent other) {
+    super.onCollisionStart(points, other);
+    if (other is Player) { game.activateFieldTerminal(); removeFromParent(); }
+  }
+  @override
+  void render(Canvas canvas) {
+    final c = const Color(0xFF4FC3F7);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(8, 4, 30, 44), const Radius.circular(4)), Paint()..color = const Color(0xFF263238));
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(11, 7, 24, 24), const Radius.circular(2)), Paint()..color = c.withOpacity(0.18 + sin(pulse * 4).abs() * 0.25));
+    canvas.drawRect(Rect.fromLTWH(14, 10, 18, 3), Paint()..color = c);
+    canvas.drawRect(Rect.fromLTWH(14, 16, 13, 2), Paint()..color = c.withOpacity(0.8));
+    canvas.drawRect(Rect.fromLTWH(14, 21, 16, 2), Paint()..color = c.withOpacity(0.6));
+    canvas.drawLine(const Offset(23, 32), const Offset(23, 43), Paint()..color = const Color(0xFF90A4AE)..strokeWidth = 3);
+  }
+}
+
 class Floor extends PositionComponent {
   final int biome;
-  Floor({required Vector2 size, this.biome = 0}) : super(size: size, position: Vector2.zero(), priority: 0);
+  final MapLayout layout;
+  Floor({required Vector2 size, this.biome = 0, this.layout = MapLayout.chambers}) : super(size: size, position: Vector2.zero(), priority: 0);
   @override
   void render(Canvas canvas) {
     final base = switch (biome % 5) {
@@ -4839,6 +5215,36 @@ class Floor extends PositionComponent {
     }
     for (double y = 0; y < size.y; y += 60) {
       canvas.drawLine(Offset(0, y), Offset(size.x, y), grid);
+    }
+    // Architectural floor inlays are vector-only: every layout remains readable without texture assets.
+    final inlay = Paint()..color = gridColor.withOpacity(0.42)..style = PaintingStyle.stroke..strokeWidth = 3;
+    switch (layout) {
+      case MapLayout.cruciform:
+        canvas.drawRect(Rect.fromCenter(center: Offset(size.x / 2, size.y / 2), width: size.x * 0.24, height: size.y * 0.78), inlay);
+        canvas.drawRect(Rect.fromCenter(center: Offset(size.x / 2, size.y / 2), width: size.x * 0.76, height: size.y * 0.18), inlay);
+        break;
+      case MapLayout.ring:
+        canvas.drawOval(Rect.fromCenter(center: Offset(size.x / 2, size.y / 2), width: size.x * 0.72, height: size.y * 0.62), inlay);
+        canvas.drawOval(Rect.fromCenter(center: Offset(size.x / 2, size.y / 2), width: size.x * 0.48, height: size.y * 0.42), inlay);
+        break;
+      case MapLayout.corridors:
+        for (int i = 1; i < 5; i++) {
+          final x = size.x * i / 5;
+          canvas.drawLine(Offset(x, 80), Offset(x, size.y - 80), inlay);
+        }
+        break;
+      case MapLayout.chambers:
+        for (int y = 0; y < 4; y++) {
+          for (int x = 0; x < 3; x++) {
+            final r = Rect.fromLTWH(100 + x * (size.x - 300) / 3, 120 + y * (size.y - 360) / 4, size.x * 0.17, size.y * 0.11);
+            canvas.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(14)), inlay);
+          }
+        }
+        break;
+      case MapLayout.openYard:
+        canvas.drawCircle(Offset(size.x / 2, size.y / 2), min(size.x, size.y) * 0.18, inlay);
+        canvas.drawCircle(Offset(size.x / 2, size.y / 2), min(size.x, size.y) * 0.29, inlay);
+        break;
     }
   }
 }
@@ -5726,6 +6132,42 @@ class _BackpackMenuState extends State<BackpackMenu> {
                 Text('Фокус: ${lo.staffFocus.name}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
               if (g.playerClass == PlayerClass.hereticus)
                 Text('Клинок: ${lo.bladeEdge.name}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              const SizedBox(height: 8),
+              const Text('ПОЛЕВОЙ ИНВЕНТАРЬ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+              Text('Вместимость: ${g.fieldInventory.length}/${g.backpackCapacity} • Улучшение: ${g.backpackUpgradeLevel}/3', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              Text(g.activeOrdoContract, style: const TextStyle(color: Color(0xFF80CBC4), fontSize: 11)),
+              const Text('ДОСЬЕ УГРОЗ • КОДЕКС ИНКВИЗИЦИИ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 11, fontWeight: FontWeight.bold)),
+              const Text('Орки: напор и ближний бой; держать дистанцию и не давать окружить. Тираниды: быстрые атакующие волны; использовать огонь и контроль. Некроны: стойкие стрелки; бронебойные боеприпасы эффективнее. Демоны и одержимые: угроза Варпа; антиварповые профили и своевременное уклонение.', style: TextStyle(color: Colors.white54, fontSize: 10)),
+              Text('Карта: ${g.activeMapLayout.name} • Терминалы: ${g.terminalsActivated} • Тайники: ${g.supplyCachesOpened}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                OutlinedButton(onPressed: g.isPlaying ? () => setState(() => g.useFieldConsumable(TacticalConsumable.fragGrenade)) : null, child: Text('Граната (${g.consumables[TacticalConsumable.fragGrenade] ?? 0})')),
+                OutlinedButton(onPressed: g.isPlaying ? () => setState(() => g.useFieldConsumable(TacticalConsumable.stim)) : null, child: Text('Стим (${g.consumables[TacticalConsumable.stim] ?? 0})')),
+                OutlinedButton(onPressed: g.isPlaying ? () => setState(() => g.useFieldConsumable(TacticalConsumable.smoke)) : null, child: Text('Дым (${g.consumables[TacticalConsumable.smoke] ?? 0})')),
+                OutlinedButton(onPressed: g.isPlaying ? () => setState(() => g.useFieldConsumable(TacticalConsumable.auspexPulse)) : null, child: Text('Ауспекс (${g.consumables[TacticalConsumable.auspexPulse] ?? 0})')),
+              ]),
+              if (g.fieldInventory.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                ...g.fieldInventory.toList().map((item) => Card(
+                  color: const Color(0xFF15191D),
+                  child: ListTile(dense: true, leading: Icon(Icons.inventory_2, color: item.rarity.color),
+                    title: Text(item.name, style: TextStyle(color: item.rarity.color, fontSize: 12)),
+                    subtitle: Text('${item.rarity.labelRu} • этаж ${item.floorFound} • ${item.kind.name}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                    trailing: IconButton(tooltip: 'Разобрать', icon: const Icon(Icons.build, color: Colors.orangeAccent), onPressed: () => setState(() => g.salvageFieldItem(item))),
+                  ),
+                )),
+              ] else const Text('Пока ничего не найдено. Ищи контейнеры и предметы на этажах.', style: TextStyle(color: Colors.white38, fontSize: 11)),
+              Wrap(spacing: 6, children: [
+                OutlinedButton(onPressed: (!g.isPlaying || g.isPaused) ? () async { g.upgradeBackpack(); setState(() {}); } : null, child: Text('Расширить рюкзак (${25 + g.backpackUpgradeLevel * 20} рекв.)')),
+                OutlinedButton(onPressed: g.isPlaying ? () => setState(() => g.activateFieldTerminal()) : null, child: const Text('Использовать терминал')),
+              ]),
+              const Text('Тактические модули', style: TextStyle(color: Color(0xFFFFD700))),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: List.generate(3, (i) => TextButton.icon(onPressed: () => setState(() => g.cycleTacticalMod(i)), icon: const Icon(Icons.tune, size: 16), label: Text('Слот ${i + 1}: ${i < g.tacticalMods.length ? g.tacticalMods[i] : 'пусто'}'), style: TextButton.styleFrom(foregroundColor: const Color(0xFF80CBC4))))),
+              const Text('Эвакуация (вне боя)', style: TextStyle(color: Color(0xFFFFD700))),
+              Wrap(spacing: 5, children: [
+                OutlinedButton(onPressed: () { g.chooseEvacuationRoute(0); setState(() {}); }, child: Text(g.evacuationRoute == 0 ? '✓ Безопасная' : 'Безопасная')),
+                OutlinedButton(onPressed: () { g.chooseEvacuationRoute(1); setState(() {}); }, child: Text(g.evacuationRoute == 1 ? '✓ Быстрая' : 'Быстрая')),
+                OutlinedButton(onPressed: () { g.chooseEvacuationRoute(2); setState(() {}); }, child: Text(g.evacuationRoute == 2 ? '✓ Скрытная' : 'Скрытная')),
+              ]),
               if (g.relics.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 const Text('Реликвии', style: TextStyle(color: Color(0xFFFFD700))),
@@ -6480,6 +6922,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
             const Text('ИНКВИЗИТОРСКОЕ ДОСЬЕ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
             Text('Операции: ${g.campaign.operationsCompleted} • Улики: ${g.campaign.cluesFound} • Подозрение: ${g.campaign.suspicion}% • Ранения: ${g.campaign.fieldWounds}/3', style: const TextStyle(color: Colors.white70, fontSize: 12)),
             Text(g.campaign.lastReport, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+            SwitchListTile(title: const Text('Операция повышенной угрозы', style: TextStyle(color: Colors.white)), subtitle: Text('Больше элитных угроз и редких тайников; награды выше.', style: TextStyle(color: Colors.white54)), value: g.highThreatOperation, onChanged: g.isPlaying ? null : (v) { setState(() { g.highThreatOperation = v; g.operationThreatLevel = v ? 2 : 0; }); g.persistExpansion(); }),
             DropdownButtonFormField<String>(
               value: g.campaign.missionApproach,
               dropdownColor: const Color(0xFF171717),
@@ -7546,6 +7989,8 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   double hurtFlash = 0;
   double regenTimer = 0;
   bool summonerTriggered = false;
+  double suppression = 0;
+  int morale = 100;
   final List<StatusEffect> statuses = [];
 
   Enemy({
@@ -7569,6 +8014,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       EnemyType.cultPsyker => 32.0,
       EnemyType.plagueBearer => 55.0,
       EnemyType.bloodletter => 36.0,
+      EnemyType.orkBoy => 48.0,
+      EnemyType.tyranidGaunt => 22.0,
+      EnemyType.necronWarrior => 52.0,
     };
     var hp = base * game.difficulty.hpMult * game.worldThreat * (1 + floor * 0.08);
     if (isChampion) hp *= 2.2;
@@ -7591,8 +8039,13 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       EnemyType.flamer => 95.0,
       EnemyType.shielded || EnemyType.shieldedShooter => 80.0,
       EnemyType.shooter => 105.0,
+      EnemyType.orkBoy => 112.0,
+      EnemyType.tyranidGaunt => 178.0,
+      EnemyType.necronWarrior => 72.0,
     };
     if (isChampion) s *= 1.12;
+    if (suppression >= 65) s *= 0.78;
+    if (morale <= 0) s *= 0.62;
     if (!game.arenaMode) s *= 1.0 + game.campaign.alarm / 500.0 + (game.campaign.suspicion >= 75 ? 0.04 : 0.0);
     if (game.arenaMode) s *= min(1.8, 1.0 + game.arenaThreatTier * 0.025);
     if (game.arenaMode && game.arenaModifier == ArenaModifier.swift) s *= 1.22;
@@ -7619,6 +8072,14 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       else { game.rangedPressure = min(10000, game.rangedPressure + 1); }
     }
     var dmg = amount;
+    if (!fromStatus) {
+      suppression = min(100, suppression + max(5, amount * 0.8));
+      if (suppression >= 100) morale = 0;
+      else if (suppression >= 65) morale = min(morale, 35);
+      if (type == EnemyType.necronWarrior && game.ammoDoctrine == AmmoDoctrine.armorPiercing) dmg = (dmg * 1.2).round();
+      if (type == EnemyType.orkBoy && game.usingMelee) dmg = (dmg * 1.08).round();
+      if (type == EnemyType.tyranidGaunt && game.ammoDoctrine == AmmoDoctrine.incendiary) dmg = (dmg * 1.15).round();
+    }
     if (!fromStatus && game.ammoDoctrine == AmmoDoctrine.antiWarp &&
         (type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter)) {
       dmg = (dmg * 1.25).round();
@@ -7746,6 +8207,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
           EnemyType.shieldedShooter => 1.0,
           EnemyType.shooter => 0.95,
           EnemyType.shielded => 0.85,
+          EnemyType.orkBoy => 0.82,
+          EnemyType.tyranidGaunt => 0.48,
+          EnemyType.necronWarrior => 1.05,
         } *
         closeBonus /
         (isChampion ? 1.15 : 1.0);
@@ -7816,6 +8280,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       case EnemyType.dog:
       case EnemyType.brute:
       case EnemyType.shielded:
+      case EnemyType.orkBoy:
+      case EnemyType.tyranidGaunt:
+      case EnemyType.necronWarrior:
         if (dist < (type == EnemyType.brute ? 70 : 55)) {
           game.player.takeDamage(type == EnemyType.bloodletter || type == EnemyType.brute ? dmg + 1 : dmg);
           if (type == EnemyType.bloodletter) {
@@ -7883,6 +8350,18 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       case EnemyType.bloodletter:
         WHDraw.bloodletter(canvas, cx, cy, 1.05, flash: f);
         break;
+      case EnemyType.orkBoy:
+        WHDraw.brute(canvas, cx, cy, 1.02, flash: f);
+        canvas.drawCircle(Offset(cx + 9, cy - 8), 5, Paint()..color = const Color(0xFF4CAF50));
+        break;
+      case EnemyType.tyranidGaunt:
+        WHDraw.chaosHound(canvas, cx, cy, flash: f);
+        canvas.drawCircle(Offset(cx - 8, cy - 8), 4, Paint()..color = const Color(0xFF8BC34A));
+        break;
+      case EnemyType.necronWarrior:
+        WHDraw.shieldedMarine(canvas, cx, cy, 1.0, withGun: true, flash: f);
+        canvas.drawLine(Offset(cx - 10, cy + 4), Offset(cx + 10, cy + 4), Paint()..color = const Color(0xFF00E5FF)..strokeWidth = 3);
+        break;
     }
     if (isChampion) {
       WHDraw.championMark(canvas, cx, -10, affix: affix);
@@ -7890,6 +8369,10 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       canvas.drawRect(Rect.fromLTWH(cx - 22, -4, 44 * ratio, 5), Paint()..color = affix != EliteAffix.none ? affix.color : const Color(0xFFFFD700));
     }
     WHDraw.statusIcons(canvas, cx, -18, statuses);
+    if (suppression > 2) {
+      canvas.drawRect(Rect.fromLTWH(cx - 18, 5, 36, 3), Paint()..color = const Color(0xFF263238));
+      canvas.drawRect(Rect.fromLTWH(cx - 18, 5, 36 * suppression / 100, 3), Paint()..color = morale <= 0 ? const Color(0xFFEF5350) : const Color(0xFF4FC3F7));
+    }
   }
 }
 
@@ -8103,6 +8586,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   double telegraphTimer = 0;
   bool telegraphing = false;
   int attackMode = 0;
+  bool get weakSpotExposed => phase >= 2 && telegraphing;
   double hurtFlash = 0;
   final List<StatusEffect> statuses = [];
 
@@ -8134,6 +8618,10 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
 
   void takeDamage(int amount) {
     if (currentHp <= 0) return;
+    if (weakSpotExposed && amount > 0) {
+      amount = (amount * 1.22).round();
+      game.spawnDamageNumber(position + Vector2(0, -48), amount, color: const Color(0xFFFFD54F), label: 'УЯЗВИМОСТЬ');
+    }
     if (amount > 0) {
       if (game.usingMelee) { game.meleePressure = min(10000, game.meleePressure + 1); }
       else { game.rangedPressure = min(10000, game.rangedPressure + 1); }
@@ -8304,6 +8792,12 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.hereticBoss(canvas, cx, cy, 1.35, flash: hurtFlash / 0.12);
+    if (weakSpotExposed) {
+      final pulse = 0.65 + sin(game.missionAlarmClock * 9).abs() * 0.35;
+      canvas.drawCircle(Offset(cx, cy - 20), 13, Paint()..color = const Color(0xFFFF1744).withOpacity(0.18 + pulse * 0.22));
+      canvas.drawCircle(Offset(cx, cy - 20), 7, Paint()..color = const Color(0xFFFFD54F).withOpacity(pulse));
+      canvas.drawCircle(Offset(cx, cy - 20), 11, Paint()..color = const Color(0xFFFFD54F)..style = PaintingStyle.stroke..strokeWidth = 2);
+    }
     if (isEcho) {
       canvas.drawCircle(
         Offset(cx, cy),
