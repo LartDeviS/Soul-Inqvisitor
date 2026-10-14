@@ -3520,7 +3520,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       attempts++;
       final x = 140.0 + rng.nextDouble() * (mapWidth - 280);
       final y = 140.0 + rng.nextDouble() * (mapHeight - 280);
-      final pos = Vector2(x, y);
+      final pos = Vector2(x.toDouble(), y.toDouble());
       if (pos.distanceTo(playerSpawnPos) < safeRadius + 40) continue;
       if (getEnemySpawnPointsRaw().any((s) => s.distanceTo(pos) < 90)) continue;
       world.add(Obstacle(position: pos));
@@ -3581,17 +3581,17 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final layout = activeMapLayout;
     if (layout == MapLayout.cruciform || layout == MapLayout.ring) {
       for (int i = 0; i < 5; i++) {
-        final x = layout == MapLayout.cruciform ? mapWidth / 2 + (i - 2) * 105 : 170 + i * 215;
-        final y = layout == MapLayout.cruciform ? 280 + i * 285 : (i.isEven ? 340.0 : mapHeight - 340.0);
-        final pos = Vector2(x, y);
+        final x = (layout == MapLayout.cruciform ? mapWidth / 2 + (i - 2) * 105 : 170 + i * 215).toDouble();
+        final y = (layout == MapLayout.cruciform ? 280 + i * 285 : (i.isEven ? 340.0 : mapHeight - 340.0)).toDouble();
+        final pos = Vector2(x.toDouble(), y.toDouble());
         if (pos.distanceTo(playerSpawnPos) > 210) world.add(Obstacle(position: pos)..priority = 5);
       }
     } else if (layout == MapLayout.corridors) {
       for (int row = 0; row < 5; row++) {
-        final y = 240.0 + row * 300;
+        final y = (240.0 + row * 300).toDouble();
         for (int col = 0; col < 3; col++) {
-          final x = 220.0 + col * 380;
-          final pos = Vector2(x, y);
+          final x = (220.0 + col * 380).toDouble();
+          final pos = Vector2(x.toDouble(), y.toDouble());
           if (pos.distanceTo(playerSpawnPos) > 190) world.add(Obstacle(position: pos)..priority = 5);
         }
       }
@@ -4964,7 +4964,7 @@ class HudLabel extends PositionComponent with HasGameReference<InquisitorGame> {
     if (margin.right > 0) x = screen.x - margin.right - 12;
     if (margin.bottom > 0) y = screen.y - margin.bottom - 12;
     if (margin.left == 0 && margin.right == 0) x = screen.x / 2 - 6;
-    position = Vector2(x, y);
+    position = Vector2(x.toDouble(), y.toDouble());
   }
 
   @override
