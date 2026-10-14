@@ -5705,6 +5705,17 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     }
                   : null,
             ),
+            const SizedBox(height: 12),
+            const Text(
+              '1-5 left top 33s',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+            const Text(
+              '2-5 left top 33s',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
             const Text('ЦВЕТА', style: TextStyle(color: Color(0xFFFFD700))),
             Slider(value: c.armorHue.toDouble(), min: 0, max: 360, activeColor: c.armorColor(0.4), onChanged: (v) => setState(() => c.armorHue = v.round())),
             Slider(value: c.capeHue.toDouble(), min: 0, max: 360, activeColor: c.capeColor(0.4), onChanged: (v) => setState(() => c.capeHue = v.round())),
