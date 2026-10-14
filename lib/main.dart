@@ -19,6 +19,7 @@ void main() {
           'mainMenu': (c, g) => MainMenu(g as InquisitorGame),
           'nameInput': (c, g) => NameInputMenu(g as InquisitorGame),
           'classSelect': (c, g) => ClassSelectMenu(g as InquisitorGame),
+          'oathSelect': (c, g) => OathSelectionMenu(g as InquisitorGame),
           'settings': (c, g) => SettingsMenu(g as InquisitorGame),
           'gameOver': (c, g) => GameOverMenu(g as InquisitorGame),
           'levelComplete': (c, g) => LevelCompleteMenu(g as InquisitorGame),
@@ -647,6 +648,94 @@ class HighScoreEntry {
       );
 }
 
+/// Run-local narrative state. Optional fields are stored inside the existing custom JSON map,
+/// so older saves remain readable without a schema migration.
+class CampaignState {
+  int suspicion = 0; // scrutiny from the conclave (0..100)
+  int evidence = 0;
+  int fieldWounds = 0;
+  int operationsCompleted = 0;
+  int cluesFound = 0;
+  int alarm = 0;
+  int oathIntegrity = 100;
+  int alliesRecruited = 0;
+  String lastReport = 'Досье ожидает первого полевого отчёта.';
+  String missionApproach = 'balanced';
+
+  Map<String, dynamic> toJson() => {
+    'suspicion': suspicion, 'evidence': evidence, 'fieldWounds': fieldWounds,
+    'operationsCompleted': operationsCompleted, 'cluesFound': cluesFound,
+    'alarm': alarm, 'oathIntegrity': oathIntegrity, 'alliesRecruited': alliesRecruited,
+    'lastReport': lastReport, 'missionApproach': missionApproach,
+  };
+
+  void load(Map<String, dynamic>? data) {
+    if (data == null) return;
+    suspicion = ((data['suspicion'] as num?)?.toInt() ?? 0).clamp(0, 100).toInt();
+    evidence = max(0, (data['evidence'] as num?)?.toInt() ?? 0);
+    fieldWounds = ((data['fieldWounds'] as num?)?.toInt() ?? 0).clamp(0, 3).toInt();
+    operationsCompleted = max(0, (data['operationsCompleted'] as num?)?.toInt() ?? 0);
+    cluesFound = max(0, (data['cluesFound'] as num?)?.toInt() ?? 0);
+    alarm = ((data['alarm'] as num?)?.toInt() ?? 0).clamp(0, 100).toInt();
+    oathIntegrity = ((data['oathIntegrity'] as num?)?.toInt() ?? 100).clamp(0, 100).toInt();
+    alliesRecruited = max(0, (data['alliesRecruited'] as num?)?.toInt() ?? 0);
+    lastReport = data['lastReport'] as String? ?? 'Досье ожидает первого полевого отчёта.';
+    missionApproach = data['missionApproach'] as String? ?? 'balanced';
+  }
+
+  void resetForNewRun() {
+    suspicion = 0;
+    evidence = 0;
+    fieldWounds = 0;
+    operationsCompleted = 0;
+    cluesFound = 0;
+    alarm = 0;
+    oathIntegrity = 100;
+    alliesRecruited = 0;
+    lastReport = 'Клятва принята. Первичная разведка не завершена.';
+    missionApproach = 'balanced';
+  }
+}
+
+class OrdoOath {
+  final String title;
+  final String threat;
+  final String dogma;
+  final String oath;
+  final String fieldDoctrine;
+  final String bonus;
+  const OrdoOath(this.title, this.threat, this.dogma, this.oath, this.fieldDoctrine, this.bonus);
+
+  static OrdoOath forClass(PlayerClass cls) {
+    switch (cls) {
+      case PlayerClass.malleus:
+        return const OrdoOath(
+          'ORDO MALLEUS — ВРАГ ЗА ЗАВЕСОЙ', 'Демоны, варп-разломы и ритуалы призыва',
+          'Не доверяй шёпоту из-за Завесы. Изучи угрозу, укрепи печать и не дай врагу закрепиться в реальности.',
+          'Клянусь не склоняться перед ужасом Варпа. Я разорву круги призыва, запечатаю разломы и уничтожу сущность, посягнувшую на владения Императора. Если моя воля дрогнет, пусть меня судят той же мерой, что и врага.',
+          'ЭКЗОРЦИЗМ: при высокой порче варпа временно усиливается защита; опасные варп-цели раскрывают больше улик.',
+          'Полевой бонус: +8% урона демоническим и варп-целям; стабильность варпа важнее жадности.'
+        );
+      case PlayerClass.hereticus:
+        return const OrdoOath(
+          'ORDO HERETICUS — ВРАГ ВНУТРИ', 'Культы, ересь, мутации и опасные псайкеры',
+          'Ересь не всегда носит знамя. Сверяй свидетельства, ищи скрытые связи и не позволяй ложной добродетели прикрывать угрозу Империуму.',
+          'Клянусь оберегать веру Императора и вскрывать гниль под маской лояльности. Я разоблачу культ, пресеку распространение ереси и не позволю предательству укорениться среди тех, кого обязан защищать.',
+          'ДОПРОС: культисты и псайкеры чаще оставляют улики; чистое завершение операции снижает подозрение конклава.',
+          'Полевой бонус: +8% урона культистам и псайкерам; улики ценнее грубой силы.'
+        );
+      case PlayerClass.xenos:
+        return const OrdoOath(
+          'ORDO XENOS — ВРАГ СНАРУЖИ', 'Ксеносы, инфильтрация и чуждая технология',
+          'Изучай противника, чтобы предвидеть его действия, но не путай знание с верностью. Чуждая технология всегда требует контроля.',
+          'Клянусь защищать человечество от чуждых видов и их скрытого влияния. Я выявлю проникновение ксеносов, изучу тактику врага и обращу знание против него. Ни любопытство, ни выгода не станут оправданием гибели Империума.',
+          'КСЕНОПРОФИЛЬ: элитные и необычные враги чаще раскрывают тактические данные; знание противника помогает подготовке.',
+          'Полевой бонус: +8% урона элитным и бронированным целям; анализ врага открывает тактические награды.'
+        );
+    }
+  }
+}
+
 class GameSave {
   final String name;
   final int floor, level, score, health, maxHealth, scraps;
@@ -1149,6 +1238,46 @@ class WHDraw {
     );
   }
 
+  /// Procedural engraving, purity stamp and energy detail helpers; no image assets required.
+  static void puritySeal(Canvas c, Offset anchor, double scale, Color wax, Color parchment) {
+    final paper = Path()
+      ..moveTo(anchor.dx, anchor.dy)
+      ..lineTo(anchor.dx + 5 * scale, anchor.dy + 15 * scale)
+      ..lineTo(anchor.dx + 1 * scale, anchor.dy + 25 * scale)
+      ..lineTo(anchor.dx - 4 * scale, anchor.dy + 13 * scale)
+      ..close();
+    c.drawPath(paper, Paint()..color = parchment.withOpacity(0.95));
+    c.drawPath(paper, Paint()..color = const Color(0xFF6D4C41).withOpacity(0.8)..style = PaintingStyle.stroke..strokeWidth = scale);
+    c.drawCircle(anchor, 4.2 * scale, Paint()..color = wax);
+    c.drawCircle(anchor, 2.1 * scale, Paint()..color = const Color(0xFFFFD54F));
+    c.drawLine(anchor + Offset(0, 5 * scale), anchor + Offset(0, 11 * scale), Paint()..color = const Color(0xFF4E342E)..strokeWidth = scale);
+  }
+
+  static void engravedRunes(Canvas c, Offset center, double radius, Color color, double scale, {int count = 7}) {
+    final p = Paint()..color = color.withOpacity(0.75)..strokeWidth = 1.1 * scale..strokeCap = StrokeCap.square;
+    for (var i = 0; i < count; i++) {
+      final a = (i / count) * pi * 2;
+      final inner = radius * 0.72;
+      final outer = radius;
+      final start = center + Offset(cos(a) * inner, sin(a) * inner);
+      final end = center + Offset(cos(a) * outer, sin(a) * outer);
+      c.drawLine(start, end, p);
+      c.drawLine(end, end + Offset(cos(a + 0.25) * 3 * scale, sin(a + 0.25) * 3 * scale), p);
+    }
+  }
+
+  static void energyArc(Canvas c, Offset center, double radius, Color color, double phase, double scale) {
+    final path = Path();
+    for (var i = 0; i <= 12; i++) {
+      final a = phase + i / 12 * pi * 1.65;
+      final jitter = (i.isEven ? 1.0 : 0.82) * radius;
+      final pt = center + Offset(cos(a) * jitter, sin(a) * jitter);
+      if (i == 0) { path.moveTo(pt.dx, pt.dy); } else { path.lineTo(pt.dx, pt.dy); }
+    }
+    c.drawPath(path, Paint()..color = color.withOpacity(0.24)..style = PaintingStyle.stroke..strokeWidth = 5 * scale..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+    c.drawPath(path, Paint()..color = color.withOpacity(0.9)..style = PaintingStyle.stroke..strokeWidth = 1.4 * scale..strokeCap = StrokeCap.round);
+  }
+
   static void inquisitor(Canvas c, {required double cx, required double cy, double s = 1.32, double flash = 0, Customization? custom, PlayerClass cls = PlayerClass.xenos, double healthRatio = 1.0}) {
     Color armor = custom?.armorColor(0.30) ?? const Color(0xFF3A4A55);
     Color armorLite = custom?.armorColor(0.42) ?? const Color(0xFF4A5A68);
@@ -1240,6 +1369,8 @@ class WHDraw {
     c.drawLine(Offset(sealX + 3 * s, sealY + 10 * s), Offset(sealX + 7 * s, sealY + 7 * s), Paint()..color = const Color(0xFFFFE0B2)..strokeWidth = 1.4 * s);
     c.drawCircle(Offset(sealX, sealY), 3.2 * s, Paint()..color = const Color(0xFFB71C1C));
     c.drawCircle(Offset(sealX, sealY), 1.4 * s, Paint()..color = gold);
+    puritySeal(c, Offset(cx - 17 * s, cy + 10 * s), 0.62 * s, const Color(0xFF8E1515), const Color(0xFFFFE0B2));
+    engravedRunes(c, Offset(cx, cy + 4 * s), 11 * s, gold, 0.65 * s, count: cls == PlayerClass.malleus ? 9 : 6);
     // Damage grows with missing health; all marks are vector strokes, not image textures.
     final wear = (1.0 - healthRatio.clamp(0.0, 1.0)).clamp(0.0, 1.0).toDouble();
     if (wear > 0.12) {
@@ -1266,6 +1397,13 @@ class WHDraw {
       c.drawCircle(Offset(cx + 16 * s + i * 6 * s, cy - 4 * s), 2 * s, Paint()..color = const Color(0xFF212121));
     }
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 40 * s, cy - 7 * s, 22 * s, 7 * s), Radius.circular(1 * s)), Paint()..color = const Color(0xFF546E7A));
+    // Layered procedural receiver, sight, rivets and heat vents.
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx - 8 * s, cy - 5 * s, 24 * s, 10 * s), Radius.circular(1.5 * s)), Paint()..color = const Color(0xFF263238));
+    c.drawLine(Offset(cx - 5 * s, cy - 2 * s), Offset(cx + 12 * s, cy - 2 * s), Paint()..color = Colors.white.withOpacity(0.18)..strokeWidth = 1.0 * s);
+    for (var i = 0; i < 3; i++) {
+      c.drawLine(Offset(cx + (13 + i * 3) * s, cy - 3 * s), Offset(cx + (13 + i * 3) * s, cy + 3 * s), Paint()..color = const Color(0xFF90A4AE).withOpacity(0.65)..strokeWidth = 1.1 * s);
+    }
+    c.drawCircle(Offset(cx - 7 * s, cy + 1 * s), 1.4 * s, Paint()..color = const Color(0xFFFFD54F));
   }
 
   static void rifle(Canvas c, double cx, double cy, double s, {Color? accent}) {
@@ -1677,6 +1815,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   final Set<CodexId> codexUnlocked = {};
   /// times accepted knowledge (0..2)
   final Map<CodexId, int> loreRanks = {};
+  final CampaignState campaign = CampaignState();
+  bool oathAcceptedThisRun = false;
+  String activeOathName = '';
+  double missionAlarmClock = 0;
+  double fieldMedkitCooldown = 0;
   WeaponLoadout loadout = WeaponLoadout();
   ActiveArtifact activeArtifact = ActiveArtifact.fragGrenade;
   double artifactCooldown = 0;
@@ -2078,7 +2221,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (legendaryWeapon == 'executionerBlade') legendaryDamage = 1.12;
     if (legendaryWeapon == 'warp') legendaryDamage = 1.18;
     final legendaryRankDamage = legendaryWeapon == 'none' ? 1.0 : 1.0 + legendaryWeaponRank * 0.04;
-    final dmgM = (1.0 + skills.damage * 0.06) * playerClass.dmgMod * setBonusDmg * specializationDamage * legendaryDamage * doctrineDamage * legendaryRankDamage;
+    final oathDamage = oathAcceptedThisRun ? 1.04 : 1.0;
+    final woundSpeedPenalty = campaign.fieldWounds > 0 ? max(0.82, 1.0 - campaign.fieldWounds * 0.04) : 1.0;
+    playerSpeed *= woundSpeedPenalty;
+    final dmgM = (1.0 + skills.damage * 0.06) * playerClass.dmgMod * setBonusDmg * specializationDamage * legendaryDamage * doctrineDamage * legendaryRankDamage * oathDamage;
     double rangedM = dmgM * (1 + codexRangedBonus);
     double meleeM = dmgM * (1 + codexMeleeBonus);
     if (combatDoctrine == CombatDoctrine.melee) { rangedM *= 0.92; meleeM *= 1.15; }
@@ -2717,6 +2863,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         secretBossesDefeatedTotal = (data['secretBossesDefeatedTotal'] as num?)?.toInt() ?? 0;
         tacticalAchievements = (data['tacticalAchievements'] as num?)?.toInt() ?? 0;
         contractsCompleted = (data['contractsCompleted'] as num?)?.toInt() ?? 0;
+        if (data['campaignState'] is Map) campaign.load(Map<String, dynamic>.from(data['campaignState'] as Map));
       }
     } catch (_) {}
   }
@@ -2745,6 +2892,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'arenaModifier': arenaModifier.name, 'servoSkullLevel': servoSkullLevel,
         'secretBossesDefeatedTotal': secretBossesDefeatedTotal, 'tacticalAchievements': tacticalAchievements,
         'contractsCompleted': contractsCompleted,
+        'campaignState': campaign.toJson(),
       }));
     } catch (_) {}
   }
@@ -2766,6 +2914,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'arenaModifier': arenaModifier.name, 'servoSkullLevel': servoSkullLevel,
         'secretBossesDefeatedTotal': secretBossesDefeatedTotal, 'tacticalAchievements': tacticalAchievements,
         'contractsCompleted': contractsCompleted,
+        'campaignState': campaign.toJson(),
       }));
     } catch (_) {}
   }
@@ -2885,7 +3034,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       arenaKills: arenaKills,
       skillPoints: skillPoints,
       skills: skills.toJson(),
-      custom: custom.toJson(),
+      custom: {...custom.toJson(), '_campaignState': campaign.toJson(), '_oathAccepted': oathAcceptedThisRun, '_activeOathName': activeOathName},
       playerClass: playerClass.name,
       relics: relics.map((e) => e.name).toList(),
       artifact: activeArtifact.name,
@@ -2914,6 +3063,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     skills = SkillTree.fromJson(s.skills);
     skillPoints = s.skillPoints;
     custom = Customization.fromJson(s.custom);
+    campaign.load(s.custom['_campaignState'] is Map ? Map<String, dynamic>.from(s.custom['_campaignState'] as Map) : null);
+    oathAcceptedThisRun = s.custom['_oathAccepted'] as bool? ?? false;
+    activeOathName = s.custom['_activeOathName'] as String? ?? OrdoOath.forClass(PlayerClass.values.firstWhere((e) => e.name == s.playerClass, orElse: () => PlayerClass.xenos)).title;
     playerClass = PlayerClass.values.firstWhere((e) => e.name == s.playerClass, orElse: () => PlayerClass.xenos);
     relics
       ..clear()
@@ -2958,7 +3110,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     player.health = s.health.clamp(1, maxHealth);
     player.maxHealth = maxHealth;
     for (final o in [
-      'mainMenu', 'loadSave', 'settings', 'nameInput', 'classSelect', 'gameOver',
+      'mainMenu', 'loadSave', 'settings', 'nameInput', 'classSelect', 'oathSelect', 'gameOver',
       'levelComplete', 'skills', 'reward', 'shop', 'victory', 'records', 'backpack',
       'codex', 'eventAltar', 'eventMerchant', 'pathSelect', 'lorePopup', 'challengeSelect', 'rankPerk', 'inquisitionHub',
     ]) {
@@ -3621,6 +3773,16 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         persistExpansion();
       }
     }
+    // Investigation loop: unusual enemies, champions and bosses can leave actionable evidence.
+    if (!arenaMode && (isChampion || isBoss || type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter) && Random().nextDouble() < 0.34) {
+      campaign.evidence++;
+      campaign.cluesFound++;
+      if (campaign.cluesFound % 3 == 0) {
+        campaign.suspicion = max(0, campaign.suspicion - 2);
+        spawnDamageNumber(at ?? player.position, 0, color: const Color(0xFF80CBC4), label: 'УЛИКА +${campaign.evidence}');
+      }
+    }
+    if (!arenaMode && isChampion && Random().nextDouble() < 0.18) campaign.alarm = max(0, campaign.alarm - 6);
     score += ((isBoss ? 200 : (isChampion ? 80 : 20)) * comboMult).round();
     if (legendaryWeapon != 'none') {
       legendaryKillCounter++;
@@ -3740,6 +3902,16 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (!isPlaying || isPaused) return;
 
     bolterHeat = max(0, bolterHeat - dt * 0.18);
+    missionAlarmClock += dt;
+    if (fieldMedkitCooldown > 0) fieldMedkitCooldown = max(0, fieldMedkitCooldown - dt);
+    // Alarm is a soft pressure system, not a forced spawn: it raises enemy alert and is capped.
+    if (!arenaMode && missionAlarmClock >= 45) {
+      missionAlarmClock = 0;
+      campaign.alarm = min(100, campaign.alarm + (campaign.missionApproach == 'investigate' ? 8 : 5));
+      if (campaign.alarm == 25 || campaign.alarm == 50 || campaign.alarm == 75) {
+        spawnDamageNumber(player.position, 0, color: const Color(0xFFFF7043), label: 'ТРЕВОГА ${campaign.alarm}%');
+      }
+    }
     // Dissipator / Warp Anchor reduce stress growth; always decay
     final stressDecay = 0.14 * (loadout.staffFocus == StaffFocusMod.dissipator ? 1.6 : 1.0) * (hasWarpAnchor ? 1.3 : 1.0);
     staffWarpStress = max(0, staffWarpStress - dt * stressDecay);
@@ -3898,6 +4070,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       'Этаж $currentFloor/$maxFloors • $nodeLabel  Очки:$score  Обл:$scraps$heatBar$warpBar',
       if (arenaMode) 'АРЕНА W$arenaWave • Убито:$arenaKills • Угроза ${arenaThreatTier + 1} • ${difficulty.labelRu} • ${arenaModifier.labelRu}',
       'Доктрина: ${combatDoctrine.labelRu} • Боеприпасы: ${ammoDoctrine.labelRu}',
+      if (oathAcceptedThisRun && !arenaMode) 'КЛЯТВА: ${playerClass.title} • Тревога ${campaign.alarm}% • Улики ${campaign.evidence} • Подозрение ${campaign.suspicion}%',
       if (!arenaMode) 'ПРИКАЗ: ${activeContract.labelRu} • ${contractProgress.clamp(0, contractTarget)}/$contractTarget${contractClaimed ? ' ✓' : ''}',
       if (isBossLevel || isMiniBossLevel) 'Адаптация противника: $adaptiveBossTactic',
       if (isSurvivalNode && !arenaMode) 'ЗАДАНИЕ: ВЫЖИВАНИЕ • ВОЛНА x2',
@@ -3924,6 +4097,17 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void nextLevel() {
     overlays.remove('levelComplete');
+    campaign.operationsCompleted++;
+    campaign.alarm = max(0, campaign.alarm - 12);
+    if (campaign.evidence >= 3) {
+      campaign.suspicion = max(0, campaign.suspicion - 4);
+      campaign.lastReport = 'Операция ${campaign.operationsCompleted}: улики сопоставлены; подозрение конклава снижено.';
+    } else {
+      campaign.suspicion = min(100, campaign.suspicion + (campaign.missionApproach == 'purge' ? 1 : 3));
+      campaign.lastReport = 'Операция ${campaign.operationsCompleted}: цель устранена; доказательств для полного отчёта недостаточно.';
+    }
+    campaign.evidence = max(0, campaign.evidence - 1);
+    persistExpansion();
     pathIndex++;
     // End of floor (after boss node) or path exhausted
     if (pathIndex >= floorPath.length || isBossLevel) {
@@ -4141,7 +4325,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void openNameInput() {
     for (final o in [
       'mainMenu', 'gameOver', 'victory', 'records', 'settings', 'loadSave',
-      'classSelect', 'codex', 'eventAltar', 'eventMerchant', 'pathSelect', 'lorePopup', 'challengeSelect', 'rankPerk', 'inquisitionHub',
+      'classSelect', 'oathSelect', 'codex', 'eventAltar', 'eventMerchant', 'pathSelect', 'lorePopup', 'challengeSelect', 'rankPerk', 'inquisitionHub',
     ]) {
       overlays.remove(o);
     }
@@ -4163,15 +4347,40 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void confirmClass(PlayerClass cls) {
+    oathAcceptedThisRun = false;
     playerClass = cls;
     applyClassDefaults();
     if (activeChallenge == RankChallenge.noDash) hasDashAbility = false;
+    activeOathName = OrdoOath.forClass(cls).title;
+    oathAcceptedThisRun = false;
     overlays.remove('classSelect');
+    overlays.add('oathSelect');
+    isPaused = true;
+  }
+
+  void confirmOath(String approach) {
+    campaign.resetForNewRun();
+    campaign.missionApproach = approach;
+    if (approach == 'investigate') {
+      campaign.evidence += 1;
+      campaign.alarm = 10;
+    } else if (approach == 'purge') {
+      campaign.suspicion = max(0, campaign.suspicion - 5);
+      campaign.alarm = 20;
+    } else {
+      campaign.alarm = 0;
+    }
+    oathAcceptedThisRun = true;
+    activeOathName = OrdoOath.forClass(playerClass).title;
+    overlays.remove('oathSelect');
+    isPaused = false;
     startNewRun();
   }
 
   void startNewRun() {
     score = 0;
+    missionAlarmClock = 0;
+    fieldMedkitCooldown = 0;
     scraps = inquisitionRank.startScraps + arsenalUpgrade * 5;
     warpCorruption = 0;
     _corruptionClock = 0;
@@ -5242,6 +5451,57 @@ class ClassSelectMenu extends StatelessWidget {
   }
 }
 
+class OathSelectionMenu extends StatefulWidget {
+  final InquisitorGame game;
+  const OathSelectionMenu(this.game, {super.key});
+  @override
+  State<OathSelectionMenu> createState() => _OathSelectionMenuState();
+}
+
+class _OathSelectionMenuState extends State<OathSelectionMenu> {
+  String _approach = 'balanced';
+  bool _accepted = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final oath = OrdoOath.forClass(widget.game.playerClass);
+    final accent = switch (widget.game.playerClass) {
+      PlayerClass.malleus => const Color(0xFFB39DDB),
+      PlayerClass.hereticus => const Color(0xFFE57373),
+      PlayerClass.xenos => const Color(0xFF80CBC4),
+    };
+    return Scaffold(
+      backgroundColor: const Color(0xFF070707),
+      body: SafeArea(child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: Padding(
+        padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const Text('РИТУАЛ ПРИНЯТИЯ КЛЯТВЫ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 1.4)),
+          const SizedBox(height: 12),
+          Expanded(child: Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: const Color(0xFF151515), border: Border.all(color: accent.withOpacity(0.7), width: 1.5), borderRadius: BorderRadius.circular(8)), child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(oath.title, style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 18)),
+            const SizedBox(height: 8), Text('УГРОЗА: ${oath.threat}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            const Divider(color: Colors.white24, height: 22),
+            const Text('ДОГМА ОРДО', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+            const SizedBox(height: 5), Text(oath.dogma, style: const TextStyle(color: Colors.white, height: 1.35)),
+            const SizedBox(height: 14), const Text('КЛЯТВА', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+            const SizedBox(height: 5), Text('«${oath.oath}»', style: const TextStyle(color: Colors.white, height: 1.45, fontStyle: FontStyle.italic)),
+            const SizedBox(height: 12), Text(oath.fieldDoctrine, style: TextStyle(color: accent, fontSize: 12, height: 1.35)),
+            const SizedBox(height: 6), Text(oath.bonus, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+          ])))),
+          const SizedBox(height: 12),
+          const Text('ПОДХОД К ПЕРВОЙ ОПЕРАЦИИ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+          DropdownButtonFormField<String>(value: _approach, dropdownColor: const Color(0xFF171717), decoration: const InputDecoration(labelText: 'Выбери доктрину операции', labelStyle: TextStyle(color: Colors.white70)), items: const [
+            DropdownMenuItem(value: 'balanced', child: Text('Сбалансированный подход', style: TextStyle(color: Colors.white))),
+            DropdownMenuItem(value: 'investigate', child: Text('Разведка: начать с дополнительной уликой', style: TextStyle(color: Colors.white))),
+            DropdownMenuItem(value: 'purge', child: Text('Зачистка: снизить подозрение конклава', style: TextStyle(color: Colors.white))),
+          ], onChanged: (v) => setState(() => _approach = v ?? 'balanced')),
+          CheckboxListTile(value: _accepted, activeColor: accent, contentPadding: EdgeInsets.zero, title: const Text('Я принимаю клятву и последствия выбранного пути.', style: TextStyle(color: Colors.white70, fontSize: 12)), onChanged: (v) => setState(() => _accepted = v ?? false)),
+          Row(children: [Expanded(child: OutlinedButton(onPressed: () { widget.game.overlays.remove('oathSelect'); widget.game.overlays.add('classSelect'); widget.game.isPaused = false; }, child: const Text('НАЗАД'))), const SizedBox(width: 12), Expanded(child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: accent), onPressed: _accepted ? () { widget.game.playClick(); widget.game.confirmOath(_approach); } : null, child: const Text('ПРИНЯТЬ КЛЯТВУ И НАЧАТЬ')))]),
+        ]),
+      )))),
+    );
+  }
+}
+
 class RewardMenu extends StatelessWidget {
   final InquisitorGame game;
   const RewardMenu(this.game, {super.key});
@@ -6216,6 +6476,23 @@ class _SettingsMenuState extends State<SettingsMenu> {
               ),
             ],
             const Divider(color: Colors.white24),
+            const Divider(color: Colors.white24),
+            const Text('ИНКВИЗИТОРСКОЕ ДОСЬЕ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+            Text('Операции: ${g.campaign.operationsCompleted} • Улики: ${g.campaign.cluesFound} • Подозрение: ${g.campaign.suspicion}% • Ранения: ${g.campaign.fieldWounds}/3', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            Text(g.campaign.lastReport, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+            DropdownButtonFormField<String>(
+              value: g.campaign.missionApproach,
+              dropdownColor: const Color(0xFF171717),
+              decoration: const InputDecoration(labelText: 'Подход к операции', labelStyle: TextStyle(color: Colors.white70)),
+              items: const [
+                DropdownMenuItem(value: 'balanced', child: Text('Сбалансированный', style: TextStyle(color: Colors.white))),
+                DropdownMenuItem(value: 'investigate', child: Text('Сначала разведка: больше улик, выше тревога', style: TextStyle(color: Colors.white))),
+                DropdownMenuItem(value: 'purge', child: Text('Немедленная зачистка: меньше подозрений', style: TextStyle(color: Colors.white))),
+              ],
+              onChanged: g.isPlaying ? null : (v) { if (v == null) return; setState(() => g.campaign.missionApproach = v); g.persistExpansion(); },
+            ),
+            ElevatedButton(onPressed: (!g.isPlaying && g.requisition >= 10 && g.campaign.fieldWounds > 0) ? () { setState(() { g.requisition -= 10; g.campaign.fieldWounds = 0; g.recomputeStats(); }); g.persistExpansion(); } : null, child: const Text('МЕДИЦИНСКАЯ СТАБИЛИЗАЦИЯ — 10 РЕКВИЗИЦИИ')),
+            const SizedBox(height: 8),
             const Text('БОЕВАЯ ДОКТРИНА', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
             DropdownButtonFormField<CombatDoctrine>(
               value: g.combatDoctrine,
@@ -6683,6 +6960,12 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       return;
     }
     health = max(0, health - amount);
+    if (game.isPlaying && amount >= 2 && health > 0 && health <= maxHealth ~/ 2 && game.campaign.fieldWounds < 3 && Random().nextDouble() < 0.10) {
+      game.campaign.fieldWounds++;
+      game.recomputeStats();
+      game.spawnDamageNumber(position, 0, color: const Color(0xFFFF8A65), label: 'РАНЕНИЕ ${game.campaign.fieldWounds}/3');
+      game.persistExpansion();
+    }
     hurtFlash = 0.15;
     game.triggerShake(power: 5, time: 0.12);
     game.spawnDamageNumber(position, amount, color: const Color(0xFFFF5252));
@@ -7310,6 +7593,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       EnemyType.shooter => 105.0,
     };
     if (isChampion) s *= 1.12;
+    if (!game.arenaMode) s *= 1.0 + game.campaign.alarm / 500.0 + (game.campaign.suspicion >= 75 ? 0.04 : 0.0);
     if (game.arenaMode) s *= min(1.8, 1.0 + game.arenaThreatTier * 0.025);
     if (game.arenaMode && game.arenaModifier == ArenaModifier.swift) s *= 1.22;
     if (affix == EliteAffix.swift) s *= 1.35;
@@ -7350,6 +7634,11 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     if (affix == EliteAffix.reflect && !fromStatus && Random().nextDouble() < 0.2) {
       game.player.takeDamage(1);
       game.spawnDamageNumber(position, 0, color: const Color(0xFFE040FB), label: 'F');
+    }
+    if (!fromStatus && game.oathAcceptedThisRun) {
+      if (game.playerClass == PlayerClass.malleus && (type == EnemyType.bloodletter || type == EnemyType.plagueBearer || type == EnemyType.cultPsyker)) dmg = (dmg * 1.08).round();
+      if (game.playerClass == PlayerClass.hereticus && (type == EnemyType.cultPsyker || type == EnemyType.sniper)) dmg = (dmg * 1.08).round();
+      if (game.playerClass == PlayerClass.xenos && (isChampion || isShielded || type == EnemyType.brute)) dmg = (dmg * 1.08).round();
     }
     currentHp -= dmg;
     if (!fromStatus && game.ammoDoctrine == AmmoDoctrine.incendiary) applyStatus(StatusType.burn, 2.0, tickDamage: 1);
