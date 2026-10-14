@@ -44,6 +44,7 @@ void main() {
   );
 }
 
+// Expansion systems are deliberately additive: legacy saves remain readable, existing route nodes stay authoritative, and all new visuals use Canvas geometry.
 // ─── Enums ───────────────────────────────────────────────
 enum RangedWeapon {
   bolter, rifle, shotgun,
@@ -83,6 +84,25 @@ enum CombatDoctrine { balanced, mobile, heavy, melee, bossHunter, control }
 enum ArenaModifier { none, swift, armored, swarm, unstable }
 /// Deathwatch ammunition profile.
 enum AmmoDoctrine { standard, armorPiercing, incendiary, suppressive, antiWarp }
+
+/// Short tactical orders layered over existing campaign nodes; these never replace the path system.
+enum TacticalContract { purge, hunter, ritual, survivor, champion }
+extension TacticalContractMeta on TacticalContract {
+  String get labelRu => switch (this) {
+    TacticalContract.purge => 'Зачистка сектора',
+    TacticalContract.hunter => 'Охота на цель',
+    TacticalContract.ritual => 'Срыв ритуала',
+    TacticalContract.survivor => 'Удержать позицию',
+    TacticalContract.champion => 'Ликвидация чемпиона',
+  };
+  String get detailRu => switch (this) {
+    TacticalContract.purge => 'Уничтожьте противников в секторе',
+    TacticalContract.hunter => 'Уничтожьте усиленных врагов и босса',
+    TacticalContract.ritual => 'Прервите варп-ритуал, уничтожая культистов',
+    TacticalContract.survivor => 'Переживите волну и зачистите сектор',
+    TacticalContract.champion => 'Уничтожьте чемпиона Хаоса',
+  };
+}
 
 /// Class-specific weapon mods (Gungeon / VS style loadout)
 enum GunBarrelMod { none, rapid, heavy }       // Xenos guns
@@ -983,6 +1003,58 @@ class TelegraphZone extends PositionComponent {
   }
 }
 
+/// Telegraphed, fully procedural Warp anomaly. It never uses image assets and is easy to avoid.
+class WarpRift extends PositionComponent with HasGameReference<InquisitorGame> {
+  double age = 0;
+  double pulse = 0;
+  double damageClock = 1.2;
+  WarpRift({required Vector2 position})
+      : super(position: position, size: Vector2(116, 116), anchor: Anchor.center);
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!game.isPlaying || game.isPaused) return;
+    age += dt;
+    pulse += dt;
+    damageClock -= dt;
+    final distance = position.distanceTo(game.player.position);
+    if (distance < 68 && damageClock <= 0) {
+      damageClock = 2.4;
+      game.player.takeDamage(1);
+      game.player.applyStatus(StatusType.corruption, 1.6, tickDamage: 0);
+      game.spawnDamageNumber(game.player.position, 0, color: const Color(0xFFCE93D8), label: 'ВАРП');
+    }
+    // Rift is temporary; old hazards collapse to prevent clutter/performance degradation.
+    if (age > 24) removeFromParent();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final c = Offset(size.x / 2, size.y / 2);
+    final beat = (sin(pulse * 3.2) + 1) / 2;
+    final outer = 30 + beat * 5;
+    final glow = Paint()..color = const Color(0xFFAB47BC).withOpacity(0.10 + beat * 0.10);
+    canvas.drawCircle(c, outer + 12, glow);
+    for (int i = 0; i < 3; i++) {
+      final r = outer - i * 8.0;
+      canvas.drawCircle(c, r, Paint()..color = Color.lerp(const Color(0xFF6A1B9A), const Color(0xFFE1BEE7), (beat + i * 0.18).clamp(0.0, 1.0).toDouble())!.withOpacity(0.65 - i * 0.12)..style = PaintingStyle.stroke..strokeWidth = 2.2 - i * 0.35);
+    }
+    final tear = Path()
+      ..moveTo(c.dx, c.dy - 24)
+      ..quadraticBezierTo(c.dx + 18 * sin(pulse), c.dy - 4, c.dx + 3, c.dy + 20)
+      ..quadraticBezierTo(c.dx - 18 * cos(pulse * 0.7), c.dy + 4, c.dx, c.dy - 24)
+      ..close();
+    canvas.drawPath(tear, Paint()..color = const Color(0xFF311B92).withOpacity(0.85));
+    canvas.drawPath(tear, Paint()..color = const Color(0xFFE1BEE7).withOpacity(0.75)..style = PaintingStyle.stroke..strokeWidth = 1.2);
+    // Warning ticks communicate the danger radius before the player enters it.
+    for (int i = 0; i < 8; i++) {
+      final a = i * pi / 4 + pulse * 0.15;
+      canvas.drawLine(Offset(c.dx + cos(a) * 42, c.dy + sin(a) * 42), Offset(c.dx + cos(a) * 48, c.dy + sin(a) * 48), Paint()..color = const Color(0xFFE1BEE7).withOpacity(0.55)..strokeWidth = 1.5);
+    }
+  }
+}
+
 class CorruptionZone extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
   double life = 12.0;
   double tickAcc = 0;
@@ -1077,7 +1149,7 @@ class WHDraw {
     );
   }
 
-  static void inquisitor(Canvas c, {required double cx, required double cy, double s = 1.32, double flash = 0, Customization? custom, PlayerClass cls = PlayerClass.xenos}) {
+  static void inquisitor(Canvas c, {required double cx, required double cy, double s = 1.32, double flash = 0, Customization? custom, PlayerClass cls = PlayerClass.xenos, double healthRatio = 1.0}) {
     Color armor = custom?.armorColor(0.30) ?? const Color(0xFF3A4A55);
     Color armorLite = custom?.armorColor(0.42) ?? const Color(0xFF4A5A68);
     Color dark = custom?.armorColor(0.16) ?? const Color(0xFF1E2830);
@@ -1135,6 +1207,10 @@ class WHDraw {
     _rivets(c, cx, cy + 4 * s, 36, 30, gold.withOpacity(0.7), s);
     c.drawCircle(Offset(cx, cy + 4 * s), 8 * s, Paint()..color = gold);
     c.drawCircle(Offset(cx, cy + 4 * s), 4 * s, Paint()..color = dark);
+    // Deathwatch/Inquisition-inspired cross insignia, assembled from vector strokes.
+    final sigil = Paint()..color = gold.withOpacity(0.9)..strokeWidth = 1.8 * s..strokeCap = StrokeCap.round;
+    c.drawLine(Offset(cx - 5 * s, cy + 4 * s), Offset(cx + 5 * s, cy + 4 * s), sigil);
+    c.drawLine(Offset(cx, cy - 1 * s), Offset(cx, cy + 9 * s), sigil);
     if (cls == PlayerClass.malleus) {
       c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 30 * s), width: 30 * s, height: 16 * s), Radius.circular(6 * s)), Paint()..color = const Color(0xFF4527A0));
       c.drawCircle(Offset(cx, cy - 32 * s), 6 * s, Paint()..color = visor.withOpacity(0.75));
@@ -1158,6 +1234,23 @@ class WHDraw {
     c.drawCircle(Offset(cx, cy - 18 * s), 13 * s, Paint()..color = const Color(0xFFC4A484));
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 22 * s), width: 26 * s, height: 12 * s), Radius.circular(2 * s)), Paint()..color = dark);
     c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 19 * s), width: 16 * s, height: 4 * s), Paint()..color = visor.withOpacity(0.95));
+    // Procedural purity seal, stamped armor markings and tiny engraved scratches.
+    final sealX = cx + 13 * s, sealY = cy + 17 * s;
+    c.drawLine(Offset(sealX, sealY), Offset(sealX + 3 * s, sealY + 10 * s), Paint()..color = const Color(0xFFFFE0B2)..strokeWidth = 2.2 * s);
+    c.drawLine(Offset(sealX + 3 * s, sealY + 10 * s), Offset(sealX + 7 * s, sealY + 7 * s), Paint()..color = const Color(0xFFFFE0B2)..strokeWidth = 1.4 * s);
+    c.drawCircle(Offset(sealX, sealY), 3.2 * s, Paint()..color = const Color(0xFFB71C1C));
+    c.drawCircle(Offset(sealX, sealY), 1.4 * s, Paint()..color = gold);
+    // Damage grows with missing health; all marks are vector strokes, not image textures.
+    final wear = (1.0 - healthRatio.clamp(0.0, 1.0)).clamp(0.0, 1.0).toDouble();
+    if (wear > 0.12) {
+      final scratchPaint = Paint()..color = const Color(0xFF101820).withOpacity(0.25 + wear * 0.5)..strokeWidth = 1.2 * s..strokeCap = StrokeCap.round;
+      c.drawLine(Offset(cx - 18 * s, cy - 1 * s), Offset(cx - (13 - wear * 4) * s, cy + 5 * s), scratchPaint);
+      c.drawLine(Offset(cx + 8 * s, cy - 4 * s), Offset(cx + 13 * s, cy + 1 * s), scratchPaint);
+      if (wear > 0.45) {
+        c.drawLine(Offset(cx - 9 * s, cy + 13 * s), Offset(cx - 3 * s, cy + 19 * s), scratchPaint);
+        c.drawLine(Offset(cx + 17 * s, cy + 8 * s), Offset(cx + 12 * s, cy + 14 * s), scratchPaint);
+      }
+    }
     // ground shadow
     c.drawOval(Rect.fromCenter(center: Offset(cx, cy + 48 * s), width: 36 * s, height: 10 * s), Paint()..color = Colors.black.withOpacity(0.22));
     if (flash > 0) c.drawCircle(Offset(cx, cy), 48 * s, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * flash));
@@ -1655,6 +1748,19 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int secretBossesDefeatedTotal = 0;
   int tacticalAchievements = 0;
   double _servoSkullPulse = 0;
+
+  // Unified campaign-systems layer. These values are run-local except the completed count.
+  TacticalContract activeContract = TacticalContract.purge;
+  int contractProgress = 0;
+  int contractTarget = 5;
+  bool contractClaimed = false;
+  int contractsCompleted = 0;
+  int rangedPressure = 0;
+  int meleePressure = 0;
+  double _riftSpawnClock = 0;
+  String get adaptiveBossTactic => meleePressure > rangedPressure * 1.25
+      ? 'Дистанция'
+      : rangedPressure > meleePressure * 1.25 ? 'Сближение' : 'Смешанная тактика';
 
   /// In the endless arena, every 20 kills add another threat tier.
   int get arenaThreatTier => arenaMode ? arenaKills ~/ 20 : 0;
@@ -2584,6 +2690,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         servoSkullLevel = ((data['servoSkullLevel'] as num?)?.toInt() ?? 0).clamp(0, 3);
         secretBossesDefeatedTotal = (data['secretBossesDefeatedTotal'] as num?)?.toInt() ?? 0;
         tacticalAchievements = (data['tacticalAchievements'] as num?)?.toInt() ?? 0;
+        contractsCompleted = (data['contractsCompleted'] as num?)?.toInt() ?? 0;
       }
     } catch (_) {}
   }
@@ -2611,6 +2718,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'showSecretSignals': showSecretSignals, 'combatDoctrine': combatDoctrine.name, 'ammoDoctrine': ammoDoctrine.name,
         'arenaModifier': arenaModifier.name, 'servoSkullLevel': servoSkullLevel,
         'secretBossesDefeatedTotal': secretBossesDefeatedTotal, 'tacticalAchievements': tacticalAchievements,
+        'contractsCompleted': contractsCompleted,
       }));
     } catch (_) {}
   }
@@ -2631,6 +2739,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'showSecretSignals': showSecretSignals, 'combatDoctrine': combatDoctrine.name, 'ammoDoctrine': ammoDoctrine.name,
         'arenaModifier': arenaModifier.name, 'servoSkullLevel': servoSkullLevel,
         'secretBossesDefeatedTotal': secretBossesDefeatedTotal, 'tacticalAchievements': tacticalAchievements,
+        'contractsCompleted': contractsCompleted,
       }));
     } catch (_) {}
   }
@@ -2855,6 +2964,26 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     ironWillUsedThisFloor = false;
 
     final node = _currentNodeKind;
+    // Contract is an additional objective, not a replacement for the selected route node.
+    activeContract = switch (node) {
+      PathNodeKind.hunt => TacticalContract.hunter,
+      PathNodeKind.ritual => TacticalContract.ritual,
+      PathNodeKind.survival || PathNodeKind.defense => TacticalContract.survivor,
+      PathNodeKind.elite || PathNodeKind.boss => TacticalContract.champion,
+      _ => TacticalContract.purge,
+    };
+    contractProgress = 0;
+    contractTarget = switch (activeContract) {
+      TacticalContract.purge => 5 + currentFloor.clamp(1, 5).toInt(),
+      TacticalContract.hunter => 2 + currentFloor.clamp(1, 4).toInt(),
+      TacticalContract.ritual => 4 + currentFloor.clamp(1, 3).toInt(),
+      TacticalContract.survivor => 6 + currentFloor.clamp(1, 5).toInt(),
+      TacticalContract.champion => 1,
+    };
+    contractClaimed = false;
+    rangedPressure = 0;
+    meleePressure = 0;
+    _riftSpawnClock = 0;
     isBossLevel = node == PathNodeKind.boss;
     isMiniBossLevel = !isBossLevel && (currentLevel == 3 || node == PathNodeKind.hunt) && node != PathNodeKind.survival;
     isEliteNode = node == PathNodeKind.elite;
@@ -2924,6 +3053,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       bPlaced++;
     }
 
+    // Warp rifts are telegraphed, avoidable hazards. Ritual sectors and high corruption are more unstable.
+    final riftCount = node == PathNodeKind.ritual ? 2 : (warpCorruption >= 50 && node != PathNodeKind.rest ? 1 : 0);
+    for (int i = 0; i < riftCount; i++) {
+      final p = Vector2(180 + rng.nextDouble() * (mapWidth - 360), 180 + rng.nextDouble() * (mapHeight - 360));
+      if (p.distanceTo(playerSpawnPos) > 220) world.add(WarpRift(position: p)..priority = 5);
+    }
+
     if (!isBossLevel && node != PathNodeKind.rest) {
       for (int i = 0; i < 1 + rng.nextInt(2); i++) {
         final p = Vector2(140 + rng.nextDouble() * (mapWidth - 280), 140 + rng.nextDouble() * (mapHeight - 280));
@@ -2961,6 +3097,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       enemiesSpawned = 0;
       spawnTimer = 0.4;
       spawnInterval = max(0.28, 1.15 - currentFloor * 0.06 - currentLevel * 0.04 - (isSurvivalNode ? 0.15 : 0));
+    }
+
+    // Elite sectors may contain a rival agent of the Inquisition: a dangerous mirror-build encounter.
+    if (isEliteNode && currentFloor >= 2 && !arenaMode) {
+      final rivalPos = Vector2(mapWidth * 0.72, mapHeight * 0.48);
+      world.add(RivalInquisitor(floor: currentFloor, position: rivalPos)..priority = 27);
+      enemiesToSpawn++;
+      enemiesAlive++;
+      enemiesSpawned++;
     }
 
     _maybeSpawnEcho();
@@ -3365,6 +3510,27 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
     }
     if (isBoss) { tacticalAchievements++; if (tacticalAchievements % 3 == 0) requisition += 5; persistExpansion(); }
+
+    // Tactical contract progress is event-driven and guarded so a multi-hit death cannot double-claim.
+    final countsForContract = switch (activeContract) {
+      TacticalContract.purge => true,
+      TacticalContract.hunter => isChampion || isBoss || type == EnemyType.sniper || type == EnemyType.brute,
+      TacticalContract.ritual => type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter || isBoss,
+      TacticalContract.survivor => true,
+      TacticalContract.champion => isChampion || isBoss,
+    };
+    if (!contractClaimed && countsForContract) {
+      contractProgress = min(contractTarget, contractProgress + 1);
+      if (contractProgress >= contractTarget) {
+        contractClaimed = true;
+        contractsCompleted++;
+        requisition += 8 + currentFloor;
+        scraps += 12 + currentFloor * 2;
+        tacticalAchievements++;
+        spawnDamageNumber(at ?? player.position, 0, color: const Color(0xFFFFD54F), label: 'ПРИКАЗ ВЫПОЛНЕН +РЕКВ.');
+        persistExpansion();
+      }
+    }
     score += ((isBoss ? 200 : (isChampion ? 80 : 20)) * comboMult).round();
     if (legendaryWeapon != 'none') {
       legendaryKillCounter++;
@@ -3629,6 +3795,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       'Этаж $currentFloor/$maxFloors • $nodeLabel  $hp  Очки:$score  Обл:$scraps$heatBar$warpBar',
       if (arenaMode) 'АРЕНА W$arenaWave • Убито:$arenaKills • Угроза ${arenaThreatTier + 1} • ${difficulty.labelRu} • ${arenaModifier.labelRu}',
       'Доктрина: ${combatDoctrine.labelRu} • Боеприпасы: ${ammoDoctrine.labelRu}',
+      if (!arenaMode) 'ПРИКАЗ: ${activeContract.labelRu} • ${contractProgress.clamp(0, contractTarget)}/$contractTarget${contractClaimed ? ' ✓' : ''}',
+      if (isBossLevel || isMiniBossLevel) 'Адаптация противника: $adaptiveBossTactic',
       if (isSurvivalNode && !arenaMode) 'ЗАДАНИЕ: ВЫЖИВАНИЕ • ВОЛНА x2',
       if (!arenaMode && warpCorruption >= 25) 'Порча Варпа: $warpCorruption%${warpCorruption >= 60 ? ' • Враги усилены' : ''}',
       if (combo >= 2) 'COMBO x$combo',
@@ -6365,7 +6533,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     final ang = atan2(aimDir.y, aimDir.x);
-    WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.28, flash: hurtFlash / 0.15, custom: game.custom, cls: game.playerClass);
+    WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.28, flash: hurtFlash / 0.15, custom: game.custom, cls: game.playerClass, healthRatio: maxHealth <= 0 ? 1 : health / maxHealth);
     canvas.save();
     canvas.translate(cx, cy);
     canvas.rotate(ang);
@@ -6429,6 +6597,22 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
         case RangedWeapon.sniperNeedle:
           WHDraw.sniperNeedle(canvas, 0, 0, 1.0, accent: wc);
           break;
+      }
+    }
+    // Legendary weapon evolution: procedural edge-light, runic ticks and rank rings.
+    if (game.legendaryWeapon != 'none') {
+      final evoColor = game.legendaryWeapon == 'warp'
+          ? const Color(0xFFCE93D8)
+          : game.legendaryWeapon == 'sanctified' || game.legendaryWeapon == 'emperor'
+              ? const Color(0xFFFFD54F)
+              : const Color(0xFFFF5252);
+      final rank = game.legendaryWeaponRank.clamp(0, 3).toInt();
+      canvas.drawLine(Offset(12, -9), Offset(48 + rank * 2.0, -9), Paint()..color = evoColor.withOpacity(0.5 + rank * 0.12)..strokeWidth = 2.0 + rank * 0.55..strokeCap = StrokeCap.round);
+      for (int rune = 0; rune < rank + 1; rune++) {
+        canvas.drawCircle(Offset(18 + rune * 7.0, 9), 1.4 + rank * 0.25, Paint()..color = evoColor.withOpacity(0.85));
+      }
+      if (rank >= 2) {
+        canvas.drawCircle(Offset(32, 0), 18 + rank * 2.0, Paint()..color = evoColor.withOpacity(0.12)..style = PaintingStyle.stroke..strokeWidth = 1.4);
       }
     }
     canvas.restore();
@@ -6978,6 +7162,10 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   }
 
   void applyDamage(int amount, {bool fromStatus = false}) {
+    if (!fromStatus && amount > 0) {
+      if (game.usingMelee) { game.meleePressure = min(10000, game.meleePressure + 1); }
+      else { game.rangedPressure = min(10000, game.rangedPressure + 1); }
+    }
     var dmg = amount;
     if (!fromStatus && game.ammoDoctrine == AmmoDoctrine.antiWarp &&
         (type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter)) {
@@ -7417,6 +7605,35 @@ void _announceBossPhase(InquisitorGame game, Vector2 position, int phase) {
   game.triggerShake(power: phase >= 3 ? 15 : 11, time: 0.35);
 }
 
+/// Rival Inquisitor encounter. Reuses MiniBoss combat/collision plumbing to keep it compatible
+/// with every existing projectile and save; only its vector appearance and durability differ.
+class RivalInquisitor extends MiniBoss {
+  RivalInquisitor({required int floor, required Vector2 position}) : super(floor: floor, position: position, isEcho: false);
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    maxHp = (maxHp * 1.45).round();
+    currentHp = maxHp;
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final cx = size.x / 2, cy = size.y / 2;
+    canvas.drawCircle(Offset(cx, cy), 49, Paint()..color = const Color(0xFFB71C1C).withOpacity(0.12));
+    WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.12, flash: hurtFlash / 0.12, cls: PlayerClass.hereticus, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp);
+    // Distinct red rosette identifies the rival without importing a sprite.
+    canvas.drawCircle(Offset(cx, cy - 28), 8, Paint()..color = const Color(0xFFB71C1C));
+    canvas.drawCircle(Offset(cx, cy - 28), 8, Paint()..color = const Color(0xFFFFD54F)..style = PaintingStyle.stroke..strokeWidth = 1.4);
+    for (int i = 0; i < 4; i++) {
+      final a = i * pi / 2;
+      canvas.drawLine(Offset(cx + cos(a) * 10, cy - 28 + sin(a) * 10), Offset(cx + cos(a) * 14, cy - 28 + sin(a) * 14), Paint()..color = const Color(0xFFFFD54F)..strokeWidth = 1.5);
+    }
+    canvas.drawRect(Rect.fromLTWH(cx - 32, -16, 64 * (currentHp / max(1, maxHp)), 5), Paint()..color = const Color(0xFFB71C1C));
+    canvas.drawRect(Rect.fromLTWH(cx - 32, -16, 64, 5), Paint()..color = const Color(0xFFFFD54F).withOpacity(0.7)..style = PaintingStyle.stroke..strokeWidth = 1);
+  }
+}
+
 class Boss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   final bool isEcho;
@@ -7460,6 +7677,10 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
 
   void takeDamage(int amount) {
     if (currentHp <= 0) return;
+    if (amount > 0) {
+      if (game.usingMelee) { game.meleePressure = min(10000, game.meleePressure + 1); }
+      else { game.rangedPressure = min(10000, game.rangedPressure + 1); }
+    }
     currentHp = max(0, currentHp - amount);
     final nextPhase = _bossPhaseForHealth(currentHp, maxHp);
     if (nextPhase > phase && currentHp > 0) {
@@ -7573,6 +7794,11 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
 
     final dist = position.distanceTo(game.player.position);
     var spd = 85.0 * (phase == 1 ? 1.0 : phase == 2 ? 1.08 : 1.16) * (isEcho ? 0.8 : 1.0);
+    // Adaptation is intentionally bounded: bosses react to repeated player habits without becoming unfair.
+    final meleeDominant = game.meleePressure > game.rangedPressure * 1.25;
+    final rangedDominant = game.rangedPressure > game.meleePressure * 1.25;
+    if (meleeDominant) spd *= 1.08; // kite and reposition against melee-heavy builds
+    if (rangedDominant) spd *= 1.12; // close distance against stationary ranged builds
     if (statuses.any((e) => e.type == StatusType.slow)) spd *= 0.6;
 
     if (telegraphing) {
@@ -7600,7 +7826,8 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
 
     attackTimer += dt;
     final phaseSpeed = phase == 1 ? 1.0 : phase == 2 ? 0.84 : 0.70;
-    final iv = (dist < 160 ? 1.2 : 1.7) * phaseSpeed * (isEcho ? 1.25 : 1.0) / (game.difficulty == Difficulty.hard ? 1.15 : 1.0);
+    final adaptiveTempo = rangedDominant ? 0.92 : meleeDominant ? 0.96 : 1.0;
+    final iv = (dist < 160 ? 1.2 : 1.7) * phaseSpeed * adaptiveTempo * (isEcho ? 1.25 : 1.0) / (game.difficulty == Difficulty.hard ? 1.15 : 1.0);
     if (attackTimer >= iv && !retreating) {
       attackTimer = 0;
       _startTelegraph();
