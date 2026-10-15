@@ -245,7 +245,7 @@ extension RelicMeta on RelicId {
       case RelicId.shieldPierce: return 'Иглы веры';
       case RelicId.killExplosion: return 'Разряд очищения';
       case RelicId.haste: return 'Шаги святого';
-      case RelicId.jediPath: return 'Путь Джедая';
+      case RelicId.jediPath: return 'Путь клинка';
       case RelicId.ammoSavant: return 'Арсенал Адептус';
       case RelicId.warpAnchor: return 'Якорь Варпа';
       case RelicId.shadowStep: return 'Тень аколита';
@@ -1862,6 +1862,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   ActiveArtifact activeArtifact = ActiveArtifact.fragGrenade;
   double artifactCooldown = 0;
   double holyAuraTimer = 0;
+  double _holyAuraDamageTick = 0;
 
   InquisitionRank inquisitionRank = InquisitionRank();
   WeaponMastery mastery = WeaponMastery();
@@ -1952,6 +1953,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int operationSerial = 0;
   int operationThreatLevel = 0;
   bool highThreatOperation = false;
+  /// Career achievements are monotonic: once unlocked, they remain unlocked.
+  final Set<String> unlockedAchievementIds = <String>{};
+  int careerOperationsCompleted = 0;
+  int careerFloorsReached = 1;
+  int careerKills = 0;
+  int careerEvidenceFound = 0;
   int evacuationRoute = 0; // 0 safe, 1 rapid, 2 covert
   int terminalsActivated = 0;
   int supplyCachesOpened = 0;
@@ -2943,6 +2950,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         if (data['tacticalMods'] is List) { tacticalMods..clear()..addAll((data['tacticalMods'] as List).map((e) => e.toString()).take(3)); }
         backpackCapacity = 16 + backpackUpgradeLevel * 4;
         highThreatOperation = data['highThreatOperation'] as bool? ?? false;
+        if (data['unlockedAchievementIds'] is List) {
+          unlockedAchievementIds..clear()..addAll((data['unlockedAchievementIds'] as List).map((e) => e.toString()));
+        }
+        careerOperationsCompleted = ((data['careerOperationsCompleted'] as num?)?.toInt() ?? 0).clamp(0, 1000000);
+        careerFloorsReached = ((data['careerFloorsReached'] as num?)?.toInt() ?? 1).clamp(1, 1000000);
+        careerKills = ((data['careerKills'] as num?)?.toInt() ?? 0).clamp(0, 100000000);
+        careerEvidenceFound = ((data['careerEvidenceFound'] as num?)?.toInt() ?? 0).clamp(0, 1000000);
         operationThreatLevel = ((data['operationThreatLevel'] as num?)?.toInt() ?? 0).clamp(0, 5);
         evacuationRoute = ((data['evacuationRoute'] as num?)?.toInt() ?? 0).clamp(0, 2).toInt();
         terminalsActivated = (data['terminalsActivated'] as num?)?.toInt() ?? 0;
@@ -3112,9 +3126,33 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     persistExpansion();
   }
 
+  /// Records a career achievement without ever revoking an unlocked one.
+  Future<void> unlockCareerAchievement(String id) async {
+    if (id.trim().isEmpty || !unlockedAchievementIds.add(id)) return;
+    await persistExpansion();
+  }
+
+  /// Updates lifetime counters; call this from mission/kill/evidence events.
+  Future<void> recordCareerProgress({int operations = 0, int floors = 0, int kills = 0, int evidence = 0}) async {
+    careerOperationsCompleted = (careerOperationsCompleted + operations).clamp(0, 1000000).toInt();
+    careerFloorsReached = max(careerFloorsReached, floors);
+    careerKills = (careerKills + kills).clamp(0, 100000000).toInt();
+    careerEvidenceFound = (careerEvidenceFound + evidence).clamp(0, 1000000).toInt();
+    if (careerOperationsCompleted >= 1) unlockedAchievementIds.add('career_first_operation');
+    if (careerOperationsCompleted >= 10) unlockedAchievementIds.add('career_ten_operations');
+    if (careerFloorsReached >= 5) unlockedAchievementIds.add('career_floor_five');
+    if (careerKills >= 100) unlockedAchievementIds.add('career_hundred_kills');
+    if (careerEvidenceFound >= 10) unlockedAchievementIds.add('career_ten_evidence');
+    await persistExpansion();
+  }
+
   Future<void> persistExpansion() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final previousExpansion = prefs.getString('inquisition_expansion');
+      if (previousExpansion != null && previousExpansion.isNotEmpty) {
+        await prefs.setString('inquisition_expansion_backup', previousExpansion);
+      }
       await prefs.setString('inquisition_expansion', jsonEncode({
         'arsenal': arsenalUpgrade, 'shrine': shrineUpgrade, 'archive': archiveUpgrade, 'medicae': medicaeUpgrade,
         'alignment': inquisitionAlignment, 'specialization': specialization, 'legendary': legendaryWeapon, 'legendaryWeaponRank': legendaryWeaponRank,
@@ -3131,6 +3169,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'terminalsActivated': terminalsActivated, 'supplyCachesOpened': supplyCachesOpened,
         'randomMissionEvents': randomMissionEvents, 'consumables': consumables.map((k, v) => MapEntry(k.name, v)),
         'campaignState': campaign.toJson(),
+        'unlockedAchievementIds': unlockedAchievementIds.toList(),
+        'careerOperationsCompleted': careerOperationsCompleted, 'careerFloorsReached': careerFloorsReached,
+        'careerKills': careerKills, 'careerEvidenceFound': careerEvidenceFound,
       }));
     } catch (_) {}
   }
@@ -3143,6 +3184,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       await prefs.setString('lore_ranks', jsonEncode(loreRanks.map((k, v) => MapEntry(k.name, v))));
       await prefs.setString('inquisition_rank', jsonEncode(inquisitionRank.toJson()));
       await prefs.setString('weapon_mastery', jsonEncode(mastery.toJson()));
+      final previousExpansion = prefs.getString('inquisition_expansion');
+      if (previousExpansion != null && previousExpansion.isNotEmpty) {
+        await prefs.setString('inquisition_expansion_backup', previousExpansion);
+      }
       await prefs.setString('inquisition_expansion', jsonEncode({
         'arsenal': arsenalUpgrade, 'shrine': shrineUpgrade, 'archive': archiveUpgrade, 'medicae': medicaeUpgrade,
         'alignment': inquisitionAlignment, 'specialization': specialization, 'legendary': legendaryWeapon, 'legendaryWeaponRank': legendaryWeaponRank,
@@ -3159,6 +3204,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'terminalsActivated': terminalsActivated, 'supplyCachesOpened': supplyCachesOpened,
         'randomMissionEvents': randomMissionEvents, 'consumables': consumables.map((k, v) => MapEntry(k.name, v)),
         'campaignState': campaign.toJson(),
+        'unlockedAchievementIds': unlockedAchievementIds.toList(),
+        'careerOperationsCompleted': careerOperationsCompleted, 'careerFloorsReached': careerFloorsReached,
+        'careerKills': careerKills, 'careerEvidenceFound': careerEvidenceFound,
       }));
     } catch (_) {}
   }
@@ -4253,14 +4301,20 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (artifactCooldown > 0) artifactCooldown = max(0, artifactCooldown - dt);
     if (holyAuraTimer > 0) {
       holyAuraTimer = max(0, holyAuraTimer - dt);
-      if (holyAuraTimer > 0) {
-        for (final e in world.children.whereType<Enemy>()) {
+      _holyAuraDamageTick -= dt;
+      // Damage is applied at a fixed interval, not once per rendered frame.
+      // This keeps the aura balanced on 30/60/120 Hz devices alike.
+      if (holyAuraTimer > 0 && _holyAuraDamageTick <= 0) {
+        _holyAuraDamageTick = 0.5;
+        for (final e in world.children.whereType<Enemy>().toList()) {
           if (e.position.distanceTo(player.position) < 110) {
             e.applyDamage(1);
             e.applyStatus(StatusType.burn, 0.8, tickDamage: 1);
           }
         }
       }
+    } else {
+      _holyAuraDamageTick = 0;
     }
     if (tempDmgTimer > 0) {
       tempDmgTimer -= dt;
@@ -6573,25 +6627,25 @@ class _AchievementsMenuState extends State<AchievementsMenu> {
     final g = widget.game;
     final wins = g.inquisitionRank.wins;
     final achievements = <_AchievementEntry>[
-      _AchievementEntry('Первое досье', 'Открыть хотя бы одну запись Кодекса.', Icons.menu_book, g.codexUnlocked.isNotEmpty, 'ЗНАНИЕ'),
-      _AchievementEntry('Охотник за реликвиями', 'Получить первую реликвию.', Icons.auto_awesome, g.relics.isNotEmpty, 'РЕЛИКВИЯ'),
-      _AchievementEntry('Полевой специалист', 'Найти или сохранить предмет в полевом инвентаре.', Icons.backpack, g.fieldInventory.isNotEmpty, 'СНАБЖЕНИЕ'),
+      _AchievementEntry('Первое досье', 'Открыть хотя бы одну запись Кодекса.', Icons.menu_book, g.unlockedAchievementIds.contains('first_codex') || g.codexUnlocked.isNotEmpty, 'ЗНАНИЕ'),
+      _AchievementEntry('Охотник за реликвиями', 'Получить первую реликвию.', Icons.auto_awesome, g.unlockedAchievementIds.contains('first_relic') || g.relics.isNotEmpty, 'РЕЛИКВИЯ'),
+      _AchievementEntry('Полевой специалист', 'Найти или сохранить предмет в полевом инвентаре.', Icons.backpack, g.unlockedAchievementIds.contains('field_specialist') || g.fieldInventory.isNotEmpty, 'СНАБЖЕНИЕ'),
       _AchievementEntry('Мастер оружия', 'Достичь 10 отметок мастерства хотя бы с одним типом оружия.', Icons.gps_fixed, ['bolter','staff','sword','katana'].any((k) => g.mastery.getCount(k) >= 10), 'МАСТЕРСТВО'),
-      _AchievementEntry('Инквизиторский чин', 'Одержать первую победу в операции.', Icons.military_tech, wins >= 1, 'СЛУЖБА'),
-      _AchievementEntry('Ветеран крестового похода', 'Одержать 10 побед.', Icons.shield, wins >= 10, 'СЛУЖБА'),
-      _AchievementEntry('Глубокое проникновение', 'Достичь третьего этажа операции.', Icons.stairs, g.currentFloor >= 3, 'ИССЛЕДОВАНИЕ'),
+      _AchievementEntry('Инквизиторский чин', 'Одержать первую победу в операции.', Icons.military_tech, g.unlockedAchievementIds.contains('career_first_operation') || wins >= 1, 'СЛУЖБА'),
+      _AchievementEntry('Ветеран крестового похода', 'Одержать 10 побед.', Icons.shield, g.unlockedAchievementIds.contains('career_first_operation') || g.unlockedAchievementIds.contains('career_ten_operations') || wins >= 10, 'СЛУЖБА'),
+      _AchievementEntry('Глубокое проникновение', 'Достичь третьего этажа операции.', Icons.stairs, g.unlockedAchievementIds.contains('floor_three') || g.careerFloorsReached >= 3 || g.currentFloor >= 3, 'ИССЛЕДОВАНИЕ'),
       _AchievementEntry('Архивариус', 'Открыть пять записей Кодекса.', Icons.library_books, g.codexUnlocked.length >= 5, 'ЗНАНИЕ'),
       _AchievementEntry('Реликварий', 'Собрать три разные реликвии.', Icons.workspace_premium, g.relics.length >= 3, 'РЕЛИКВИЯ'),
       _AchievementEntry('Служитель трёх Ордо', 'Испытать все три доктрины персонажа.', Icons.account_balance, g.inquisitionRank.rank >= 3, 'ДОКТРИНА'),
-      _AchievementEntry('Операция повышенной угрозы', 'Завершить операцию повышенной угрозы.', Icons.warning_amber, g.highThreatOperation && wins >= 1, 'ИСПЫТАНИЕ'),
+      _AchievementEntry('Операция повышенной угрозы', 'Завершить операцию повышенной угрозы.', Icons.warning_amber, g.highThreatOperation && g.unlockedAchievementIds.contains('career_first_operation') || wins >= 1, 'ИСПЫТАНИЕ'),
       _AchievementEntry('Кузнец арсенала', 'Накопить 100 обломков.', Icons.build, g.scraps >= 100, 'АРСЕНАЛ'),
       _AchievementEntry('Голос снабжения', 'Активировать полевой терминал.', Icons.terminal, g.terminalsActivated >= 1, 'ОПЕРАЦИЯ'),
       _AchievementEntry('Снабженец', 'Открыть три тайника снабжения.', Icons.inventory_2, g.supplyCachesOpened >= 3, 'ОПЕРАЦИЯ'),
       _AchievementEntry('Контракт исполнен', 'Завершить первый тактический контракт.', Icons.assignment_turned_in, g.contractsCompleted >= 1, 'СЛУЖБА'),
       _AchievementEntry('Контрактор', 'Завершить пять тактических контрактов.', Icons.fact_check, g.contractsCompleted >= 5, 'СЛУЖБА'),
-      _AchievementEntry('Следопыт глубин', 'Добраться до пятого этажа операции.', Icons.travel_explore, g.currentFloor >= 5, 'ИССЛЕДОВАНИЕ'),
+      _AchievementEntry('Следопыт глубин', 'Добраться до пятого этажа операции.', Icons.travel_explore, g.unlockedAchievementIds.contains('career_floor_five') || g.careerFloorsReached >= 5 || g.currentFloor >= 5, 'ИССЛЕДОВАНИЕ'),
       _AchievementEntry('Охотник на секреты', 'Победить секретного босса.', Icons.visibility, g.secretBossesDefeatedTotal >= 1, 'ИСПЫТАНИЕ'),
-      _AchievementEntry('Арена очищена', 'Устранить 100 противников на арене.', Icons.sports_martial_arts, g.arenaKills >= 100, 'ИСПЫТАНИЕ'),
+      _AchievementEntry('Арена очищена', 'Устранить 100 противников на арене.', Icons.sports_martial_arts, g.unlockedAchievementIds.contains('career_hundred_kills') || g.arenaKills >= 100, 'ИСПЫТАНИЕ'),
       _AchievementEntry('Тактический арсенал', 'Установить три тактических модификации.', Icons.tune, g.tacticalMods.length >= 3, 'АРСЕНАЛ'),
       _AchievementEntry('Проверка на прочность', 'Начать операцию повышенной угрозы.', Icons.warning, g.highThreatOperation && g.operationThreatLevel >= 1, 'ИСПЫТАНИЕ'),
       _AchievementEntry('Свидетель Варпа', 'Достичь 50 очков варп-порчи.', Icons.blur_on, g.warpCorruption >= 50, 'РИСК'),
