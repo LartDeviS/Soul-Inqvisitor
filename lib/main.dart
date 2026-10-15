@@ -8864,7 +8864,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         break;
       case EnemyType.necronImmortal:
         if (dist < 460) {
-          game.world.add(EnemyBullet(position: position.clone(), direction: toP, damage: dmg + 1, speed: 230, mod: BulletMod.pierce)..priority = 16);
+          game.world.add(EnemyBullet(position: position.clone(), direction: toP, damage: dmg + 1, speed: 230, mod: BulletMod.ricochet)..priority = 16);
         }
         break;
       case EnemyType.sniper:
