@@ -64,8 +64,9 @@ enum EnemyType {
   // new
   cultPsyker, plagueBearer, bloodletter,
   orkBoy, tyranidGaunt, necronWarrior,
+  genestealer, chaosSpawn, necronImmortal,
 }
-enum Difficulty { easy, normal, hard }
+enum Difficulty { easy, normal, hard, hell }
 enum PlayerClass { xenos, malleus, hereticus }
 enum RelicId {
   crit, lifesteal, shieldPierce, killExplosion, haste, jediPath,
@@ -223,6 +224,7 @@ enum CodexId {
   cultPsyker, plagueBearer, bloodletter,
   miniBoss, boss, knight, king, tentacle, cyclops, champion,
   plagueLord, bloodChampion,
+  genestealer, chaosSpawn, necronImmortal,
 }
 
 extension DiffLabel on Difficulty {
@@ -231,6 +233,7 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 'Легко';
       case Difficulty.normal: return 'Норма';
       case Difficulty.hard: return 'Хард';
+      case Difficulty.hell: return 'АДСКИЙ';
     }
   }
   /// Floors in a full campaign
@@ -239,9 +242,10 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 5;   // 25 nodes
       case Difficulty.normal: return 7; // 35
       case Difficulty.hard: return 10;  // 50
+      case Difficulty.hell: return 13;  // +3 этажа к Хард
     }
   }
-  int get levelsPerFloor => 5;
+  int get levelsPerFloor => this == Difficulty.hell ? 8 : 5;
   int get maxOverallLevels => maxFloors * levelsPerFloor;
 
   double get hpMult {
@@ -249,6 +253,7 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 0.75;
       case Difficulty.normal: return 1.15;
       case Difficulty.hard: return 1.70;
+      case Difficulty.hell: return 1.70; // x3 добавляется в профиле противника
     }
   }
   double get dmgMult {
@@ -256,6 +261,7 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 0.70;
       case Difficulty.normal: return 1.05;
       case Difficulty.hard: return 1.45;
+      case Difficulty.hell: return 1.45; // x3 добавляется в профиле противника
     }
   }
   double get bossHpMult {
@@ -263,6 +269,7 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 0.80;
       case Difficulty.normal: return 1.20;
       case Difficulty.hard: return 1.85;
+      case Difficulty.hell: return 1.85; // скрытые боссы сохраняют профиль Харда
     }
   }
 }
@@ -430,6 +437,9 @@ extension CodexMeta on CodexId {
       case CodexId.champion: return 'Чемпион-элита';
       case CodexId.plagueLord: return 'Повелитель чумы';
       case CodexId.bloodChampion: return 'Кровавый чемпион';
+      case CodexId.genestealer: return 'Генокрад';
+      case CodexId.chaosSpawn: return 'Отродье Хаоса';
+      case CodexId.necronImmortal: return 'Бессмертный некронов';
     }
   }
   String get lore {
@@ -474,6 +484,12 @@ extension CodexMeta on CodexId {
         return 'Аватар Нургла на поле боя. Облака чумы, регенерация, призыв носителей. Сожги его, пока гниль не поглотила этаж.';
       case CodexId.bloodChampion:
         return 'Избранник Кхорна. Чем больше крови пролито — тем сильнее его удар. Не дай комбо врага расти.';
+      case CodexId.genestealer:
+        return 'Генокрады — быстрые засадные хищники, чьи когти разрывают броню. Их опасность — резкое сближение и серия ударов.';
+      case CodexId.chaosSpawn:
+        return 'Отродье Хаоса — нестабильная масса мутаций. Регенерирует в бою и атакует непредсказуемыми конечностями.';
+      case CodexId.necronImmortal:
+        return 'Бессмертные некронов — тяжёлая пехота древней машинной династии. Их гаусс-оружие истончает материю, а самовосстановление делает их опасными на дистанции.';
     }
   }
   String get knowledgeBonus {
@@ -506,6 +522,12 @@ extension CodexMeta on CodexId {
       case CodexId.tentacle:
       case CodexId.cyclops:
         return '+1 SP при убийстве секрета';
+      case CodexId.genestealer:
+        return '+2% урон по генокрадам';
+      case CodexId.chaosSpawn:
+        return '+2% урон по отродьям Хаоса';
+      case CodexId.necronImmortal:
+        return '+2% урон по некронам';
     }
   }
 }
@@ -4232,9 +4254,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   EnemyType _chooseEnemyType() {
     final r = Random().nextDouble();
     final f = currentFloor;
-    if (f >= 6 && r < 0.08) return EnemyType.plagueBearer;
-    if (f >= 5 && r < 0.14) return EnemyType.bloodletter;
-    if (f >= 4 && r < 0.12) return EnemyType.cultPsyker;
+    if (f >= 7 && r < 0.07) return EnemyType.necronImmortal;
+    if (f >= 6 && r >= 0.07 && r < 0.14) return EnemyType.chaosSpawn;
+    if (f >= 5 && r >= 0.14 && r < 0.22) return EnemyType.genestealer;
+    if (f >= 6 && r < 0.07) return EnemyType.plagueBearer;
+    if (f >= 5 && r >= 0.07 && r < 0.14) return EnemyType.bloodletter;
+    if (f >= 4 && r >= 0.22 && r < 0.34) return EnemyType.cultPsyker;
     if (currentFloor >= 3 && r < 0.19) return EnemyType.necronWarrior;
     if (currentFloor >= 2 && r < 0.27) return EnemyType.tyranidGaunt;
     if (currentFloor >= 2 && r < 0.34) return EnemyType.orkBoy;
@@ -4329,6 +4354,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case EnemyType.orkBoy: unlockCodex(CodexId.brute); break;
         case EnemyType.tyranidGaunt: unlockCodex(CodexId.dog); break;
         case EnemyType.necronWarrior: unlockCodex(CodexId.shielded); break;
+        case EnemyType.genestealer: unlockCodex(CodexId.genestealer); break;
+        case EnemyType.chaosSpawn: unlockCodex(CodexId.chaosSpawn); break;
+        case EnemyType.necronImmortal: unlockCodex(CodexId.necronImmortal); break;
       }
     }
     if (isBoss) { tacticalAchievements++; if (tacticalAchievements % 3 == 0) requisition += 5; persistExpansion(); }
@@ -8577,6 +8605,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       EnemyType.orkBoy => 48.0,
       EnemyType.tyranidGaunt => 22.0,
       EnemyType.necronWarrior => 52.0,
+      EnemyType.genestealer => 44.0,
+      EnemyType.chaosSpawn => 92.0,
+      EnemyType.necronImmortal => 68.0,
     };
     // Veteran-grade tuning: ordinary hostiles gain roughly two threat steps per difficulty.
     // Boss classes are separate components and are deliberately not modified here.
@@ -8584,8 +8615,10 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       Difficulty.easy => 1.28,
       Difficulty.normal => 1.42,
       Difficulty.hard => 1.58,
+      Difficulty.hell => 1.58,
     };
     var hp = base * game.difficulty.hpMult * veteranScale * game.worldThreat * (1 + floor * 0.08);
+    if (game.difficulty == Difficulty.hell) hp *= 3.0;
     if (isChampion) hp *= 2.2;
     if (affix == EliteAffix.regenerating) hp *= 1.15;
     maxHp = hp.round().clamp(8, 9999);
@@ -8609,6 +8642,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       EnemyType.orkBoy => 112.0,
       EnemyType.tyranidGaunt => 178.0,
       EnemyType.necronWarrior => 72.0,
+      EnemyType.genestealer => 220.0,
+      EnemyType.chaosSpawn => 88.0,
+      EnemyType.necronImmortal => 68.0,
     };
     if (isChampion) s *= 1.12;
     if (suppression >= 65) s *= 0.78;
@@ -8617,6 +8653,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     if (game.arenaMode) s *= min(1.8, 1.0 + game.arenaThreatTier * 0.025);
     if (game.arenaMode && game.arenaModifier == ArenaModifier.swift) s *= 1.22;
     if (affix == EliteAffix.swift) s *= 1.35;
+    if (game.difficulty == Difficulty.hell) s *= 3.0;
     if (statuses.any((e) => e.type == StatusType.slow || e.type == StatusType.plague)) s *= 0.6;
     return s;
   }
@@ -8648,9 +8685,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       suppression = min(100, suppression + max(5, amount * 0.8));
       if (suppression >= 100) morale = 0;
       else if (suppression >= 65) morale = min(morale, 35);
-      if (type == EnemyType.necronWarrior && game.ammoDoctrine == AmmoDoctrine.armorPiercing) dmg = (dmg * 1.2).round();
+      if ((type == EnemyType.necronWarrior || type == EnemyType.necronImmortal) && game.ammoDoctrine == AmmoDoctrine.armorPiercing) dmg = (dmg * 1.2).round();
       if (type == EnemyType.orkBoy && game.usingMelee) dmg = (dmg * 1.08).round();
-      if (type == EnemyType.tyranidGaunt && game.ammoDoctrine == AmmoDoctrine.incendiary) dmg = (dmg * 1.15).round();
+      if ((type == EnemyType.tyranidGaunt || type == EnemyType.genestealer) && game.ammoDoctrine == AmmoDoctrine.incendiary) dmg = (dmg * 1.15).round();
     }
     if (!fromStatus && game.ammoDoctrine == AmmoDoctrine.antiWarp &&
         (type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter)) {
@@ -8760,7 +8797,8 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     final kite = type == EnemyType.shooter ||
         type == EnemyType.sniper ||
         type == EnemyType.shieldedShooter ||
-        type == EnemyType.cultPsyker;
+        type == EnemyType.cultPsyker ||
+        type == EnemyType.necronImmortal;
     final prefer = type == EnemyType.sniper
         ? 320.0
         : type == EnemyType.cultPsyker
@@ -8786,9 +8824,13 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
           EnemyType.orkBoy => 0.82,
           EnemyType.tyranidGaunt => 0.48,
           EnemyType.necronWarrior => 1.05,
+          EnemyType.genestealer => 0.42,
+          EnemyType.chaosSpawn => 0.92,
+          EnemyType.necronImmortal => 1.15,
         } *
         closeBonus /
-        (isChampion ? 1.15 : 1.0);
+        (isChampion ? 1.15 : 1.0) /
+        (game.difficulty == Difficulty.hell ? 3.0 : 1.0);
 
     if (attackTimer >= interval) {
       attackTimer = 0;
@@ -8804,8 +8846,10 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       Difficulty.easy => 1.10,
       Difficulty.normal => 1.22,
       Difficulty.hard => 1.34,
+      Difficulty.hell => 1.34,
     };
-    final dmg = (1 * game.difficulty.dmgMult * veteranDamage * incomingMult).ceil();
+    final hellBehavior = game.difficulty == Difficulty.hell ? 3.0 : 1.0;
+    final dmg = (1 * game.difficulty.dmgMult * veteranDamage * incomingMult * hellBehavior).ceil();
     switch (type) {
       case EnemyType.shooter:
       case EnemyType.shieldedShooter:
@@ -8816,6 +8860,11 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
             damage: dmg,
             mod: game.rollBulletMod(),
           )..priority = 16);
+        }
+        break;
+      case EnemyType.necronImmortal:
+        if (dist < 460) {
+          game.world.add(EnemyBullet(position: position.clone(), direction: toP, damage: dmg + 1, speed: 230, mod: BulletMod.pierce)..priority = 16);
         }
         break;
       case EnemyType.sniper:
@@ -8855,6 +8904,21 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
           game.player.takeDamage(dmg);
           game.player.applyStatus(StatusType.plague, 2.5, tickDamage: 1);
         }
+        break;
+      case EnemyType.genestealer:
+        if (dist < 64) {
+          game.player.takeDamage(dmg + 1);
+          game.player.applyStatus(StatusType.bleed, 2.2, tickDamage: 1);
+          game.triggerShake(power: 2.2, time: 0.07);
+        }
+        break;
+      case EnemyType.chaosSpawn:
+        if (dist < 82) {
+          game.player.takeDamage(dmg + 1);
+          if (Random().nextDouble() < 0.25) game.player.applyStatus(StatusType.corruption, 2.0, tickDamage: 1);
+        }
+        break;
+      case EnemyType.necronImmortal:
         break;
       case EnemyType.bloodletter:
       case EnemyType.melee:
@@ -8942,6 +9006,29 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       case EnemyType.necronWarrior:
         WHDraw.shieldedMarine(canvas, cx, cy, 1.0, withGun: true, flash: f);
         canvas.drawLine(Offset(cx - 10, cy + 4), Offset(cx + 10, cy + 4), Paint()..color = const Color(0xFF00E5FF)..strokeWidth = 3);
+        break;
+      case EnemyType.genestealer:
+        WHDraw.chaosHound(canvas, cx, cy, flash: f);
+        final claw = Paint()..color = const Color(0xFFB39DDB)..strokeWidth = 3..strokeCap = StrokeCap.round;
+        canvas.drawLine(Offset(cx - 13, cy + 4), Offset(cx - 20, cy + 15), claw);
+        canvas.drawLine(Offset(cx + 13, cy + 4), Offset(cx + 20, cy + 15), claw);
+        canvas.drawLine(Offset(cx - 20, cy + 15), Offset(cx - 24, cy + 19), claw);
+        canvas.drawLine(Offset(cx + 20, cy + 15), Offset(cx + 24, cy + 19), claw);
+        canvas.drawCircle(Offset(cx - 5, cy - 11), 2.4, Paint()..color = const Color(0xFFFF1744));
+        canvas.drawCircle(Offset(cx + 5, cy - 11), 2.4, Paint()..color = const Color(0xFFFF1744));
+        break;
+      case EnemyType.chaosSpawn:
+        WHDraw.brute(canvas, cx, cy, 1.22, flash: f);
+        final mutation = Paint()..color = const Color(0xFF8E24AA)..strokeWidth = 4..strokeCap = StrokeCap.round;
+        canvas.drawLine(Offset(cx - 15, cy - 3), Offset(cx - 24, cy - 17), mutation);
+        canvas.drawLine(Offset(cx + 14, cy - 1), Offset(cx + 23, cy - 14), mutation);
+        canvas.drawCircle(Offset(cx + 3, cy - 13), 4 + 1.5 * sin(animationClock * 5).abs(), Paint()..color = const Color(0xFFCE93D8));
+        break;
+      case EnemyType.necronImmortal:
+        WHDraw.shieldedMarine(canvas, cx, cy, 1.12, withGun: true, flash: f);
+        final gauss = Paint()..color = Color.lerp(const Color(0xFF00E5FF), const Color(0xFF76FF03), 0.5 + 0.5 * sin(animationClock * 7))!..strokeWidth = 3..strokeCap = StrokeCap.round;
+        canvas.drawLine(Offset(cx - 16, cy - 7), Offset(cx + 16, cy - 7), gauss);
+        canvas.drawLine(Offset(cx - 8, cy - 17), Offset(cx + 8, cy - 17), gauss..strokeWidth = 2);
         break;
     }
     // Procedural detail pass: chipped plates, rivets, bio-chitin ridges and energy seams.
