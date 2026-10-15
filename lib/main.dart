@@ -253,7 +253,7 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 0.75;
       case Difficulty.normal: return 1.15;
       case Difficulty.hard: return 1.70;
-      case Difficulty.hell: return 1.70; // x3 добавляется в профиле противника
+      case Difficulty.hell: return 2.40; // x3 добавляется в профиле противника
     }
   }
   double get dmgMult {
@@ -261,7 +261,7 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 0.70;
       case Difficulty.normal: return 1.05;
       case Difficulty.hard: return 1.45;
-      case Difficulty.hell: return 1.45; // x3 добавляется в профиле противника
+      case Difficulty.hell: return 1.90; // x3 добавляется в профиле противника
     }
   }
   double get bossHpMult {
@@ -269,7 +269,7 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 0.80;
       case Difficulty.normal: return 1.20;
       case Difficulty.hard: return 1.85;
-      case Difficulty.hell: return 1.85; // скрытые боссы сохраняют профиль Харда
+      case Difficulty.hell: return 2.50; // скрытые боссы сохраняют профиль Харда
     }
   }
 }
@@ -6824,8 +6824,14 @@ class _NameInputMenuState extends State<NameInputMenu> {
                   _d(Difficulty.easy, Colors.green, '5 эт.'),
                   const SizedBox(width: 8),
                   _d(Difficulty.normal, const Color(0xFFB8860B), '7 эт.'),
-                  const SizedBox(width: 8),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
                   _d(Difficulty.hard, Colors.redAccent, '10 эт.'),
+                  const SizedBox(width: 8),
+                  _d(Difficulty.hell, const Color(0xFF6A1B9A), '13 эт. ×3'),
                 ],
               ),
               const SizedBox(height: 20),
@@ -8615,7 +8621,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       Difficulty.easy => 1.28,
       Difficulty.normal => 1.42,
       Difficulty.hard => 1.58,
-      Difficulty.hell => 1.58,
+      Difficulty.hell => 1.68,
     };
     var hp = base * game.difficulty.hpMult * veteranScale * game.worldThreat * (1 + floor * 0.08);
     if (game.difficulty == Difficulty.hell) hp *= 3.0;
@@ -8846,7 +8852,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       Difficulty.easy => 1.10,
       Difficulty.normal => 1.22,
       Difficulty.hard => 1.34,
-      Difficulty.hell => 1.34,
+      Difficulty.hell => 1.42,
     };
     final hellBehavior = game.difficulty == Difficulty.hell ? 3.0 : 1.0;
     final dmg = (1 * game.difficulty.dmgMult * veteranDamage * incomingMult * hellBehavior).ceil();
