@@ -6695,6 +6695,14 @@ class CodexMenu extends StatelessWidget {
               style: const TextStyle(color: Colors.white54),
             ),
             TextButton.icon(onPressed: () { game.playClick(); game.overlays.add('chronicle'); }, icon: const Icon(Icons.menu_book, color: Color(0xFFFFD700)), label: const Text('Хроника событий кампании', style: TextStyle(color: Color(0xFFFFD700)))),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              child: Text('ДОПОЛНИТЕЛЬНЫЕ ДОСЬЕ УГРОЗ', style: TextStyle(color: Color(0xFFBCAAA4), fontSize: 11, letterSpacing: 1.4)),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text('Орочьи бойцы: штурмовые налёты и грубая броня.\nТиранидские гаунты: быстрые прыжки, когти и хитиновый панцирь.\nНекронские воины: металлические пластины и дисциплинированный дальний огонь.\nПсайкеры культа: варп-атаки и давление на дистанции.\nНосители чумы: тяжёлый шаг, заражение и высокая живучесть.', style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.35)),
+            ),
             Expanded(
               child: ListView.builder(
                 itemCount: CodexId.values.length,
@@ -8536,6 +8544,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   late int currentHp;
   double attackTimer = 0;
   double hurtFlash = 0;
+  double hitReactTimer = 0;
+  double animationClock = 0;
+  final int visualVariant = Random().nextInt(5);
   double regenTimer = 0;
   bool summonerTriggered = false;
   double suppression = 0;
@@ -8567,7 +8578,14 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       EnemyType.tyranidGaunt => 22.0,
       EnemyType.necronWarrior => 52.0,
     };
-    var hp = base * game.difficulty.hpMult * game.worldThreat * (1 + floor * 0.08);
+    // Veteran-grade tuning: ordinary hostiles gain roughly two threat steps per difficulty.
+    // Boss classes are separate components and are deliberately not modified here.
+    final veteranScale = switch (game.difficulty) {
+      Difficulty.easy => 1.28,
+      Difficulty.normal => 1.42,
+      Difficulty.hard => 1.58,
+    };
+    var hp = base * game.difficulty.hpMult * veteranScale * game.worldThreat * (1 + floor * 0.08);
     if (isChampion) hp *= 2.2;
     if (affix == EliteAffix.regenerating) hp *= 1.15;
     maxHp = hp.round().clamp(8, 9999);
@@ -8659,6 +8677,8 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     if (!fromStatus && game.ammoDoctrine == AmmoDoctrine.incendiary) applyStatus(StatusType.burn, 2.0, tickDamage: 1);
     if (!fromStatus && game.ammoDoctrine == AmmoDoctrine.suppressive) applyStatus(StatusType.slow, game.combatDoctrine == CombatDoctrine.control ? 2.1 : 1.55, tickDamage: 0);
     hurtFlash = 0.12;
+    hitReactTimer = 0.16;
+    game.triggerShake(power: min(2.4, 0.65 + amount * 0.025), time: 0.045);
     final fromDir = (position - game.player.position).normalized();
     game.spawnDamageNumber(position, dmg);
     if (currentHp <= 0) {
@@ -8723,6 +8743,8 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   void update(double dt) {
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
+    if (hitReactTimer > 0) hitReactTimer = max(0, hitReactTimer - dt);
+    animationClock += dt;
     if (!game.isPlaying || game.isPaused) return;
     _tickStatuses(dt);
 
@@ -8778,7 +8800,12 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     final toP = (game.player.position - position).normalized();
     var incomingMult = game.arenaMode ? (1.0 + game.arenaThreatTier * 0.08) : 1.0;
     if (game.arenaMode && game.arenaModifier == ArenaModifier.unstable) incomingMult *= 1.15;
-    final dmg = (1 * game.difficulty.dmgMult * incomingMult).ceil();
+    final veteranDamage = switch (game.difficulty) {
+      Difficulty.easy => 1.10,
+      Difficulty.normal => 1.22,
+      Difficulty.hard => 1.34,
+    };
+    final dmg = (1 * game.difficulty.dmgMult * veteranDamage * incomingMult).ceil();
     switch (type) {
       case EnemyType.shooter:
       case EnemyType.shieldedShooter:
@@ -8916,6 +8943,43 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         WHDraw.shieldedMarine(canvas, cx, cy, 1.0, withGun: true, flash: f);
         canvas.drawLine(Offset(cx - 10, cy + 4), Offset(cx + 10, cy + 4), Paint()..color = const Color(0xFF00E5FF)..strokeWidth = 3);
         break;
+    }
+    // Procedural detail pass: chipped plates, rivets, bio-chitin ridges and energy seams.
+    // Everything is drawn with Canvas; no external sprites or texture assets are required.
+    final pulse = 0.5 + 0.5 * sin(animationClock * (type == EnemyType.tyranidGaunt || type == EnemyType.dog ? 8 : 3));
+    final detail = Paint()..style = PaintingStyle.stroke..strokeWidth = 1.2;
+    final plate = Paint()..style = PaintingStyle.fill;
+    final isBio = type == EnemyType.tyranidGaunt || type == EnemyType.dog || type == EnemyType.plagueBearer;
+    final isMetal = type == EnemyType.necronWarrior || type == EnemyType.shielded || type == EnemyType.shieldedShooter;
+    final accent = isBio ? const Color(0xFF9AAE42) : isMetal ? const Color(0xFF00C9C9) : const Color(0xFF9E2635);
+    for (int i = 0; i < 5; i++) {
+      final dx = (i - 2) * 7.0;
+      final y = -11.0 + (i % 2) * 5.0;
+      canvas.drawCircle(Offset(cx + dx, cy + y), 1.1 + pulse * 0.35, plate..color = accent.withOpacity(0.75));
+    }
+    if (isBio) {
+      for (int i = 0; i < 3; i++) {
+        final x = cx + (i - 1) * 8.0;
+        final path = Path()..moveTo(x - 3, cy - 13)..lineTo(x, cy - 20 - (i % 2) * 3)..lineTo(x + 3, cy - 13);
+        canvas.drawPath(path, detail..color = const Color(0xFF4D5A25)..strokeWidth = 2.0);
+      }
+    } else {
+      for (int i = 0; i < 4; i++) {
+        final x = cx - 13 + i * 8.5;
+        canvas.drawCircle(Offset(x, cy + 9), 1.35, plate..color = const Color(0xFFC4B8A0));
+      }
+      canvas.drawLine(Offset(cx - 12, cy + 1), Offset(cx + 12, cy + 1), detail..color = accent.withOpacity(0.65 + pulse * 0.3));
+    }
+    if (hitReactTimer > 0) {
+      final reaction = Paint()..color = const Color(0xFFFFF3D0).withOpacity(((hitReactTimer / 0.16).clamp(0.0, 1.0) * 0.7).toDouble())..blendMode = BlendMode.screen;
+      canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy), width: size.x * 0.72, height: size.y * 0.78), reaction);
+      // Small directional impact sparks are procedurally placed around the torso.
+      for (int i = 0; i < 4; i++) {
+        final a = animationClock * 9 + i * pi / 2;
+        final start = Offset(cx + cos(a) * 12, cy + sin(a) * 14);
+        final end = Offset(cx + cos(a) * (18 + 4 * pulse), cy + sin(a) * (20 + 4 * pulse));
+        canvas.drawLine(start, end, Paint()..color = const Color(0xFFFFD180)..strokeWidth = 1.8);
+      }
     }
     if (isChampion) {
       WHDraw.championMark(canvas, cx, -10, affix: affix);
