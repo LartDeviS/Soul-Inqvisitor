@@ -4898,7 +4898,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   Future<void> resolveInvestigation(bool radical) async {
     investigationsResolved++;
-    recordChronicle('Расследование завершено: ${decision.name}; тревога ${campaign.alarm}%, подозрение ${campaign.suspicion}%.');
+    recordChronicle('Расследование завершено: ${radical ? 'радикальный подход' : 'пуританский подход'}; тревога ${campaign.alarm}%, подозрение ${campaign.suspicion}%.');
     if (radical) {
       inquisitionAlignment = 'radical';
       if (!artifactInvestigationResolved) requisition += 35;
