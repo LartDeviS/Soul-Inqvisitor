@@ -2193,7 +2193,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       _loreBonus(CodexId.flamer, 0.5);
 
   void unlockCodex(CodexId id) {
-    if (codexUnlocked.add(id) && isPlaying) {
+    final wasNew = codexUnlocked.add(id);
+    if (wasNew) {
+      if (codexUnlocked.length == 1) { unlockedAchievementIds.add('first_codex'); }
+      persistExpansion();
+    }
+    if (wasNew && isPlaying) {
       world.add(DamageNumber(position: player.position + Vector2(0, -40), amount: 0, color: const Color(0xFFFFD700), label: 'CODEX'));
       pendingLoreId = id;
       isPaused = true;
@@ -2371,6 +2376,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void grantRelic(RelicId id) {
     relics.add(id);
+    if (relics.isNotEmpty) { unlockedAchievementIds.add('first_relic'); }
+    persistExpansion();
     recomputeStats();
   }
 
@@ -3073,6 +3080,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     requisition += 2 + currentFloor;
     campaign.evidence++;
     campaign.cluesFound++;
+    recordCareerProgress(evidence: 1);
     campaign.alarm = max(0, campaign.alarm - 5);
     spawnDamageNumber(player.position, 0, color: const Color(0xFF4FC3F7), label: 'ТЕРМИНАЛ: ДАННЫЕ +РЕКВ.');
     persistExpansion();
@@ -3133,7 +3141,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   /// Updates lifetime counters; call this from mission/kill/evidence events.
-  Future<void> recordCareerProgress({int operations = 0, int floors = 0, int kills = 0, int evidence = 0}) async {
+  Future<void> recordCareerProgress({int operations = 0, int floors = 0, int kills = 0, int evidence = 0, bool save = true}) async {
+    final beforeAchievements = unlockedAchievementIds.length;
     careerOperationsCompleted = (careerOperationsCompleted + operations).clamp(0, 1000000).toInt();
     careerFloorsReached = max(careerFloorsReached, floors);
     careerKills = (careerKills + kills).clamp(0, 100000000).toInt();
@@ -3143,7 +3152,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (careerFloorsReached >= 5) unlockedAchievementIds.add('career_floor_five');
     if (careerKills >= 100) unlockedAchievementIds.add('career_hundred_kills');
     if (careerEvidenceFound >= 10) unlockedAchievementIds.add('career_ten_evidence');
-    await persistExpansion();
+    if (save || unlockedAchievementIds.length != beforeAchievements) await persistExpansion();
   }
 
   Future<void> persistExpansion() async {
@@ -4055,6 +4064,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     EliteAffix affix = EliteAffix.none,
     Vector2? fromDir,
   }) {
+    // Lifetime kill statistics are updated from the actual death callback, not inferred from score.
+    final nextCareerKillCount = careerKills + 1;
+    recordCareerProgress(kills: 1, save: nextCareerKillCount % 10 == 0 || nextCareerKillCount == 100);
     // Recalculate from actual world state — fixes portal not appearing
     enemiesAlive = countLivingHostiles();
     // Also account for not-yet-spawned
@@ -4120,6 +4132,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (!arenaMode && (isChampion || isBoss || type == EnemyType.cultPsyker || type == EnemyType.plagueBearer || type == EnemyType.bloodletter || type == EnemyType.orkBoy || type == EnemyType.tyranidGaunt || type == EnemyType.necronWarrior) && Random().nextDouble() < 0.34) {
       campaign.evidence++;
       campaign.cluesFound++;
+      recordCareerProgress(evidence: 1);
       if (campaign.cluesFound % 3 == 0) {
         campaign.suspicion = max(0, campaign.suspicion - 2);
         spawnDamageNumber(at ?? player.position, 0, color: const Color(0xFF80CBC4), label: 'УЛИКА +${campaign.evidence}');
@@ -4468,12 +4481,14 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
       if (isBossLevel) {
         currentFloor++;
+        recordCareerProgress(floors: currentFloor);
         pathIndex = 0;
         generateFloorPath();
         syncLevelFromPath();
       } else if (pathIndex >= floorPath.length) {
         pathIndex = 0;
         currentFloor++;
+        recordCareerProgress(floors: currentFloor);
         if (currentFloor > maxFloors) {
           showVictory();
           return;
@@ -4554,6 +4569,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void showVictory() {
+    // A completed campaign counts as one career operation; individual rooms do not.
+    if (highThreatOperation) unlockedAchievementIds.add('career_high_threat_completed');
+    recordCareerProgress(operations: 1);
     final evacReward = evacuationRoute == 0 ? 8 : evacuationRoute == 1 ? 14 : 5;
     requisition += evacReward;
     if (evacuationRoute == 2) campaign.suspicion = max(0, campaign.suspicion - 4);
@@ -6632,12 +6650,12 @@ class _AchievementsMenuState extends State<AchievementsMenu> {
       _AchievementEntry('Полевой специалист', 'Найти или сохранить предмет в полевом инвентаре.', Icons.backpack, g.unlockedAchievementIds.contains('field_specialist') || g.fieldInventory.isNotEmpty, 'СНАБЖЕНИЕ'),
       _AchievementEntry('Мастер оружия', 'Достичь 10 отметок мастерства хотя бы с одним типом оружия.', Icons.gps_fixed, ['bolter','staff','sword','katana'].any((k) => g.mastery.getCount(k) >= 10), 'МАСТЕРСТВО'),
       _AchievementEntry('Инквизиторский чин', 'Одержать первую победу в операции.', Icons.military_tech, g.unlockedAchievementIds.contains('career_first_operation') || wins >= 1, 'СЛУЖБА'),
-      _AchievementEntry('Ветеран крестового похода', 'Одержать 10 побед.', Icons.shield, g.unlockedAchievementIds.contains('career_first_operation') || g.unlockedAchievementIds.contains('career_ten_operations') || wins >= 10, 'СЛУЖБА'),
+      _AchievementEntry('Ветеран крестового похода', 'Одержать 10 побед.', Icons.shield, g.unlockedAchievementIds.contains('career_ten_operations') || g.careerOperationsCompleted >= 10, 'СЛУЖБА'),
       _AchievementEntry('Глубокое проникновение', 'Достичь третьего этажа операции.', Icons.stairs, g.unlockedAchievementIds.contains('floor_three') || g.careerFloorsReached >= 3 || g.currentFloor >= 3, 'ИССЛЕДОВАНИЕ'),
       _AchievementEntry('Архивариус', 'Открыть пять записей Кодекса.', Icons.library_books, g.codexUnlocked.length >= 5, 'ЗНАНИЕ'),
       _AchievementEntry('Реликварий', 'Собрать три разные реликвии.', Icons.workspace_premium, g.relics.length >= 3, 'РЕЛИКВИЯ'),
       _AchievementEntry('Служитель трёх Ордо', 'Испытать все три доктрины персонажа.', Icons.account_balance, g.inquisitionRank.rank >= 3, 'ДОКТРИНА'),
-      _AchievementEntry('Операция повышенной угрозы', 'Завершить операцию повышенной угрозы.', Icons.warning_amber, g.highThreatOperation && g.unlockedAchievementIds.contains('career_first_operation') || wins >= 1, 'ИСПЫТАНИЕ'),
+      _AchievementEntry('Операция повышенной угрозы', 'Завершить операцию повышенной угрозы.', Icons.warning_amber, g.unlockedAchievementIds.contains('career_high_threat_completed'), 'ИСПЫТАНИЕ'),
       _AchievementEntry('Кузнец арсенала', 'Накопить 100 обломков.', Icons.build, g.scraps >= 100, 'АРСЕНАЛ'),
       _AchievementEntry('Голос снабжения', 'Активировать полевой терминал.', Icons.terminal, g.terminalsActivated >= 1, 'ОПЕРАЦИЯ'),
       _AchievementEntry('Снабженец', 'Открыть три тайника снабжения.', Icons.inventory_2, g.supplyCachesOpened >= 3, 'ОПЕРАЦИЯ'),
@@ -6670,7 +6688,7 @@ class _AchievementsMenuState extends State<AchievementsMenu> {
             const SizedBox(height: 8),
             ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: unlocked / achievements.length, minHeight: 7, backgroundColor: Colors.white10, valueColor: const AlwaysStoppedAnimation(Color(0xFFB8860B)))),
             const SizedBox(height: 6),
-            const Text('Заслуги вычисляются по прогрессу профиля. Существующие сохранения не сбрасываются.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 11)),
+            const Text('Карьерные заслуги сохраняются между операциями. Существующие сохранения не сбрасываются.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 11)),
           ])),
           Expanded(child: ListView.builder(padding: const EdgeInsets.fromLTRB(12, 4, 12, 18), itemCount: achievements.length, itemBuilder: (context, index) {
             final a = achievements[index];
