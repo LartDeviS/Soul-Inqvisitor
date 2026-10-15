@@ -32,6 +32,7 @@ void main() {
           'backpack': (c, g) => BackpackMenu(g as InquisitorGame),
           'loadSave': (c, g) => LoadSaveMenu(g as InquisitorGame),
           'codex': (c, g) => CodexMenu(g as InquisitorGame),
+          'chronicle': (c, g) => CampaignChronicleMenu(g as InquisitorGame),
           'eventAltar': (c, g) => EventAltarMenu(g as InquisitorGame),
           'eventMerchant': (c, g) => EventMerchantMenu(g as InquisitorGame),
           'pathSelect': (c, g) => PathSelectMenu(g as InquisitorGame),
@@ -111,6 +112,20 @@ extension InquisitionFactionMeta on InquisitionFaction {
     InquisitionFaction.necron => 'Прочные цели; бронебойные боеприпасы предпочтительны.',
     InquisitionFaction.daemon => 'Варп-угроза; антиварповые боеприпасы и стабильность критичны.',
   };
+}
+
+/// Procedural armor patterns inspired by broad 40K silhouettes; all markings are drawn with Canvas.
+enum ArmorPattern { flak, carapace, mk3Iron, mk6Corvus, mk7Aquila, artificer, terminator, voidSealed, inquisitorial }
+extension ArmorPatternMeta on ArmorPattern {
+  String get labelRu => switch (this) {
+    ArmorPattern.flak => 'Флак-бронирование', ArmorPattern.carapace => 'Кираса карапас',
+    ArmorPattern.mk3Iron => 'Силовая броня Mk III «Железная»', ArmorPattern.mk6Corvus => 'Силовая броня Mk VI «Корвус»',
+    ArmorPattern.mk7Aquila => 'Силовая броня Mk VII «Аквила»', ArmorPattern.artificer => 'Артефакторная броня',
+    ArmorPattern.terminator => 'Терминаторская броня', ArmorPattern.voidSealed => 'Герметичный штурмовой комплект',
+    ArmorPattern.inquisitorial => 'Инквизиторский панцирь',
+  };
+  int get price => switch (this) { ArmorPattern.flak => 0, ArmorPattern.carapace => 45, ArmorPattern.mk3Iron => 85, ArmorPattern.mk6Corvus => 95, ArmorPattern.mk7Aquila => 110, ArmorPattern.artificer => 180, ArmorPattern.terminator => 240, ArmorPattern.voidSealed => 135, ArmorPattern.inquisitorial => 160 };
+  double get defense => switch (this) { ArmorPattern.flak => 0, ArmorPattern.carapace => .05, ArmorPattern.mk3Iron => .12, ArmorPattern.mk6Corvus => .08, ArmorPattern.mk7Aquila => .10, ArmorPattern.artificer => .15, ArmorPattern.terminator => .22, ArmorPattern.voidSealed => .11, ArmorPattern.inquisitorial => .13 };
 }
 
 /// Item storage category. Existing field loot stays backward compatible.
@@ -1929,6 +1944,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   double _holyAuraDamageTick = 0;
   final ModularWeaponBuild modularWeapon = ModularWeaponBuild();
   final List<StoredInventoryItem> storedItems = [];
+  ArmorPattern activeArmor = ArmorPattern.inquisitorial;
+  final Set<ArmorPattern> ownedArmor = {ArmorPattern.flak, ArmorPattern.inquisitorial};
+  final List<String> campaignChronicle = <String>[];
+  double combatAnimClock = 0;
+  double hitPulse = 0;
+  int armorForgePurchases = 0;
   double warpStability = 100.0;
   double _warpStabilityClock = 0;
   BiomeId get activeBiome => BiomeId.values[(currentFloor - 1 + (warpCorruption >= 60 ? 2 : 0)) % BiomeId.values.length];
@@ -2271,9 +2292,27 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       (codexUnlocked.contains(CodexId.plagueBearer) ? 0.5 : 0) +
       _loreBonus(CodexId.flamer, 0.5);
 
+  void recordChronicle(String event) {
+    final stamp = 'Этаж $currentFloor • ${DateTime.now().toIso8601String().substring(11, 16)}';
+    campaignChronicle.insert(0, '$stamp — $event');
+    if (campaignChronicle.length > 80) campaignChronicle.removeRange(80, campaignChronicle.length);
+    persistExpansion();
+  }
+
+  bool purchaseArmorAtForge(ArmorPattern pattern) {
+    if (ownedArmor.contains(pattern)) { activeArmor = pattern; persistExpansion(); return true; }
+    if (requisition < pattern.price) return false;
+    requisition -= pattern.price; ownedArmor.add(pattern); activeArmor = pattern; armorForgePurchases++;
+    recordChronicle('Кузня: получен комплект «${pattern.labelRu}» за ${pattern.price} реквизиции.');
+    return true;
+  }
+
+  double get armorDamageReduction => activeArmor.defense.clamp(0.0, 0.30).toDouble();
+
   void unlockCodex(CodexId id) {
     final wasNew = codexUnlocked.add(id);
     if (wasNew) {
+      recordChronicle('Запись Кодекса открыта: ${id.title}.');
       if (codexUnlocked.length == 1) { unlockedAchievementIds.add('first_codex'); }
       persistExpansion();
     }
@@ -3013,6 +3052,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         legendaryWeaponRank = ((data['legendaryWeaponRank'] as num?)?.toInt() ?? 0).clamp(0, 3);
         investigationsResolved = (data['investigations'] as num?)?.toInt() ?? 0;
         warpStability = ((data['warpStability'] as num?)?.toDouble() ?? 100.0).clamp(0.0, 100.0).toDouble();
+        activeArmor = ArmorPattern.values.firstWhere((e) => e.name == data['activeArmor'], orElse: () => ArmorPattern.inquisitorial);
+        ownedArmor.clear();
+        ownedArmor.addAll(((data['ownedArmor'] as List?) ?? ['flak', 'inquisitorial']).map((e) => ArmorPattern.values.firstWhere((a) => a.name == e.toString(), orElse: () => ArmorPattern.flak)));
+        campaignChronicle.clear();
+        campaignChronicle.addAll(((data['campaignChronicle'] as List?) ?? const []).map((e) => e.toString()).take(80));
+        armorForgePurchases = (data['armorForgePurchases'] as num?)?.toInt() ?? 0;
         modularWeapon.load(data['modularWeapon'] is Map ? Map<String, dynamic>.from(data['modularWeapon'] as Map) : null);
         storedItems.clear();
         if (data['storedItems'] is List) { for (final e in data['storedItems'] as List) { if (e is Map) { try { storedItems.add(StoredInventoryItem.fromJson(Map<String, dynamic>.from(e))); } catch (_) {} } } }
@@ -3344,6 +3389,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'alignment': inquisitionAlignment, 'specialization': specialization, 'legendary': legendaryWeapon, 'legendaryWeaponRank': legendaryWeaponRank,
         'investigations': investigationsResolved, 'requisition': requisition,
         'warpStability': warpStability, 'modularWeapon': modularWeapon.toJson(),
+        'activeArmor': activeArmor.name, 'ownedArmor': ownedArmor.map((e) => e.name).toList(),
+        'campaignChronicle': campaignChronicle, 'armorForgePurchases': armorForgePurchases,
         'storedItems': storedItems.map((e) => e.toJson()).toList(),
         'permanentSkillBonus': permanentSkillBonus, 'artifactInvestigationResolved': artifactInvestigationResolved,
         'showSecretSignals': showSecretSignals, 'combatDoctrine': combatDoctrine.name, 'ammoDoctrine': ammoDoctrine.name,
@@ -3381,6 +3428,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'alignment': inquisitionAlignment, 'specialization': specialization, 'legendary': legendaryWeapon, 'legendaryWeaponRank': legendaryWeaponRank,
         'investigations': investigationsResolved, 'requisition': requisition,
         'warpStability': warpStability, 'modularWeapon': modularWeapon.toJson(),
+        'activeArmor': activeArmor.name, 'ownedArmor': ownedArmor.map((e) => e.name).toList(),
+        'campaignChronicle': campaignChronicle, 'armorForgePurchases': armorForgePurchases,
         'storedItems': storedItems.map((e) => e.toJson()).toList(),
         'permanentSkillBonus': permanentSkillBonus, 'artifactInvestigationResolved': artifactInvestigationResolved,
         'showSecretSignals': showSecretSignals, 'combatDoctrine': combatDoctrine.name, 'ammoDoctrine': ammoDoctrine.name,
@@ -4438,6 +4487,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     super.update(dt);
     if (!isPlaying || isPaused) return;
 
+    combatAnimClock += dt;
+    hitPulse = max(0, hitPulse - dt * 2.8);
     bolterHeat = max(0, bolterHeat - dt * 0.18);
     missionAlarmClock += dt;
     _fieldEventClock += dt;
@@ -4639,6 +4690,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void goNextLevel() {
+    recordChronicle('Переход к следующему узлу кампании: этаж $currentFloor, уровень $currentLevel.');
     if (!nearPortal || !portalSpawned) return;
     playClick();
     // Auto-save on portal
@@ -4846,6 +4898,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   Future<void> resolveInvestigation(bool radical) async {
     investigationsResolved++;
+    recordChronicle('Расследование завершено: ${decision.name}; тревога ${campaign.alarm}%, подозрение ${campaign.suspicion}%.');
     if (radical) {
       inquisitionAlignment = 'radical';
       if (!artifactInvestigationResolved) requisition += 35;
@@ -5408,6 +5461,7 @@ class FieldLootPickup extends PositionComponent with HasGameReference<Inquisitor
       if (game.collectFieldLoot(item, secret: secret)) removeFromParent();
     }
   }
+
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
@@ -6434,6 +6488,12 @@ class _BackpackMenuState extends State<BackpackMenu> {
               if (g.playerClass == PlayerClass.hereticus)
                 Text('Клинок: ${lo.bladeEdge.name}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
               const SizedBox(height: 8),
+              const Text('КУЗНЯ БРОНИ • ПРОЦЕДУРНЫЕ КЕРАМИТНЫЕ КОМПЛЕКТЫ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+              Text('Надето: ${g.activeArmor.labelRu} • снижение входящего урона ${(g.armorDamageReduction * 100).round()}% • реквизиция ${g.requisition}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
+              Wrap(spacing: 5, runSpacing: 5, children: ArmorPattern.values.map((a) => OutlinedButton(
+                onPressed: () { final ok = g.purchaseArmorAtForge(a); setState(() {}); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? 'Экипировано: ${a.labelRu}' : 'Недостаточно реквизиции: нужно ${a.price}'))); },
+                child: Text('${g.ownedArmor.contains(a) ? 'НАДЕТЬ' : 'КУПИТЬ'} ${a.labelRu} • ${a.price}', style: const TextStyle(fontSize: 10)),
+              )).toList()),
               const Text('ПОЛЕВОЙ ИНВЕНТАРЬ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
               Text('Вместимость: ${g.fieldInventory.length}/${g.backpackCapacity} • Улучшение: ${g.backpackUpgradeLevel}/3', style: const TextStyle(color: Colors.white70, fontSize: 12)),
               Text(g.activeOrdoContract, style: const TextStyle(color: Color(0xFF80CBC4), fontSize: 11)),
@@ -6603,6 +6663,19 @@ class _BackpackMenuState extends State<BackpackMenu> {
   }
 }
 
+class CampaignChronicleMenu extends StatelessWidget {
+  final InquisitorGame game;
+  const CampaignChronicleMenu(this.game, {super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: const Color(0xFF090909),
+    appBar: AppBar(backgroundColor: const Color(0xFF211A14), title: const Text('ХРОНИКА КАМПАНИИ', style: TextStyle(color: Color(0xFFFFD700))), leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () { game.playClick(); game.overlays.remove('chronicle'); })),
+    body: game.campaignChronicle.isEmpty
+      ? const Center(child: Text('Записей пока нет. События расследования и открытия Кодекса появятся здесь.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54)))
+      : ListView.builder(itemCount: game.campaignChronicle.length, itemBuilder: (_, i) => Card(color: const Color(0xFF171717), child: ListTile(leading: const Icon(Icons.menu_book, color: Color(0xFFFFD700)), title: Text(game.campaignChronicle[i], style: const TextStyle(color: Colors.white70, fontSize: 13))))),
+  );
+}
+
 class CodexMenu extends StatelessWidget {
   final InquisitorGame game;
   const CodexMenu(this.game, {super.key});
@@ -6621,6 +6694,7 @@ class CodexMenu extends StatelessWidget {
               '${game.codexUnlocked.length} / ${CodexId.values.length}',
               style: const TextStyle(color: Colors.white54),
             ),
+            TextButton.icon(onPressed: () { game.playClick(); game.overlays.add('chronicle'); }, icon: const Icon(Icons.menu_book, color: Color(0xFFFFD700)), label: const Text('Хроника событий кампании', style: TextStyle(color: Color(0xFFFFD700)))),
             Expanded(
               child: ListView.builder(
                 itemCount: CodexId.values.length,
@@ -7818,6 +7892,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       return;
     }
     if (game.holyAuraTimer > 0) amount = max(1, (amount * 0.7).round());
+    amount = max(1, (amount * (1.0 - game.armorDamageReduction)).round());
     if (game.defenseChance > 0 && Random().nextDouble() < game.defenseChance) {
       game.spawnDamageNumber(position, 0, color: const Color(0xFF90CAF9), label: 'BLOCK');
       return;
@@ -7843,11 +7918,65 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
   }
 
+  void _drawProceduralArmor(Canvas canvas, double cx, double cy, ArmorPattern pattern, Color base, Color trim) {
+    final dark = Color.lerp(base, Colors.black, .42)!;
+    final light = Color.lerp(base, Colors.white, .22)!;
+    final plate = Paint()..style = PaintingStyle.fill;
+    // Breastplate lamination, rivets and heraldic markings. Pattern changes geometry, not only tint.
+    final chest = Path()..moveTo(cx - 16, cy - 9)..lineTo(cx - 20, cy + 7)..lineTo(cx - 12, cy + 20)..lineTo(cx + 12, cy + 20)..lineTo(cx + 20, cy + 7)..lineTo(cx + 16, cy - 9)..lineTo(cx, cy - 15)..close();
+    plate.color = pattern == ArmorPattern.terminator ? dark : base;
+    canvas.drawPath(chest, plate);
+    canvas.drawPath(chest, Paint()..color = trim.withOpacity(.85)..style = PaintingStyle.stroke..strokeWidth = pattern == ArmorPattern.artificer ? 2.4 : 1.2);
+    for (final side in [-1.0, 1.0]) {
+      final shoulder = Path()..moveTo(cx + side * 13, cy - 11)..quadraticBezierTo(cx + side * 27, cy - 18, cx + side * 28, cy - 2)..lineTo(cx + side * 20, cy + 5)..lineTo(cx + side * 13, cy + 1)..close();
+      canvas.drawPath(shoulder, Paint()..color = pattern == ArmorPattern.terminator ? light : dark);
+      canvas.drawPath(shoulder, Paint()..color = trim.withOpacity(.8)..style = PaintingStyle.stroke..strokeWidth = 1.0);
+      for (int rivet = 0; rivet < (pattern == ArmorPattern.artificer ? 4 : 2); rivet++) {
+        canvas.drawCircle(Offset(cx + side * (18 + rivet * 2.0), cy - 6 + rivet * 2.0), 0.9, Paint()..color = trim);
+      }
+    }
+    // Distinct silhouette cues for selected armor patterns.
+    if (pattern == ArmorPattern.mk3Iron || pattern == ArmorPattern.terminator) {
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2), width: 15, height: 8), const Radius.circular(2)), Paint()..color = light);
+      canvas.drawLine(Offset(cx - 7, cy + 2), Offset(cx + 7, cy + 2), Paint()..color = trim..strokeWidth = 1.4);
+    }
+    if (pattern == ArmorPattern.mk6Corvus) {
+      final beak = Path()..moveTo(cx - 5, cy - 18)..lineTo(cx + 5, cy - 18)..lineTo(cx + 2, cy - 25)..lineTo(cx - 2, cy - 25)..close();
+      canvas.drawPath(beak, Paint()..color = light);
+    }
+    if (pattern == ArmorPattern.artificer || pattern == ArmorPattern.inquisitorial) {
+      canvas.drawCircle(Offset(cx, cy + 3), 5.0, Paint()..color = trim);
+      canvas.drawCircle(Offset(cx, cy + 3), 2.2, Paint()..color = dark);
+      canvas.drawLine(Offset(cx - 4, cy + 3), Offset(cx + 4, cy + 3), Paint()..color = trim..strokeWidth = 1.0);
+    }
+    if (pattern == ArmorPattern.voidSealed) {
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 18), width: 22, height: 6), const Radius.circular(3)), Paint()..color = const Color(0xFF80DEEA).withOpacity(.8));
+    }
+    if (pattern == ArmorPattern.terminator) {
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 24), width: 33, height: 8), const Radius.circular(2)), Paint()..color = dark);
+      canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy + 24), width: 21, height: 2), Paint()..color = trim);
+    }
+    // Scratches and ceramic edge highlights vary with active pattern for material depth.
+    final scratchCount = pattern == ArmorPattern.artificer ? 5 : pattern == ArmorPattern.flak ? 1 : 3;
+    for (int i = 0; i < scratchCount; i++) {
+      final x = cx - 10 + i * (20 / max(1, scratchCount - 1));
+      canvas.drawLine(Offset(x, cy + 8 + (i.isEven ? 0 : 2)), Offset(x + 2, cy + 11 + (i.isEven ? 2 : 0)), Paint()..color = light.withOpacity(.35)..strokeWidth = .8);
+    }
+  }
+
+
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     final ang = atan2(aimDir.y, aimDir.x);
     WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.28, flash: hurtFlash / 0.15, custom: game.custom, cls: game.playerClass, healthRatio: maxHealth <= 0 ? 1 : health / maxHealth);
+    _drawProceduralArmor(canvas, cx, cy, game.activeArmor, game.custom.armorColor(0.45), game.custom.trimColor(0.65));
+    // Animated targeting servo and shoulder beacon are vector-only; phase follows game time.
+    final servoPhase = sin(game.combatAnimClock * 5.0);
+    canvas.drawCircle(Offset(cx + 21, cy - 14 + servoPhase * 1.2), 3.0, Paint()..color = const Color(0xFF80DEEA).withOpacity(0.55 + 0.35 * servoPhase.abs()));
+    if (hurtFlash > 0) {
+      canvas.drawLine(Offset(cx - 18, cy - 3), Offset(cx + 18, cy + 6), Paint()..color = const Color(0xFFFF5252).withOpacity(hurtFlash * 2)..strokeWidth = 2.0);
+    }
     canvas.save();
     canvas.translate(cx, cy);
     canvas.rotate(ang);
