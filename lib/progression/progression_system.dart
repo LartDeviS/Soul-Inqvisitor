@@ -1,0 +1,2 @@
+class ProgressionReward { final int experience,requisition,shards; const ProgressionReward({this.experience=0,this.requisition=0,this.shards=0}); }
+class ProgressionSystem { static int levelForExperience(int xp)=>1+(xp<0?0:xp)~/250; static int experienceToNextLevel(int xp)=>250-(xp<0?0:xp)%250; static ProgressionReward missionReward({required int threat,bool boss=false,bool contract=false})=>ProgressionReward(experience:60+threat*20+(boss?120:0),requisition:40+threat*25+(boss?180:0)+(contract?75:0),shards:boss?2:0); }

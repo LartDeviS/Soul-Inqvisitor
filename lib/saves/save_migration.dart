@@ -1,0 +1,1 @@
+class SaveMigration { static const currentVersion=1; static Map<String,dynamic> migrate(Map<String,dynamic> source){final data=Map<String,dynamic>.from(source);final version=(data['schemaVersion'] as num?)?.toInt()??0;if(version<1){data.putIfAbsent('campaign',()=>{});data.putIfAbsent('inventory',()=>{});data.putIfAbsent('weapons',()=>{});data['schemaVersion']=1;} return data;} }

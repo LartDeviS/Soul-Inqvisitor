@@ -1,0 +1,3 @@
+enum MissionEventType { reinforcement, extraction, warpSurge, reactorLeak, ambush, cache }
+class MissionEvent { final String id, title, description; final MissionEventType type; final double triggerAfterSeconds; final int threatDelta; const MissionEvent({required this.id, required this.title, required this.description, required this.type, required this.triggerAfterSeconds, this.threatDelta = 0}); }
+class MissionEventDirector { final List<MissionEvent> events; final Set<String> triggered = {}; MissionEventDirector(this.events); List<MissionEvent> poll(double elapsedSeconds) { final ready = events.where((e) => elapsedSeconds >= e.triggerAfterSeconds && !triggered.contains(e.id)).toList(); triggered.addAll(ready.map((e) => e.id)); return ready; } }

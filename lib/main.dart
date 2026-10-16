@@ -8,6 +8,7 @@ import 'package:flame/game.dart';
 import 'package:flame/input.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'game/inquisitor_game.dart' as expansion;
 
 void main() {
   runApp(
@@ -1936,6 +1937,8 @@ class WHDraw {
   }
 }
 class InquisitorGame extends FlameGame with HasCollisionDetection {
+  /// Additive expansion state; legacy campaign and save fields remain untouched.
+  final expansion.InquisitorExpansionSystems expansionSystems = expansion.InquisitorExpansionSystems();
   late Player player;
   late JoystickComponent moveJoystick;
   late JoystickComponent attackJoystick;
