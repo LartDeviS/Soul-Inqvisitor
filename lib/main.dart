@@ -90,6 +90,10 @@ enum ArenaModifier { none, swift, armored, swarm, unstable }
 /// Deathwatch ammunition profile.
 enum AmmoDoctrine { standard, armorPiercing, incendiary, suppressive, antiWarp }
 
+/// Damage channels used by Combat 2.0. Kept separate from legacy weapon enums
+/// so existing save files and weapon unlocks remain compatible.
+enum CombatDamageType { kinetic, plasma, flame, warp, melee, explosive }
+
 enum LootRarity { common, uncommon, rare, epic, legendary }
 enum LootKind { ammunition, medicae, requisition, weaponPart, evidence, keycard, relicShard, stim, grenade, mod }
 enum TacticalConsumable { fragGrenade, stim, smoke, auspexPulse }
@@ -7909,6 +7913,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
           damage: game.scaleDamage((game.rifleDamage * 1.75).round()),
           color: const Color(0xFF80D8FF), speed: 430, radius: 8,
           pierce: true, explosive: true, applyBurn: true,
+          damageType: CombatDamageType.plasma, armorPenetration: 0.45,
         )..priority = 13);
         break;
       case RangedWeapon.shotgun:
@@ -7991,6 +7996,19 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       pierce: prc,
       ricochet: ric,
       explosive: exp,
+      damageType: switch (game.rangedWeapon) {
+        RangedWeapon.plasmaGun => CombatDamageType.plasma,
+        RangedWeapon.warpBeam || RangedWeapon.staff || RangedWeapon.stormStaff => CombatDamageType.warp,
+        RangedWeapon.daggers || RangedWeapon.needles || RangedWeapon.sniperNeedle => CombatDamageType.kinetic,
+        RangedWeapon.shotgun => exp ? CombatDamageType.explosive : CombatDamageType.kinetic,
+        _ => exp ? CombatDamageType.explosive : CombatDamageType.kinetic,
+      },
+      armorPenetration: switch (game.rangedWeapon) {
+        RangedWeapon.sniperNeedle => 0.30,
+        RangedWeapon.plasmaGun => 0.45,
+        RangedWeapon.warpBeam => 0.18,
+        _ => game.ammoDoctrine == AmmoDoctrine.armorPiercing ? 0.25 : 0.0,
+      },
     )..priority = 13);
   }
 
@@ -8309,6 +8327,8 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
   final int damage;
   final Color color;
   final bool pierce, ricochet, explosive, applyBurn;
+  final CombatDamageType damageType;
+  final double armorPenetration;
   double life = 2.2;
   int bounces = 0;
   final Set<int> hitIds = {};
@@ -8325,6 +8345,8 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
     this.ricochet = false,
     this.explosive = false,
     this.applyBurn = false,
+    this.damageType = CombatDamageType.kinetic,
+    this.armorPenetration = 0,
   })  : velocity = direction.normalized() * speed,
         super(position: position.clone(), size: Vector2.all(radius * 2), anchor: Anchor.center, priority: 13);
 
@@ -8358,8 +8380,8 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
     final ratio = e.maxHp > 0 ? e.currentHp / e.maxHp : 1.0;
     final dmg = game.hasExecutionerMark && ratio < 0.3 ? (damage * 1.2).round() : damage;
-    e.applyDamage(dmg);
-    if (applyBurn || explosive) e.applyStatus(StatusType.burn, 2.0 + game.codexBurnBonus, tickDamage: 1);
+    e.applyCombatDamage(dmg, damageType: damageType, armorPenetration: armorPenetration);
+    if (applyBurn || explosive || damageType == CombatDamageType.flame) e.applyStatus(StatusType.burn, 2.0 + game.codexBurnBonus, tickDamage: 1);
     if (explosive) {
       game.world.add(KillExplosion(position: position.clone(), radius: 55, damage: damage ~/ 3)..priority = 12);
     }
@@ -8747,6 +8769,61 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     } else {
       statuses.add(StatusEffect(t, dur, tickDamage: tickDamage));
     }
+  }
+
+  /// Applies typed damage before routing through the established damage pipeline.
+  /// Armor penetration bypasses a portion of physical protection; faction matchups
+  /// reward choosing the right weapon without making any enemy immune.
+  void applyCombatDamage(
+    int amount, {
+    required CombatDamageType damageType,
+    double armorPenetration = 0,
+  }) {
+    if (amount <= 0) return;
+    final penetration = armorPenetration.clamp(0.0, 0.85).toDouble();
+    var armor = switch (type) {
+      EnemyType.shielded || EnemyType.shieldedShooter => 0.28,
+      EnemyType.brute || EnemyType.chaosSpawn || EnemyType.plagueBearer => 0.22,
+      EnemyType.necronWarrior || EnemyType.necronImmortal => 0.25,
+      EnemyType.orkBoy => 0.16,
+      EnemyType.genestealer => 0.08,
+      _ => 0.04,
+    };
+    if (isChampion) armor += 0.06;
+    var multiplier = 1.0;
+    switch (type) {
+      case EnemyType.necronWarrior:
+      case EnemyType.necronImmortal:
+        if (damageType == CombatDamageType.kinetic) multiplier = 0.82;
+        if (damageType == CombatDamageType.plasma || damageType == CombatDamageType.explosive) multiplier = 1.18;
+        break;
+      case EnemyType.orkBoy:
+      case EnemyType.brute:
+      case EnemyType.chaosSpawn:
+        if (damageType == CombatDamageType.kinetic) multiplier = 0.92;
+        if (damageType == CombatDamageType.flame || damageType == CombatDamageType.plasma) multiplier = 1.12;
+        break;
+      case EnemyType.tyranidGaunt:
+      case EnemyType.genestealer:
+        if (damageType == CombatDamageType.flame) multiplier = 1.30;
+        if (damageType == CombatDamageType.explosive) multiplier = 1.12;
+        break;
+      case EnemyType.bloodletter:
+      case EnemyType.plagueBearer:
+        if (damageType == CombatDamageType.kinetic) multiplier = 0.84;
+        if (damageType == CombatDamageType.warp || damageType == CombatDamageType.plasma) multiplier = 1.18;
+        if (damageType == CombatDamageType.flame && type == EnemyType.plagueBearer) multiplier = 1.15;
+        break;
+      case EnemyType.cultPsyker:
+        if (damageType == CombatDamageType.warp) multiplier = 0.82;
+        if (damageType == CombatDamageType.kinetic || damageType == CombatDamageType.plasma) multiplier = 1.12;
+        break;
+      default:
+        break;
+    }
+    final armorFactor = 1.0 - armor * (1.0 - penetration);
+    final adjusted = max(1, (amount * armorFactor * multiplier).round());
+    applyDamage(adjusted);
   }
 
   void applyDamage(int amount, {bool fromStatus = false}) {
