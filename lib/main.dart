@@ -61,10 +61,9 @@ enum MeleeWeapon {
 }
 enum EnemyType {
   shooter, melee, shielded, dog, shieldedShooter, flamer, sniper, brute,
-  // new
   cultPsyker, plagueBearer, bloodletter,
   orkBoy, tyranidGaunt, necronWarrior,
-  genestealer, chaosSpawn, necronImmortal, orkBoy, tyranidGaunt, necronWarrior,
+  genestealer, chaosSpawn, necronImmortal,
 }
 enum Difficulty { easy, normal, hard, hell }
 enum PlayerClass { xenos, malleus, hereticus }
@@ -7784,6 +7783,8 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     final base = switch (game.rangedWeapon) {
       RangedWeapon.bolter => 0.28 + (game.playerClass == PlayerClass.xenos ? game.bolterHeat * 0.35 : 0),
       RangedWeapon.rifle => 0.55,
+      // Plasma has a deliberate charge/recovery cadence to offset its piercing explosive shot.
+      RangedWeapon.plasmaGun => 0.82,
       RangedWeapon.shotgun => 0.72,
       RangedWeapon.staff => 0.48 + game.staffWarpStress * 0.25,
       RangedWeapon.stormStaff => 0.55 + game.staffWarpStress * 0.3,
