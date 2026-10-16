@@ -8671,6 +8671,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   late int maxHp;
   late int currentHp;
   double attackTimer = 0;
+  double attackWindup = 0;
   double hurtFlash = 0;
   double hitReactTimer = 0;
   double animationClock = 0;
@@ -8966,6 +8967,13 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     smartMove(game.player.position, movementSpeed, dt, radius: 22, kite: kite && dist < prefer + 40, preferDist: prefer);
     pushOutOfWalls(22);
 
+    // Combat 2.0: ordinary enemies telegraph attacks before damage/projectiles resolve.
+    // While winding up, the enemy cannot start another attack.
+    if (attackWindup > 0) {
+      attackWindup = max(0, attackWindup - dt);
+      if (attackWindup <= 0) _doAttack(dist);
+      return;
+    }
     attackTimer += dt;
     final closeBonus = dist < 140 ? 0.65 : 1.0;
     final interval = switch (type) {
@@ -8993,8 +9001,18 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
 
     if (attackTimer >= interval) {
       attackTimer = 0;
-      _doAttack(dist);
+      attackWindup = _attackWindupDuration;
+      if (attackWindup <= 0) _doAttack(dist);
     }
+  }
+
+  double get _attackWindupDuration {
+    if (type == EnemyType.sniper || type == EnemyType.necronImmortal) return 0.52;
+    if (type == EnemyType.brute || type == EnemyType.chaosSpawn || type == EnemyType.plagueBearer) return 0.42;
+    if (type == EnemyType.cultPsyker || type == EnemyType.flamer) return 0.38;
+    if (type == EnemyType.genestealer || type == EnemyType.dog || type == EnemyType.tyranidGaunt) return 0.20;
+    if (type == EnemyType.shooter || type == EnemyType.shieldedShooter || type == EnemyType.necronWarrior) return 0.30;
+    return 0.24;
   }
 
   void _doAttack(double dist) {
@@ -9237,6 +9255,21 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       WHDraw.championMark(canvas, cx, -10, affix: affix);
       final ratio = currentHp / maxHp;
       canvas.drawRect(Rect.fromLTWH(cx - 22, -4, 44 * ratio, 5), Paint()..color = affix != EliteAffix.none ? affix.color : const Color(0xFFFFD700));
+    }
+    if (attackWindup > 0) {
+      final progress = (attackWindup / _attackWindupDuration).clamp(0.0, 1.0);
+      final warningColor = type == EnemyType.cultPsyker || type == EnemyType.bloodletter
+          ? const Color(0xFFCE93D8)
+          : type == EnemyType.necronWarrior || type == EnemyType.necronImmortal
+              ? const Color(0xFF00E5FF)
+              : const Color(0xFFFF5252);
+      final warningPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0 + (1.0 - progress) * 2.0
+        ..color = warningColor.withOpacity(0.45 + (1.0 - progress) * 0.5);
+      canvas.drawCircle(Offset(cx, cy + 5), 25 + (1.0 - progress) * 8, warningPaint);
+      canvas.drawCircle(Offset(cx, cy + 5), 7 + (1.0 - progress) * 4,
+          Paint()..color = warningColor.withOpacity(0.45));
     }
     WHDraw.statusIcons(canvas, cx, -18, statuses);
     if (suppression > 2) {
