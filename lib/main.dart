@@ -50,7 +50,7 @@ void main() {
 // Expansion systems are deliberately additive: legacy saves remain readable, existing route nodes stay authoritative, and all new visuals use Canvas geometry.
 // ─── Enums ───────────────────────────────────────────────
 enum RangedWeapon {
-  bolter, rifle, shotgun,
+  bolter, rifle, shotgun, plasmaGun,
   staff, stormStaff, warpBeam,
   daggers, needles, sniperNeedle,
 }
@@ -64,7 +64,7 @@ enum EnemyType {
   // new
   cultPsyker, plagueBearer, bloodletter,
   orkBoy, tyranidGaunt, necronWarrior,
-  genestealer, chaosSpawn, necronImmortal,
+  genestealer, chaosSpawn, necronImmortal, orkBoy, tyranidGaunt, necronWarrior,
 }
 enum Difficulty { easy, normal, hard, hell }
 enum PlayerClass { xenos, malleus, hereticus }
@@ -95,7 +95,7 @@ enum LootKind { ammunition, medicae, requisition, weaponPart, evidence, keycard,
 enum TacticalConsumable { fragGrenade, stim, smoke, auspexPulse }
 enum MapLayout { cruciform, ring, corridors, chambers, openYard }
 enum InquisitionFaction { imperium, chaos, ork, tyranid, necron, daemon }
-enum BiomeId { manufactorum, hive, shrine, deathWorld, warpRuin }
+enum BiomeId { manufactorum, hive, shrine, deathWorld, warpRuin, voidship, necronTomb }
 enum InventoryLocation { backpack, equipment, vault }
 enum InvestigationDecision { preserveEvidence, destroyEvidence, bargainWithInformant }
 
@@ -224,7 +224,7 @@ enum CodexId {
   cultPsyker, plagueBearer, bloodletter,
   miniBoss, boss, knight, king, tentacle, cyclops, champion,
   plagueLord, bloodChampion,
-  genestealer, chaosSpawn, necronImmortal,
+  genestealer, chaosSpawn, necronImmortal, orkBoy, tyranidGaunt, necronWarrior,
 }
 
 extension DiffLabel on Difficulty {
@@ -253,7 +253,7 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 0.75;
       case Difficulty.normal: return 1.15;
       case Difficulty.hard: return 1.70;
-      case Difficulty.hell: return 2.40; // x3 добавляется в профиле противника
+      case Difficulty.hell: return 1.95; // Адский: повышенная угроза без тройного множителя
     }
   }
   double get dmgMult {
@@ -261,7 +261,7 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 0.70;
       case Difficulty.normal: return 1.05;
       case Difficulty.hard: return 1.45;
-      case Difficulty.hell: return 1.90; // x3 добавляется в профиле противника
+      case Difficulty.hell: return 1.38; // Адский: опасно, но без тройного множителя
     }
   }
   double get bossHpMult {
@@ -269,7 +269,7 @@ extension DiffLabel on Difficulty {
       case Difficulty.easy: return 0.80;
       case Difficulty.normal: return 1.20;
       case Difficulty.hard: return 1.85;
-      case Difficulty.hell: return 2.50; // скрытые боссы сохраняют профиль Харда
+      case Difficulty.hell: return 2.10; // босс-множитель применяется только к отдельным боссам
     }
   }
 }
@@ -440,6 +440,9 @@ extension CodexMeta on CodexId {
       case CodexId.genestealer: return 'Генокрад';
       case CodexId.chaosSpawn: return 'Отродье Хаоса';
       case CodexId.necronImmortal: return 'Бессмертный некронов';
+      case CodexId.orkBoy: return 'Орк-парень';
+      case CodexId.tyranidGaunt: return 'Тиранид-гаунт';
+      case CodexId.necronWarrior: return 'Воин некронов';
     }
   }
   String get lore {
@@ -490,6 +493,12 @@ extension CodexMeta on CodexId {
         return 'Отродье Хаоса — нестабильная масса мутаций. Регенерирует в бою и атакует непредсказуемыми конечностями.';
       case CodexId.necronImmortal:
         return 'Бессмертные некронов — тяжёлая пехота древней машинной династии. Их гаусс-оружие истончает материю, а самовосстановление делает их опасными на дистанции.';
+      case CodexId.orkBoy:
+        return 'Орк-парень идёт в лобовую атаку, полагаясь на грубую силу и численное превосходство. Держи дистанцию и не позволяй ему зажать себя у стены.';
+      case CodexId.tyranidGaunt:
+        return 'Гаунты — передовой рой тиранидов. Поодиночке они уязвимы, но быстрый натиск опасен; огонь по площади помогает сдерживать стаю.';
+      case CodexId.necronWarrior:
+        return 'Воин некронов медлителен, но защищён металлическим панцирем. Бронебойные боеприпасы эффективнее обычных попаданий.';
     }
   }
   String get knowledgeBonus {
@@ -527,6 +536,12 @@ extension CodexMeta on CodexId {
       case CodexId.chaosSpawn:
         return '+2% урон по отродьям Хаоса';
       case CodexId.necronImmortal:
+        return '+2% урон по некронам';
+      case CodexId.orkBoy:
+        return '+2% урон по оркам';
+      case CodexId.tyranidGaunt:
+        return '+2% урон по тиранидам';
+      case CodexId.necronWarrior:
         return '+2% урон по некронам';
     }
   }
@@ -1978,11 +1993,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   String get activeBiomeLabel => switch (activeBiome) {
     BiomeId.manufactorum => 'Манyфакторум', BiomeId.hive => 'Улей', BiomeId.shrine => 'Храмовый комплекс',
     BiomeId.deathWorld => 'Мир смерти', BiomeId.warpRuin => 'Руины Варпа',
+    BiomeId.voidship => 'Пустотный корабль', BiomeId.necronTomb => 'Гробница некронов',
   };
   String get activeRoomSet => switch (activeBiome) {
     BiomeId.manufactorum => 'цеха, конвейеры, силовые узлы', BiomeId.hive => 'жилые блоки, мостки, узкие коридоры',
     BiomeId.shrine => 'часовни, алтари, колоннады', BiomeId.deathWorld => 'укрытия, обломки, открытые площадки',
     BiomeId.warpRuin => 'осквернённые залы, разломы, рунические круги',
+    BiomeId.voidship => 'гермодвери, переборки, аварийные палубы', BiomeId.necronTomb => 'монолитные камеры, зелёные энергетические каналы',
   };
 
 
@@ -2739,11 +2756,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     levelsSinceEvent++;
     if (isBossLevel || isMiniBossLevel || arenaMode) return EventRoomType.none;
     if (levelsSinceEvent < 2) return EventRoomType.none;
-    if (levelsSinceEvent >= 3 || Random().nextDouble() < 0.55) {
+    if (levelsSinceEvent >= 3 || Random().nextDouble() < 0.62) {
       levelsSinceEvent = 0;
       final r = Random().nextDouble();
-      if (r < 0.34) return EventRoomType.altar;
-      if (r < 0.67) return EventRoomType.merchant;
+      if (r < 0.38) return EventRoomType.altar;
+      if (r < 0.70) return EventRoomType.merchant;
       return EventRoomType.trap;
     }
     return EventRoomType.none;
@@ -2896,16 +2913,28 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void _startTrapWave() {
     eventResolved = true;
-    final n = 4 + currentFloor;
+    // Trap rooms now become biome-specific ambush events instead of identical generic waves.
+    final biome = activeBiome;
+    final n = 4 + currentFloor + (biome == BiomeId.voidship || biome == BiomeId.necronTomb ? 1 : 0);
+    String eventLabel = 'ЗАСАДА!';
     for (int i = 0; i < n; i++) {
       enemiesToSpawn++;
       enemiesAlive++;
       enemiesSpawned++;
       final points = getEnemySpawnPoints();
       if (points.isEmpty) continue;
+      final EnemyType type = switch (biome) {
+        BiomeId.voidship => i % 3 == 0 ? EnemyType.shieldedShooter : EnemyType.shooter,
+        BiomeId.necronTomb => i % 4 == 0 && currentFloor >= 7 ? EnemyType.necronImmortal : EnemyType.necronWarrior,
+        BiomeId.deathWorld => i % 3 == 0 ? EnemyType.genestealer : EnemyType.tyranidGaunt,
+        BiomeId.warpRuin => i % 3 == 0 ? EnemyType.bloodletter : EnemyType.cultPsyker,
+        BiomeId.hive => i % 3 == 0 ? EnemyType.dog : EnemyType.melee,
+        BiomeId.shrine => i % 3 == 0 ? EnemyType.cultPsyker : EnemyType.bloodletter,
+        BiomeId.manufactorum => i % 3 == 0 ? EnemyType.orkBoy : EnemyType.shooter,
+      };
       final e = Enemy(
         floor: currentFloor,
-        type: _chooseEnemyType(),
+        type: type,
         isChampion: i == 0 && overallLevel >= 5,
         affix: i == 0 && overallLevel >= 5 ? rollAffix() : EliteAffix.none,
       );
@@ -2913,7 +2942,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       e.priority = 30;
       world.add(e);
     }
-    spawnDamageNumber(player.position, 0, color: const Color(0xFFFF1744), label: 'ЗАСАДА!');
+    if (biome == BiomeId.voidship) eventLabel = 'АБОРДАЖНАЯ ТРЕВОГА!';
+    if (biome == BiomeId.necronTomb) eventLabel = 'ПРОБУЖДЕНИЕ ГРОБНИЦЫ!';
+    if (biome == BiomeId.deathWorld) eventLabel = 'ЗАСАДА РОЯ!';
+    if (biome == BiomeId.warpRuin) eventLabel = 'ВАРП-РАЗЛОМ!';
+    spawnDamageNumber(player.position, 0, color: const Color(0xFFFF1744), label: eventLabel);
     triggerShake(power: 8, time: 0.25);
   }
 
@@ -4252,24 +4285,26 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   EnemyType _chooseEnemyType() {
+    // Disjoint cumulative bands: no late condition can silently shadow another enemy.
     final r = Random().nextDouble();
     final f = currentFloor;
-    if (f >= 7 && r < 0.07) return EnemyType.necronImmortal;
-    if (f >= 6 && r >= 0.07 && r < 0.14) return EnemyType.chaosSpawn;
-    if (f >= 5 && r >= 0.14 && r < 0.22) return EnemyType.genestealer;
-    if (f >= 6 && r < 0.07) return EnemyType.plagueBearer;
-    if (f >= 5 && r >= 0.07 && r < 0.14) return EnemyType.bloodletter;
-    if (f >= 4 && r >= 0.22 && r < 0.34) return EnemyType.cultPsyker;
-    if (currentFloor >= 3 && r < 0.19) return EnemyType.necronWarrior;
-    if (currentFloor >= 2 && r < 0.27) return EnemyType.tyranidGaunt;
-    if (currentFloor >= 2 && r < 0.34) return EnemyType.orkBoy;
-    if (overallLevel >= 18 && r < 0.40) return EnemyType.brute;
-    if (overallLevel >= 14 && r < 0.34) return EnemyType.sniper;
-    if (overallLevel >= 12 && r < 0.42) return EnemyType.flamer;
-    if (overallLevel >= 20 && r < 0.52) return EnemyType.shieldedShooter;
-    if (overallLevel >= 11 && r < 0.62) return EnemyType.dog;
-    if (r < 0.40) return EnemyType.shooter;
-    if (r < 0.70) return EnemyType.melee;
+    final level = overallLevel;
+    if (f >= 7 && r < 0.055) return EnemyType.necronImmortal;
+    if (f >= 6 && r < 0.105) return EnemyType.chaosSpawn;
+    if (f >= 6 && r < 0.155) return EnemyType.plagueBearer;
+    if (f >= 5 && r < 0.205) return EnemyType.genestealer;
+    if (f >= 5 && r < 0.250) return EnemyType.bloodletter;
+    if (f >= 4 && r < 0.300) return EnemyType.cultPsyker;
+    if (f >= 3 && r < 0.365) return EnemyType.necronWarrior;
+    if (f >= 2 && r < 0.430) return EnemyType.tyranidGaunt;
+    if (f >= 2 && r < 0.490) return EnemyType.orkBoy;
+    if (level >= 20 && r < 0.555) return EnemyType.shieldedShooter;
+    if (level >= 18 && r < 0.615) return EnemyType.brute;
+    if (level >= 14 && r < 0.675) return EnemyType.sniper;
+    if (level >= 12 && r < 0.735) return EnemyType.flamer;
+    if (level >= 11 && r < 0.795) return EnemyType.dog;
+    if (r < 0.865) return EnemyType.shooter;
+    if (r < 0.940) return EnemyType.melee;
     return EnemyType.shielded;
   }
 
@@ -4351,9 +4386,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case EnemyType.cultPsyker: unlockCodex(CodexId.cultPsyker); break;
         case EnemyType.plagueBearer: unlockCodex(CodexId.plagueBearer); break;
         case EnemyType.bloodletter: unlockCodex(CodexId.bloodletter); break;
-        case EnemyType.orkBoy: unlockCodex(CodexId.brute); break;
-        case EnemyType.tyranidGaunt: unlockCodex(CodexId.dog); break;
-        case EnemyType.necronWarrior: unlockCodex(CodexId.shielded); break;
+        case EnemyType.orkBoy: unlockCodex(CodexId.orkBoy); break;
+        case EnemyType.tyranidGaunt: unlockCodex(CodexId.tyranidGaunt); break;
+        case EnemyType.necronWarrior: unlockCodex(CodexId.necronWarrior); break;
         case EnemyType.genestealer: unlockCodex(CodexId.genestealer); break;
         case EnemyType.chaosSpawn: unlockCodex(CodexId.chaosSpawn); break;
         case EnemyType.necronImmortal: unlockCodex(CodexId.necronImmortal); break;
@@ -5537,18 +5572,22 @@ class Floor extends PositionComponent {
   Floor({required Vector2 size, this.biome = 0, this.layout = MapLayout.chambers}) : super(size: size, position: Vector2.zero(), priority: 0);
   @override
   void render(Canvas canvas) {
-    final base = switch (biome % 5) {
+    final base = switch (biome % 7) {
       0 => const Color(0xFFB0BEC5),
       1 => const Color(0xFF263238),
       2 => const Color(0xFF3E2723),
       3 => const Color(0xFF1B2635),
+      5 => const Color(0xFF17232B),
+      6 => const Color(0xFF142A22),
       _ => const Color(0xFF30243A),
     };
-    final gridColor = switch (biome % 5) {
+    final gridColor = switch (biome % 7) {
       0 => const Color(0xFF90A4AE),
       1 => const Color(0xFF455A64),
       2 => const Color(0xFF5D4037),
       3 => const Color(0xFF37474F),
+      5 => const Color(0xFF607D8B),
+      6 => const Color(0xFF00BFA5),
       _ => const Color(0xFF5E35B1),
     };
     canvas.drawRect(size.toRect(), Paint()..color = base);
@@ -5563,7 +5602,7 @@ class Floor extends PositionComponent {
     final inlay = Paint()..color = gridColor.withOpacity(0.42)..style = PaintingStyle.stroke..strokeWidth = 3;
     // Biome-specific room motifs are generated with vector geometry only.
     final motif = Paint()..color = gridColor.withOpacity(0.28)..style = PaintingStyle.stroke..strokeWidth = 5;
-    switch (biome % 5) {
+    switch (biome % 7) {
       case 0: // Manufactorum: conveyor rails and service bays
         for (double y = 170; y < size.y; y += 360) {
           canvas.drawLine(Offset(90, y), Offset(size.x - 90, y), motif);
@@ -5590,6 +5629,22 @@ class Floor extends PositionComponent {
           final y = 120.0 + ((i * 257) % (size.y - 240));
           final path = Path()..moveTo(x, y)..lineTo(x + 32, y - 18)..lineTo(x + 78, y + 12)..lineTo(x + 54, y + 54)..close();
           canvas.drawPath(path, motif);
+        }
+        break;
+      case 5: // Voidship: bulkheads, hatches and deck markings
+        for (double y = 120; y < size.y - 80; y += 300) {
+          canvas.drawLine(Offset(80, y), Offset(size.x - 80, y), motif);
+          for (double x = 130; x < size.x - 100; x += 260) {
+            canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(x, y - 42, 92, 84), const Radius.circular(10)), motif);
+          }
+        }
+        break;
+      case 6: // Necron tomb: obelisks and concentric dynastic seals
+        for (double x = 140; x < size.x - 100; x += 280) {
+          for (double y = 160; y < size.y - 100; y += 300) {
+            canvas.drawRect(Rect.fromCenter(center: Offset(x, y), width: 42, height: 100), motif);
+            canvas.drawCircle(Offset(x, y), 66, motif);
+          }
         }
         break;
       default: // Warp ruins: fractured sigils and concentric seals
@@ -7844,6 +7899,14 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       case RangedWeapon.rifle:
         _bullet(origin, dir, game.rifleDamage, const Color(0xFF00E5FF), 680, 4);
         break;
+      case RangedWeapon.plasmaGun:
+        game.world.add(Bullet(
+          position: origin.clone(), direction: dir,
+          damage: game.scaleDamage((game.rifleDamage * 1.75).round()),
+          color: const Color(0xFF80D8FF), speed: 430, radius: 8,
+          pierce: true, explosive: true, applyBurn: true,
+        )..priority = 13);
+        break;
       case RangedWeapon.shotgun:
         final n = game.loadout.gunSight == GunSightMod.wide ? 5 : 3;
         final spread = game.loadout.gunSight == GunSightMod.wide ? 0.32 : 0.22;
@@ -8060,6 +8123,11 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
           break;
         case RangedWeapon.rifle:
           WHDraw.rifle(canvas, 0, 0, 1.0, accent: wc);
+          break;
+        case RangedWeapon.plasmaGun:
+          WHDraw.bolter(canvas, 0, 0, 1.05, accent: const Color(0xFF80D8FF));
+          canvas.drawCircle(const Offset(39, -7), 5, Paint()..color = const Color(0xFF80D8FF));
+          canvas.drawCircle(const Offset(39, -7), 8, Paint()..color = const Color(0xFF80D8FF).withOpacity(0.22));
           break;
         case RangedWeapon.shotgun:
           WHDraw.shotgun(canvas, 0, 0, 1.0, accent: wc);
@@ -8621,10 +8689,11 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       Difficulty.easy => 1.28,
       Difficulty.normal => 1.42,
       Difficulty.hard => 1.58,
-      Difficulty.hell => 1.68,
+      Difficulty.hell => 1.55,
     };
-    var hp = base * game.difficulty.hpMult * veteranScale * game.worldThreat * (1 + floor * 0.08);
-    if (game.difficulty == Difficulty.hell) hp *= 3.0;
+    // Enemy-only scaling. Bosses are separate components and do not pass through this path.
+    final floorScale = 1 + floor * (game.difficulty == Difficulty.hell ? 0.055 : 0.08);
+    var hp = base * game.difficulty.hpMult * veteranScale * game.worldThreat * floorScale;
     if (isChampion) hp *= 2.2;
     if (affix == EliteAffix.regenerating) hp *= 1.15;
     maxHp = hp.round().clamp(8, 9999);
@@ -8659,7 +8728,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     if (game.arenaMode) s *= min(1.8, 1.0 + game.arenaThreatTier * 0.025);
     if (game.arenaMode && game.arenaModifier == ArenaModifier.swift) s *= 1.22;
     if (affix == EliteAffix.swift) s *= 1.35;
-    if (game.difficulty == Difficulty.hell) s *= 3.0;
+    if (game.difficulty == Difficulty.hell) s *= 1.18;
     if (statuses.any((e) => e.type == StatusType.slow || e.type == StatusType.plague)) s *= 0.6;
     return s;
   }
@@ -8791,11 +8860,11 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     if (!game.isPlaying || game.isPaused) return;
     _tickStatuses(dt);
 
-    if (affix == EliteAffix.regenerating) {
+    if (affix == EliteAffix.regenerating || type == EnemyType.chaosSpawn) {
       regenTimer += dt;
       if (regenTimer >= 1.2 && currentHp < maxHp) {
         regenTimer = 0;
-        currentHp = min(maxHp, currentHp + max(1, maxHp ~/ 25));
+        currentHp = min(maxHp, currentHp + max(1, maxHp ~/ (type == EnemyType.chaosSpawn ? 45 : 25)));
       }
     }
 
@@ -8810,7 +8879,10 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         : type == EnemyType.cultPsyker
             ? 260.0
             : 180.0;
-    smartMove(game.player.position, moveSpeed, dt, radius: 22, kite: kite && dist < prefer + 40, preferDist: prefer);
+    // Genestealer pounce: short, readable acceleration windows rather than permanent extreme speed.
+    final pounce = type == EnemyType.genestealer && (animationClock % 3.8) < 0.62;
+    final movementSpeed = pounce ? moveSpeed * 1.28 : moveSpeed;
+    smartMove(game.player.position, movementSpeed, dt, radius: 22, kite: kite && dist < prefer + 40, preferDist: prefer);
     pushOutOfWalls(22);
 
     attackTimer += dt;
@@ -8836,7 +8908,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         } *
         closeBonus /
         (isChampion ? 1.15 : 1.0) /
-        (game.difficulty == Difficulty.hell ? 3.0 : 1.0);
+        (game.difficulty == Difficulty.hell ? 0.88 : 1.0);
 
     if (attackTimer >= interval) {
       attackTimer = 0;
@@ -8852,9 +8924,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       Difficulty.easy => 1.10,
       Difficulty.normal => 1.22,
       Difficulty.hard => 1.34,
-      Difficulty.hell => 1.42,
+      Difficulty.hell => 1.28,
     };
-    final hellBehavior = game.difficulty == Difficulty.hell ? 3.0 : 1.0;
+    final hellBehavior = game.difficulty == Difficulty.hell ? 1.18 : 1.0;
     final dmg = (1 * game.difficulty.dmgMult * veteranDamage * incomingMult * hellBehavior).ceil();
     switch (type) {
       case EnemyType.shooter:
@@ -8870,7 +8942,15 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         break;
       case EnemyType.necronImmortal:
         if (dist < 460) {
-          game.world.add(EnemyBullet(position: position.clone(), direction: toP, damage: dmg + 1, speed: 230, mod: BulletMod.ricochet)..priority = 16);
+          // Three-shot gauss fan: dangerous, but spread gives the player a dodge lane.
+          final baseAngle = atan2(toP.y, toP.x);
+          for (final offset in [-0.16, 0.0, 0.16]) {
+            final angle = baseAngle + offset;
+            game.world.add(EnemyBullet(
+              position: position.clone(), direction: Vector2(cos(angle), sin(angle)),
+              damage: max(1, dmg - 1), speed: 215, mod: BulletMod.ricochet,
+            )..priority = 16);
+          }
         }
         break;
       case EnemyType.sniper:
@@ -8923,8 +9003,6 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
           game.player.takeDamage(dmg + 1);
           if (Random().nextDouble() < 0.25) game.player.applyStatus(StatusType.corruption, 2.0, tickDamage: 1);
         }
-        break;
-      case EnemyType.necronImmortal:
         break;
       case EnemyType.bloodletter:
       case EnemyType.melee:
