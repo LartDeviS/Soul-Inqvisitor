@@ -2,8 +2,8 @@
 import 'balance/difficulty_config.dart';
 import 'enemies/enemy.dart';
 import 'missions/mission_data.dart';
-import 'progression/campaign_state.dart';
-import 'progression/inventory_state.dart';
+import '../progression/campaign_state.dart';
+import '../progression/inventory_state.dart';
 import 'weapons/weapon_system.dart';
 import 'world/biome_data.dart';
 
