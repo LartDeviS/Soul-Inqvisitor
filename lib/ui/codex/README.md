@@ -1,1 +1,1 @@
-Codex expansion: faction dossiers, enemy ability descriptions, and discovered evidence. Reuse the current Codex screen and unlock state during integration.
+Mission and biome descriptions are data-driven in game/missions and game/world. The existing CodexMenu remains the UI entry point.

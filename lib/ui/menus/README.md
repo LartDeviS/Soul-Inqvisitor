@@ -1,1 +1,1 @@
-Place menu widgets for mission briefing, contract board, and post-mission debrief here. Keep existing overlays in main.dart until each replacement is tested.
+World events are surfaced by InquisitorGame.currentWorldEvent and currentMissionEvent; a later UI pass can add dedicated choice overlays without replacing existing overlays.

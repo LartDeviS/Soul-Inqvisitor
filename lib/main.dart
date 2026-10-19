@@ -9,6 +9,12 @@ import 'package:flame/input.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'game/inquisitor_game.dart' as expansion;
+import 'game/weapons/weapon_data.dart' as weapon_catalog;
+import 'game/world/biome_data.dart' as world_catalog;
+import 'game/world/arena_events.dart' as arena_catalog;
+import 'progression/inventory_state.dart' as gear_catalog;
+import 'progression/progression_system.dart' as progression_catalog;
+import 'game/missions/mission_events.dart' as mission_catalog;
 
 void main() {
   runApp(
@@ -54,6 +60,7 @@ enum RangedWeapon {
   bolter, rifle, shotgun, plasmaGun,
   staff, stormStaff, warpBeam,
   daggers, needles, sniperNeedle,
+  meltaGun, flamer, heavyBolter,
 }
 enum MeleeWeapon {
   sword, axe, hammer,
@@ -1942,6 +1949,15 @@ class WHDraw {
   }
 }
 class InquisitorGame extends FlameGame with HasCollisionDetection {
+  final expansion.InquisitorExpansionSystems expansionSystems = expansion.InquisitorExpansionSystems();
+  final arena_catalog.WorldDirector worldDirector = arena_catalog.WorldDirector();
+  final mission_catalog.MissionEventDirector missionEvents = mission_catalog.MissionEventDirector();
+  final progression_catalog.ProgressionTrack progressionTrack = progression_catalog.ProgressionTrack();
+  final gear_catalog.EquipmentInventory equipmentInventory = gear_catalog.EquipmentInventory();
+  world_catalog.BiomeId expansionBiome = world_catalog.BiomeId.manufactorum;
+  arena_catalog.WorldEvent? currentWorldEvent;
+  arena_catalog.WorldEventEffects? currentWorldEventEffects;
+  mission_catalog.MissionEvent? currentMissionEvent;
   /// Additive expansion state; legacy campaign and save fields remain untouched.
   final expansion.InquisitorExpansionSystems expansionSystems = expansion.InquisitorExpansionSystems();
   late Player player;
@@ -2240,7 +2256,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   bool get unlockedPowerKatana => playerClass == PlayerClass.hereticus && unlockTier11;
   bool get unlockedExecutioner => playerClass == PlayerClass.hereticus && unlockTier21;
 
-  double get worldThreat => 1.0 + (highThreatOperation ? operationThreatLevel * 0.045 : 0) + overallLevel * 0.055 + skills.totalSpent * 0.02 + (currentFloor - 1) * 0.04 + (arenaMode ? arenaThreatTier * 0.12 : 0) + (warpCorruption >= 60 ? 0.08 : 0) + (warpCorruption >= 90 ? 0.12 : 0) + (arenaMode && arenaModifier == ArenaModifier.armored ? 0.25 : 0) + (arenaMode && arenaModifier == ArenaModifier.unstable ? 0.10 : 0);
+  double get worldThreat => (1.0 + (highThreatOperation ? operationThreatLevel * 0.045 : 0) + overallLevel * 0.055 + skills.totalSpent * 0.02 + (currentFloor - 1) * 0.04 + (arenaMode ? arenaThreatTier * 0.12 : 0) + (warpCorruption >= 60 ? 0.08 : 0) + (warpCorruption >= 90 ? 0.12 : 0) + (arenaMode && arenaModifier == ArenaModifier.armored ? 0.25 : 0) + (arenaMode && arenaModifier == ArenaModifier.unstable ? 0.10 : 0)) * (currentWorldEventEffects?.enemyThreatMultiplier ?? 1.0);
   double get comboMult => (1.0 + (combo.clamp(0, 12) * 0.08)).clamp(1.0, 2.0);
   bool get hasCrit => relics.contains(RelicId.crit);
   bool get hasLifesteal => relics.contains(RelicId.lifesteal);
@@ -2974,6 +2990,22 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     await persistRank();
   }
 
+  weapon_catalog.WeaponData get activeWeaponData => weapon_catalog.WeaponData.forLegacyName(rangedWeapon.name);
+
+  void rollWorldAndMissionEvents({int? seed}) {
+    currentWorldEvent = worldDirector.rollEvent(expansionBiome, floor: currentFloor, seed: seed);
+    currentMissionEvent = missionEvents.roll(floor: currentFloor, alarm: campaign.alarm, seed: seed == null ? null : seed + 17);
+    if (currentWorldEvent != null) {
+      currentWorldEventEffects = worldDirector.applyEventModifiers(currentWorldEvent!, this);
+      campaign.requisition += currentWorldEventEffects!.bonusRequisition;
+      campaignChronicle.insert(0, 'Событие мира: ${currentWorldEvent!.title} — ${currentWorldEvent!.description}');
+    }
+    if (currentMissionEvent != null) {
+      campaignChronicle.insert(0, 'Событие расследования: ${currentMissionEvent!.title}');
+    }
+    if (campaignChronicle.length > 80) campaignChronicle.removeRange(80, campaignChronicle.length);
+  }
+
   @override
   Future<void> onLoad() async {
     camera.viewfinder.visibleGameSize = Vector2(mapWidth, mapHeight);
@@ -3104,6 +3136,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       final ex = prefs.getString('inquisition_expansion');
       if (ex != null) {
         final data = Map<String, dynamic>.from(jsonDecode(ex) as Map);
+        if (data['expansionSystems'] is Map) {
+          expansionSystems.loadJson(data['expansionSystems']);
+          equipmentInventory.state.loadJson(data['expansionSystems'] is Map ? (data['expansionSystems'] as Map)['inventory'] : null);
+          progressionTrack.loadJson((data['expansionSystems'] as Map)['progression']);
+        }
         arsenalUpgrade = ((data['arsenal'] as num?)?.toInt() ?? 0).clamp(0, 5);
         shrineUpgrade = ((data['shrine'] as num?)?.toInt() ?? 0).clamp(0, 5);
         archiveUpgrade = ((data['archive'] as num?)?.toInt() ?? 0).clamp(0, 5);
@@ -3466,6 +3503,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'terminalsActivated': terminalsActivated, 'supplyCachesOpened': supplyCachesOpened,
         'randomMissionEvents': randomMissionEvents, 'consumables': consumables.map((k, v) => MapEntry(k.name, v)),
         'campaignState': campaign.toJson(),
+        'expansionSystems': expansionSystems.toJson(),
+        'equipmentInventory': equipmentInventory.state.toJson(),
+        'progressionTrack': progressionTrack.toJson(),
+        'worldEventType': currentWorldEvent?.type.name,
+        'worldEventFloor': currentFloor,
         'unlockedAchievementIds': unlockedAchievementIds.toList(),
         'careerOperationsCompleted': careerOperationsCompleted, 'careerFloorsReached': careerFloorsReached,
         'careerKills': careerKills, 'careerEvidenceFound': careerEvidenceFound,
@@ -3505,6 +3547,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'terminalsActivated': terminalsActivated, 'supplyCachesOpened': supplyCachesOpened,
         'randomMissionEvents': randomMissionEvents, 'consumables': consumables.map((k, v) => MapEntry(k.name, v)),
         'campaignState': campaign.toJson(),
+        'expansionSystems': expansionSystems.toJson(),
+        'equipmentInventory': equipmentInventory.state.toJson(),
+        'progressionTrack': progressionTrack.toJson(),
+        'worldEventType': currentWorldEvent?.type.name,
+        'worldEventFloor': currentFloor,
         'unlockedAchievementIds': unlockedAchievementIds.toList(),
         'careerOperationsCompleted': careerOperationsCompleted, 'careerFloorsReached': careerFloorsReached,
         'careerKills': careerKills, 'careerEvidenceFound': careerEvidenceFound,
@@ -4792,6 +4839,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       if (isBossLevel) {
         currentFloor++;
         recordCareerProgress(floors: currentFloor);
+        rollWorldAndMissionEvents(seed: operationSerial + currentFloor * 101);
         pathIndex = 0;
         generateFloorPath();
         syncLevelFromPath();
@@ -4799,6 +4847,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         pathIndex = 0;
         currentFloor++;
         recordCareerProgress(floors: currentFloor);
+        rollWorldAndMissionEvents(seed: operationSerial + currentFloor * 101);
         if (currentFloor > maxFloors) {
           showVictory();
           return;
@@ -5102,6 +5151,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     ironWillUsedThisFloor = false;
     generateFloorPath();
     syncLevelFromPath();
+    rollWorldAndMissionEvents(seed: operationSerial + currentFloor * 101);
     recomputeStats();
     isPlaying = true;
     isPaused = false;
@@ -6697,6 +6747,9 @@ class _BackpackMenuState extends State<BackpackMenu> {
         add('Болтер', RangedWeapon.bolter, true);
         add('Винтовка', RangedWeapon.rifle, g.unlockedRifle);
         add('Дробовик', RangedWeapon.shotgun, g.unlockedShotgun);
+        add('Мельтаган', RangedWeapon.meltaGun, g.currentFloor >= 3 || g._everReached11);
+        add('Огнемёт', RangedWeapon.flamer, g.currentFloor >= 4 || g.overallLevel >= 21);
+        add('Тяжёлый болтер', RangedWeapon.heavyBolter, g.currentFloor >= 5 || g.overallLevel >= 31);
         break;
       case PlayerClass.malleus:
         add('Посох', RangedWeapon.staff, true);
@@ -7800,6 +7853,9 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       RangedWeapon.daggers => 0.22,
       RangedWeapon.needles => 0.32,
       RangedWeapon.sniperNeedle => 0.85,
+      RangedWeapon.meltaGun => 1.05,
+      RangedWeapon.flamer => 0.12,
+      RangedWeapon.heavyBolter => 0.20,
     };
     return base * game.attackSpeedMult / game.modularWeapon.rateMultiplier;
   }
@@ -7941,6 +7997,37 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
           }
         }
         break;
+      case RangedWeapon.meltaGun:
+        // Short-range anti-armour weapon: slow, heavy projectile with strong penetration.
+        game.world.add(Bullet(
+          position: origin.clone(), direction: dir,
+          damage: game.scaleDamage((game.shotgunDamage * 4.2).round()),
+          color: const Color(0xFFFF7043), speed: 330, radius: 10,
+          pierce: true, explosive: true,
+          damageType: CombatDamageType.plasma, armorPenetration: 0.72,
+        )..priority = 13);
+        break;
+      case RangedWeapon.flamer:
+        // A short cone of burning projectiles; visually distinct and useful against swarms.
+        for (int i = 0; i < 7; i++) {
+          final a = atan2(dir.y, dir.x) + (i - 3) * 0.105;
+          game.world.add(Bullet(
+            position: origin.clone(), direction: Vector2(cos(a), sin(a)),
+            damage: game.scaleDamage(max(2, (game.bolterDamage * 0.42).round())),
+            color: i.isEven ? const Color(0xFFFF6D00) : const Color(0xFFFFD54F),
+            speed: 260 + (i % 3) * 18, radius: 5.5,
+            applyBurn: true, damageType: CombatDamageType.flame,
+          )..priority = 13);
+        }
+        break;
+      case RangedWeapon.heavyBolter:
+        // Three-round burst with modest spread, high sustained damage and recoil cadence.
+        for (int i = 0; i < 3; i++) {
+          final a = atan2(dir.y, dir.x) + (i - 1) * 0.035;
+          _bullet(origin, Vector2(cos(a), sin(a)), (game.bolterDamage * 0.82).round(),
+              const Color(0xFFFFB74D), 470, 6.5);
+        }
+        break;
       case RangedWeapon.staff:
         final rad = 160.0 * game.staffRadiusMult();
         game.world.add(PsyWave(
@@ -8000,7 +8087,9 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       damageType: switch (game.rangedWeapon) {
         RangedWeapon.plasmaGun => CombatDamageType.plasma,
         RangedWeapon.warpBeam || RangedWeapon.staff || RangedWeapon.stormStaff => CombatDamageType.warp,
-        RangedWeapon.daggers || RangedWeapon.needles || RangedWeapon.sniperNeedle => CombatDamageType.kinetic,
+        RangedWeapon.daggers || RangedWeapon.needles || RangedWeapon.sniperNeedle || RangedWeapon.heavyBolter => CombatDamageType.kinetic,
+        RangedWeapon.flamer => CombatDamageType.flame,
+        RangedWeapon.meltaGun => CombatDamageType.plasma,
         RangedWeapon.shotgun => exp ? CombatDamageType.explosive : CombatDamageType.kinetic,
         _ => exp ? CombatDamageType.explosive : CombatDamageType.kinetic,
       },
@@ -8008,6 +8097,8 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
         RangedWeapon.sniperNeedle => 0.30,
         RangedWeapon.plasmaGun => 0.45,
         RangedWeapon.warpBeam => 0.18,
+        RangedWeapon.meltaGun => 0.72,
+        RangedWeapon.heavyBolter => 0.12,
         _ => game.ammoDoctrine == AmmoDoctrine.armorPiercing ? 0.25 : 0.0,
       },
     )..priority = 13);
@@ -8172,6 +8263,22 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
           break;
         case RangedWeapon.sniperNeedle:
           WHDraw.sniperNeedle(canvas, 0, 0, 1.0, accent: wc);
+          break;
+        case RangedWeapon.meltaGun:
+          WHDraw.bolter(canvas, 0, 0, 1.22, accent: const Color(0xFFFF7043));
+          canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(24, -14, 19, 13), const Radius.circular(3)), Paint()..color = const Color(0xFF4E342E));
+          canvas.drawCircle(const Offset(42, -7), 5, Paint()..color = const Color(0xFFFF7043));
+          canvas.drawCircle(const Offset(42, -7), 9, Paint()..color = const Color(0xFFFF7043).withOpacity(0.20));
+          break;
+        case RangedWeapon.flamer:
+          WHDraw.shotgun(canvas, 0, 0, 1.05, accent: const Color(0xFFFF6D00));
+          canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(16, -18, 16, 10), const Radius.circular(3)), Paint()..color = const Color(0xFF8D4B20));
+          canvas.drawCircle(const Offset(38, -7), 5, Paint()..color = const Color(0xFFFFD54F));
+          break;
+        case RangedWeapon.heavyBolter:
+          WHDraw.bolter(canvas, 0, 0, 1.32, accent: const Color(0xFFFFB74D));
+          canvas.drawRect(const Rect.fromLTWH(20, 3, 22, 7), Paint()..color = const Color(0xFF5D4037));
+          canvas.drawLine(const Offset(43, -7), const Offset(53, -7), Paint()..color = const Color(0xFFFFCC80)..strokeWidth = 4);
           break;
       }
     }
@@ -8951,6 +9058,10 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   }
 
   void _die(Vector2 fromDir) {
+    game.progressionTrack.grantExperience(isChampion ? 24 : 12);
+    game.expansionSystems.progression.grantExperience(isChampion ? 24 : 12);
+    game.expansionSystems.contracts.recordKill(elite: isChampion || type == EnemyType.brute || type == EnemyType.necronImmortal);
+    game.expansionSystems.campaign.recordKill(type.name);
     final pos = position.clone();
     if (affix == EliteAffix.explosive) {
       game.world.add(KillExplosion(position: pos, radius: 80, damage: 6 + floor * 2)..priority = 12);

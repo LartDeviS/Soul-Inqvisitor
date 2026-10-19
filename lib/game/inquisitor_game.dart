@@ -1,58 +1,39 @@
-// Integration facade for the legacy Flame game. The full game remains in main.dart for compatibility.
 import 'balance/difficulty_config.dart';
 import 'enemies/enemy.dart';
+import 'enemies/enemy_type.dart';
 import 'missions/mission_data.dart';
+import 'missions/mission_events.dart';
+import 'missions/contracts.dart';
 import '../progression/campaign_state.dart';
 import '../progression/inventory_state.dart';
+import '../progression/progression_system.dart';
+import '../saves/save_manager.dart';
+import '../saves/save_migration.dart';
 import 'weapons/weapon_system.dart';
 import 'world/biome_data.dart';
+import 'world/arena_events.dart';
 
-/// Additive runtime services for new content. Kept independent of Flame so it is testable.
+/// Connected data layer for new combat, world, mission and gear systems.
+/// Legacy Flame components remain in main.dart while this facade owns testable domain state.
 class InquisitorExpansionSystems {
-  final CampaignProgress campaign = CampaignProgress();
-  final InventoryState inventory = InventoryState();
-  final WeaponSystem weapons = WeaponSystem();
-  DifficultyConfig difficulty = DifficultyConfig.normal;
-  BiomeId biome = BiomeId.hive;
+  final CampaignProgress campaign=CampaignProgress();
+  final InventoryState inventory=InventoryState();
+  final WeaponSystem weapons=WeaponSystem();
+  final ProgressionTrack progression=ProgressionTrack();
+  final ContractBoard contracts=ContractBoard();
+  final WorldDirector world=WorldDirector();
+  final MissionEventDirector missionEvents=MissionEventDirector();
+  final ExpansionSaveManager saves=ExpansionSaveManager();
+  DifficultyConfig difficulty=DifficultyConfig.normal;
+  BiomeId biome=BiomeId.hive;
   MissionData? activeMission;
-  final List<EnemyRuntimeState> trackedEnemies = <EnemyRuntimeState>[];
-
-  void beginMission(MissionData mission, {BiomeId? selectedBiome, DifficultyConfig? selectedDifficulty}) {
-    activeMission = mission;
-    if (selectedBiome != null) biome = selectedBiome;
-    if (selectedDifficulty != null) difficulty = selectedDifficulty;
-    campaign.beginMission(mission.id);
-    trackedEnemies.clear();
-  }
-
-  void recordEnemyDefeated(EnemyRuntimeState enemy) {
-    enemy.isDefeated = true;
-    campaign.recordKill(enemy.type.name);
-  }
-
-  Map<String, dynamic> toJson() => {
-    'schemaVersion': 1,
-    'campaign': campaign.toJson(),
-    'inventory': inventory.toJson(),
-    'weapons': weapons.toJson(),
-    'difficulty': difficulty.id,
-    'biome': biome.name,
-    'activeMissionId': activeMission?.id,
-  };
-
-  void loadJson(Map<String, dynamic> json, {List<MissionData> missions = const []}) {
-    campaign.loadJson(json['campaign']);
-    inventory.loadJson(json['inventory']);
-    weapons.loadJson(json['weapons']);
-    difficulty = DifficultyConfig.byId(json['difficulty'] as String? ?? 'normal');
-    biome = BiomeId.values.firstWhere((e) => e.name == json['biome'], orElse: () => BiomeId.hive);
-    final id = json['activeMissionId'];
-    activeMission = id is String ? _findMission(missions, id) : null;
-    trackedEnemies.clear();
-  }
-
-  MissionData? _findMission(List<MissionData> missions, String id) {
-    for (final mission in missions) { if (mission.id == id) return mission; }
-    return null;
-  }
+  WorldEvent? activeWorldEvent;
+  MissionEvent? activeMissionEvent;
+  final List<EnemyRuntimeState> trackedEnemies=[];
+  void beginMission(MissionData mission,{BiomeId? selectedBiome,DifficultyConfig? selectedDifficulty,int? seed}) {activeMission=mission;if(selectedBiome!=null)biome=selectedBiome;if(selectedDifficulty!=null)difficulty=selectedDifficulty;campaign.beginMission(mission.id);activeWorldEvent=world.rollEvent(biome,floor:mission.floor,seed:seed);activeMissionEvent=missionEvents.roll(floor:mission.floor,alarm:campaign.alarm,seed:seed==null?null:seed+17);trackedEnemies.clear();}
+  void recordEnemyDefeated(EnemyRuntimeState enemy){enemy.isDefeated=true;campaign.recordKill(enemy.type.faction.name);contracts.recordKill(elite:enemy.type.archetype==EnemyArchetype.heavy||enemy.type.archetype==EnemyArchetype.sniper);progression.grantExperience(12);}
+  void recordCacheFound(){contracts.recordCache();campaign.requisition+=activeWorldEvent?.requisition??5;progression.grantExperience(8);}
+  Map<String,dynamic> toJson()=>{'schemaVersion':2,'campaign':campaign.toJson(),'inventory':inventory.toJson(),'weapons':weapons.toJson(),'progression':progression.toJson(),'contracts':contracts.toJson(),'difficulty':difficulty.id,'biome':biome.name,'activeMissionId':activeMission?.id,'activeWorldEvent':activeWorldEvent?.type.name,'activeMissionEvent':activeMissionEvent?.type.name};
+  void loadJson(dynamic input,{List<MissionData> missions=const[]}){final migrated=SaveMigration.migrate(input);campaign.loadJson(migrated['campaign']);inventory.loadJson(migrated['inventory']);weapons.loadJson(migrated['weapons']);progression.loadJson(migrated['progression']);contracts.loadJson(migrated['contracts']);difficulty=DifficultyConfig.byId(migrated['difficulty'] as String? ?? 'normal');biome=BiomeId.values.firstWhere((e)=>e.name==migrated['biome'],orElse:()=>BiomeId.hive);final id=migrated['activeMissionId'];activeMission=id is String?missions.where((m)=>m.id==id).firstOrNull:null;trackedEnemies.clear();}
 }
+extension _FirstOrNull<T> on Iterable<T>{T? get firstOrNull=>isEmpty?null:first;}

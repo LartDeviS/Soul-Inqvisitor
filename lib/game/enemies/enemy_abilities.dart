@@ -1,17 +1,2 @@
-enum EnemyAbilityKind { charge, summon, regeneration, warpBlast, poisonCloud, suppressingFire, phaseShift }
-class EnemyAbility {
-  final EnemyAbilityKind kind;
-  final double cooldown, range, power;
-  final String telegraph;
-  const EnemyAbility(this.kind, {required this.cooldown, required this.range, required this.power, required this.telegraph});
-}
-class EnemyAbilityBook {
-  static const abilities = <String, List<EnemyAbility>>{
-    'genestealer': [EnemyAbility(EnemyAbilityKind.charge, cooldown: 5, range: 260, power: 1.5, telegraph: 'Генокрад готовится к рывку!')],
-    'chaosPsyker': [EnemyAbility(EnemyAbilityKind.warpBlast, cooldown: 6, range: 300, power: 1.8, telegraph: 'Псайкер собирает энергию варпа!')],
-    'plagueBearer': [EnemyAbility(EnemyAbilityKind.poisonCloud, cooldown: 8, range: 100, power: 0.7, telegraph: 'Чумной демон выпускает облако скверны!')],
-    'necronImmortal': [EnemyAbility(EnemyAbilityKind.regeneration, cooldown: 10, range: 0, power: 0.2, telegraph: 'Некрон начинает самовосстановление!')],
-    'daemonPrince': [EnemyAbility(EnemyAbilityKind.summon, cooldown: 12, range: 360, power: 3, telegraph: 'Демон-принц разрывает завесу варпа!'), EnemyAbility(EnemyAbilityKind.phaseShift, cooldown: 18, range: 250, power: 1.4, telegraph: 'Демон-принц переходит в новую фазу!')],
-  };
-  static List<EnemyAbility> forType(String type) => abilities[type] ?? const [];
-}
+enum EnemyAbility { charge, suppressiveBurst, warpBolt, gaussLine, regeneration, summonMinions, toxicZone }
+class EnemyAbilityData { final EnemyAbility id; final String warning; final double windup,cooldown; final bool area; const EnemyAbilityData(this.id,this.warning,this.windup,this.cooldown,{this.area=false}); static const all=<EnemyAbility,EnemyAbilityData>{EnemyAbility.charge:EnemyAbilityData(EnemyAbility.charge,'Враг готовится к рывку',.55,3.5),EnemyAbility.suppressiveBurst:EnemyAbilityData(EnemyAbility.suppressiveBurst,'Стрелок готовит подавляющий залп',.8,2.7),EnemyAbility.warpBolt:EnemyAbilityData(EnemyAbility.warpBolt,'Псайкер собирает варп-энергию',1.0,3.8),EnemyAbility.gaussLine:EnemyAbilityData(EnemyAbility.gaussLine,'Некрон фиксирует гаусс-линию',1.15,4.0),EnemyAbility.regeneration:EnemyAbilityData(EnemyAbility.regeneration,'Плоть восстанавливается',0,5),EnemyAbility.summonMinions:EnemyAbilityData(EnemyAbility.summonMinions,'Сущность призывает подкрепление',.9,6),EnemyAbility.toxicZone:EnemyAbilityData(EnemyAbility.toxicZone,'Огнемётчик заливает сектор',.7,4.5,area:true)}; }

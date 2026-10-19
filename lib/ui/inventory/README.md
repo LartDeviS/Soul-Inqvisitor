@@ -1,1 +1,1 @@
-Inventory UI expansion: equipment slots, vault, relic synergies, and weapon heat/ammunition. Keep the existing backpack and load-save screens until migration is verified.
+Inventory domain is implemented in progression/inventory_state.dart. The legacy BackpackMenu remains the visible inventory UI; new items can be passed through EquipmentInventory without changing old save keys.
