@@ -8533,6 +8533,8 @@ class EnemyBullet extends PositionComponent with HasGameReference<InquisitorGame
   Vector2 velocity;
   final int damage;
   final BulletMod mod;
+  final StatusType? statusOnHit;
+  final double statusDuration;
   double life = 3.5;
   int bounces = 0;
   bool didSplit = false;
@@ -8543,6 +8545,8 @@ class EnemyBullet extends PositionComponent with HasGameReference<InquisitorGame
     required this.damage,
     double speed = 180,
     this.mod = BulletMod.normal,
+    this.statusOnHit,
+    this.statusDuration = 1.4,
   })  : velocity = direction.normalized() * speed,
         super(position: position.clone(), size: Vector2(14, 14), anchor: Anchor.center, priority: 16);
 
@@ -8571,6 +8575,9 @@ class EnemyBullet extends PositionComponent with HasGameReference<InquisitorGame
     if (other is Player) {
       other.takeDamage(damage);
       if (mod == BulletMod.slow) other.applyStatus(StatusType.slow, 1.8);
+      if (statusOnHit != null) {
+        other.applyStatus(statusOnHit!, statusDuration, tickDamage: statusOnHit == StatusType.corruption ? 1 : 0);
+      }
       if (mod == BulletMod.split && !didSplit) {
         didSplit = true;
         final base = atan2(velocity.y, velocity.x);
@@ -9057,6 +9064,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
             game.world.add(EnemyBullet(
               position: position.clone(), direction: Vector2(cos(angle), sin(angle)),
               damage: max(1, dmg - 1), speed: 215, mod: BulletMod.ricochet,
+              statusOnHit: StatusType.slow, statusDuration: 0.9,
             )..priority = 16);
           }
         }
@@ -9124,6 +9132,12 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
           game.player.takeDamage(type == EnemyType.bloodletter || type == EnemyType.brute ? dmg + 1 : dmg);
           if (type == EnemyType.bloodletter) {
             game.player.applyStatus(StatusType.bleed, 1.5, tickDamage: 1);
+          } else if (type == EnemyType.tyranidGaunt) {
+            // Tyranid claws cause a short, low-intensity bleed.
+            game.player.applyStatus(StatusType.bleed, 1.2, tickDamage: 1);
+          } else if (type == EnemyType.orkBoy) {
+            // Heavy Ork melee has a small shove, making space management matter.
+            game.player.position += toP * 14;
           }
         }
         break;
