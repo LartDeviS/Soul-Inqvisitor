@@ -8673,6 +8673,9 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   late int currentHp;
   double attackTimer = 0;
   double attackWindup = 0;
+  // Combat 2.0 stage 4: lock the aim direction when the warning starts,
+  // so the player can dodge the announced attack instead of being tracked unfairly.
+  Vector2 attackDirection = Vector2(1, 0);
   double hurtFlash = 0;
   double hitReactTimer = 0;
   double animationClock = 0;
@@ -9002,6 +9005,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
 
     if (attackTimer >= interval) {
       attackTimer = 0;
+      attackDirection = (game.player.position - position).normalized();
       attackWindup = _attackWindupDuration;
       if (attackWindup <= 0) _doAttack(dist);
     }
@@ -9017,7 +9021,11 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   }
 
   void _doAttack(double dist) {
-    final toP = (game.player.position - position).normalized();
+    // Use the direction shown during the telegraph. A player who moves sideways
+    // during the wind-up can now genuinely evade aimed projectiles and cones.
+    final toP = attackDirection.length2 > 0.001
+        ? attackDirection.normalized()
+        : (game.player.position - position).normalized();
     var incomingMult = game.arenaMode ? (1.0 + game.arenaThreatTier * 0.08) : 1.0;
     if (game.arenaMode && game.arenaModifier == ArenaModifier.unstable) incomingMult *= 1.15;
     final veteranDamage = switch (game.difficulty) {
@@ -9271,6 +9279,18 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       canvas.drawCircle(Offset(cx, cy + 5), 25 + (1.0 - progress) * 8, warningPaint);
       canvas.drawCircle(Offset(cx, cy + 5), 7 + (1.0 - progress) * 4,
           Paint()..color = warningColor.withOpacity(0.45));
+      // Directional lane for ranged/warp attacks. Its angle matches the locked
+      // attackDirection used when the wind-up resolves.
+      final isRangedTelegraph = type == EnemyType.shooter ||
+          type == EnemyType.shieldedShooter || type == EnemyType.sniper ||
+          type == EnemyType.necronImmortal || type == EnemyType.cultPsyker;
+      if (isRangedTelegraph) {
+        final start = Offset(cx + attackDirection.x * 10, cy + attackDirection.y * 10);
+        final end = Offset(cx + attackDirection.x * (48 + (1.0 - progress) * 12),
+            cy + attackDirection.y * (48 + (1.0 - progress) * 12));
+        canvas.drawLine(start, end, warningPaint..strokeWidth = 2.5);
+        canvas.drawCircle(end, 3.0, Paint()..color = warningColor.withOpacity(0.75));
+      }
     }
     WHDraw.statusIcons(canvas, cx, -18, statuses);
     if (suppression > 2) {
