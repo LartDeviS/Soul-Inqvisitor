@@ -1959,7 +1959,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   arena_catalog.WorldEventEffects? currentWorldEventEffects;
   mission_catalog.MissionEvent? currentMissionEvent;
   /// Additive expansion state; legacy campaign and save fields remain untouched.
-  final expansion.InquisitorExpansionSystems expansionSystems = expansion.InquisitorExpansionSystems();
   late Player player;
   late JoystickComponent moveJoystick;
   late JoystickComponent attackJoystick;
@@ -2997,7 +2996,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     currentMissionEvent = missionEvents.roll(floor: currentFloor, alarm: campaign.alarm, seed: seed == null ? null : seed + 17);
     if (currentWorldEvent != null) {
       currentWorldEventEffects = worldDirector.applyEventModifiers(currentWorldEvent!, this);
-      campaign.requisition += currentWorldEventEffects!.bonusRequisition;
+      requisition += currentWorldEventEffects!.bonusRequisition;
       campaignChronicle.insert(0, 'Событие мира: ${currentWorldEvent!.title} — ${currentWorldEvent!.description}');
     }
     if (currentMissionEvent != null) {
