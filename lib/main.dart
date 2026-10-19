@@ -8373,6 +8373,42 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
   }
 
+  int _adjustBossDamage(Object boss) {
+    // Shared typed-damage handling for legacy boss classes that still expose
+    // takeDamage(int). The primary Boss class has its own richer handler.
+    double armor = 0.12;
+    double matchup = 1.0;
+    if (boss is KnightBoss || boss is KingBoss || boss is BloodChampionBoss) {
+      armor = 0.24;
+    } else if (boss is TentacleBoss || boss is CyclopsBoss || boss is PlagueLordBoss) {
+      armor = 0.18;
+    } else if (boss is MiniBoss) {
+      armor = 0.14;
+    }
+    switch (damageType) {
+      case CombatDamageType.plasma:
+        matchup = 1.22;
+        break;
+      case CombatDamageType.explosive:
+        matchup = 1.15;
+        break;
+      case CombatDamageType.warp:
+        matchup = (boss is TentacleBoss || boss is CyclopsBoss || boss is PlagueLordBoss) ? 1.25 : 1.0;
+        break;
+      case CombatDamageType.flame:
+        matchup = (boss is PlagueLordBoss) ? 0.82 : 1.05;
+        break;
+      case CombatDamageType.kinetic:
+        matchup = 0.94;
+        break;
+      case CombatDamageType.melee:
+        matchup = 1.0;
+        break;
+    }
+    final effectiveArmor = (armor - armorPenetration).clamp(0.0, 0.8);
+    return max(1, (damage * matchup * (1.0 - effectiveArmor)).round());
+  }
+
   void _hitEnemy(Enemy e) {
     if (!hitIds.add(e.hashCode)) return;
     if (e.affix == EliteAffix.reflect && Random().nextDouble() < 0.25) {
@@ -8394,7 +8430,7 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
     super.onCollision(intersectionPoints, other);
     if (other is Enemy) _hitEnemy(other);
     if (other is MiniBoss) {
-      other.takeDamage(damage);
+      other.takeDamage(_adjustBossDamage(other));
       if (!pierce) removeFromParent();
     }
     if (other is Boss) {
@@ -8403,29 +8439,29 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
       if (!pierce) removeFromParent();
     }
     if (other is KnightBoss) {
-      other.takeDamage(damage);
+      other.takeDamage(_adjustBossDamage(other));
       game.noteBossDamagedByRanged();
       if (!pierce) removeFromParent();
     }
     if (other is KingBoss) {
-      other.takeDamage(damage);
+      other.takeDamage(_adjustBossDamage(other));
       game.noteBossDamagedByRanged();
       if (!pierce) removeFromParent();
     }
     if (other is TentacleBoss) {
-      other.takeDamage(damage);
+      other.takeDamage(_adjustBossDamage(other));
       if (!pierce) removeFromParent();
     }
     if (other is CyclopsBoss) {
-      other.takeDamage(damage);
+      other.takeDamage(_adjustBossDamage(other));
       if (!pierce) removeFromParent();
     }
     if (other is PlagueLordBoss) {
-      other.takeDamage(damage);
+      other.takeDamage(_adjustBossDamage(other));
       if (!pierce) removeFromParent();
     }
     if (other is BloodChampionBoss) {
-      other.takeDamage(damage);
+      other.takeDamage(_adjustBossDamage(other));
       if (!pierce) removeFromParent();
     }
     if (other is BreakableBarrel) {
