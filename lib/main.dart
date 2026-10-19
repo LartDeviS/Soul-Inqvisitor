@@ -9047,12 +9047,28 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       case EnemyType.shooter:
       case EnemyType.shieldedShooter:
         if (dist < 420) {
-          game.world.add(EnemyBullet(
-            position: position.clone(),
-            direction: toP,
-            damage: dmg,
-            mod: game.rollBulletMod(),
-          )..priority = 16);
+          if (isChampion) {
+            // Combat 2.0 stage 6: elite shooters use a readable three-round fan.
+            // Each round is slightly weaker than a normal shot to keep the burst fair.
+            final baseAngle = atan2(toP.y, toP.x);
+            for (final offset in [-0.13, 0.0, 0.13]) {
+              final angle = baseAngle + offset;
+              game.world.add(EnemyBullet(
+                position: position.clone(),
+                direction: Vector2(cos(angle), sin(angle)),
+                damage: max(1, dmg - 1),
+                speed: 188,
+                mod: game.rollBulletMod(),
+              )..priority = 16);
+            }
+          } else {
+            game.world.add(EnemyBullet(
+              position: position.clone(),
+              direction: toP,
+              damage: dmg,
+              mod: game.rollBulletMod(),
+            )..priority = 16);
+          }
         }
         break;
       case EnemyType.necronImmortal:
@@ -9304,6 +9320,16 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
             cy + attackDirection.y * (48 + (1.0 - progress) * 12));
         canvas.drawLine(start, end, warningPaint..strokeWidth = 2.5);
         canvas.drawCircle(end, 3.0, Paint()..color = warningColor.withOpacity(0.75));
+        // Elite cultists and shielded gunners signal the wider spread before firing.
+        if (isChampion && (type == EnemyType.shooter || type == EnemyType.shieldedShooter)) {
+          for (final side in [-1.0, 1.0]) {
+            final a = atan2(attackDirection.y, attackDirection.x) + side * 0.13;
+            final fanEnd = Offset(cx + cos(a) * (48 + (1.0 - progress) * 12),
+                cy + sin(a) * (48 + (1.0 - progress) * 12));
+            canvas.drawLine(Offset(cx + cos(a) * 10, cy + sin(a) * 10), fanEnd,
+                warningPaint..strokeWidth = 1.4);
+          }
+        }
       }
     }
     WHDraw.statusIcons(canvas, cx, -18, statuses);
