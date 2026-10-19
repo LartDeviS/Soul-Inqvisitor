@@ -1212,9 +1212,10 @@ class TelegraphZone extends PositionComponent {
   final String shape;
   final double radius;
   final double angle;
+  final Color color;
   double life;
   final double maxLife;
-  TelegraphZone({required Vector2 position, required this.shape, required this.radius, this.angle = 0, this.life = 0.75})
+  TelegraphZone({required Vector2 position, required this.shape, required this.radius, this.angle = 0, this.life = 0.75, this.color = const Color(0xFFFF3030)})
       : maxLife = life,
         super(position: position.clone(), anchor: Anchor.center, priority: 6);
   @override
@@ -1228,10 +1229,10 @@ class TelegraphZone extends PositionComponent {
     final t = (1 - life / maxLife).clamp(0.0, 1.0);
     final a = 0.25 + 0.45 * t;
     final p = Paint()
-      ..color = Color.fromRGBO(255, 30, 30, a)
+      ..color = Color.fromRGBO(color.red, color.green, color.blue, a)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
-    final fill = Paint()..color = Color.fromRGBO(255, 0, 0, a * 0.25);
+    final fill = Paint()..color = Color.fromRGBO(color.red, color.green, color.blue, a * 0.25);
     if (shape == 'circle') {
       canvas.drawCircle(Offset.zero, radius, fill);
       canvas.drawCircle(Offset.zero, radius, p);
@@ -8397,7 +8398,7 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
       if (!pierce) removeFromParent();
     }
     if (other is Boss) {
-      other.takeDamage(damage);
+      other.takeCombatDamage(damage, damageType: damageType, armorPenetration: armorPenetration);
       game.noteBossDamagedByRanged();
       if (!pierce) removeFromParent();
     }
@@ -9519,6 +9520,20 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     }
   }
 
+  void takeCombatDamage(int amount, {required CombatDamageType damageType, double armorPenetration = 0}) {
+    // Bosses have layered armor: kinetic fire is reliable, plasma breaks armor,
+    // warp harms echoes more efficiently, and flame is less effective against armored targets.
+    var multiplier = 1.0;
+    final armor = (isEcho ? 0.08 : (floor >= 8 ? 0.28 : floor >= 4 ? 0.20 : 0.12));
+    final effectiveArmor = (armor - armorPenetration).clamp(0.0, 0.6);
+    multiplier *= 1.0 - effectiveArmor;
+    if (damageType == CombatDamageType.plasma) multiplier *= 1.22;
+    if (damageType == CombatDamageType.warp) multiplier *= isEcho ? 1.30 : 1.08;
+    if (damageType == CombatDamageType.flame) multiplier *= 0.88;
+    if (damageType == CombatDamageType.explosive) multiplier *= 1.08;
+    takeDamage(max(1, (amount * multiplier).round()));
+  }
+
   void takeDamage(int amount) {
     if (currentHp <= 0) return;
     if (weakSpotExposed && amount > 0) {
@@ -9564,21 +9579,28 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     attackMode = Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
+    final warningColor = switch (attackMode) {
+      0 => const Color(0xFFFF5252), // radial burst
+      1 => const Color(0xFFFFA726), // aimed cone
+      2 => const Color(0xFF26C6DA), // cross volley
+      3 => const Color(0xFFAB47BC), // heavy radial burst
+      _ => const Color(0xFFFF1744), // focused barrage
+    };
     switch (attackMode) {
       case 0:
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 130, life: 0.75)..priority = 6);
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 130, life: 0.75, color: warningColor)..priority = 6);
         break;
       case 1:
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 220, angle: ang, life: 0.75)..priority = 6);
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 220, angle: ang, life: 0.75, color: warningColor)..priority = 6);
         break;
       case 2:
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 150, life: 0.75)..priority = 6);
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cross', radius: 150, life: 0.75, color: warningColor)..priority = 6);
         break;
       case 3:
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 180, life: 0.75)..priority = 6);
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'circle', radius: 180, life: 0.75, color: warningColor)..priority = 6);
         break;
       case 4:
-        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 270, angle: ang, life: 0.75)..priority = 6);
+        game.world.add(TelegraphZone(position: position.clone(), shape: 'cone', radius: 270, angle: ang, life: 0.75, color: warningColor)..priority = 6);
         break;
     }
   }
