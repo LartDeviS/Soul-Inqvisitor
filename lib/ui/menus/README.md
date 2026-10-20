@@ -1,3 +1,1 @@
-# Меню
-
-`MissionEventDecisionMenu` зарегистрировано в `GameWidget.overlayBuilderMap` как `missionEvent`. Оно открывается из рюкзака и не заменяет существующие игровые меню и маршруты. После выбора решение фиксируется в хронике кампании и сохраняется.
+World events are surfaced by InquisitorGame.currentWorldEvent and currentMissionEvent; a later UI pass can add dedicated choice overlays without replacing existing overlays.

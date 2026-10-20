@@ -12,6 +12,8 @@ import 'game/inquisitor_game.dart' as expansion;
 import 'game/weapons/weapon_data.dart' as weapon_catalog;
 import 'game/world/biome_data.dart' as world_catalog;
 import 'game/world/arena_events.dart' as arena_catalog;
+import 'ui/codex/weapon_catalog_panel.dart';
+import 'ui/codex/world_codex_panel.dart';
 import 'progression/inventory_state.dart' as gear_catalog;
 import 'progression/progression_system.dart' as progression_catalog;
 import 'game/missions/mission_events.dart' as mission_catalog;
@@ -40,7 +42,6 @@ void main() {
           'loadSave': (c, g) => LoadSaveMenu(g as InquisitorGame),
           'codex': (c, g) => CodexMenu(g as InquisitorGame),
           'chronicle': (c, g) => CampaignChronicleMenu(g as InquisitorGame),
-          'missionEvent': (c, g) => MissionEventDecisionMenu(g as InquisitorGame),
           'eventAltar': (c, g) => EventAltarMenu(g as InquisitorGame),
           'eventMerchant': (c, g) => EventMerchantMenu(g as InquisitorGame),
           'pathSelect': (c, g) => PathSelectMenu(g as InquisitorGame),
@@ -1959,9 +1960,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   arena_catalog.WorldEvent? currentWorldEvent;
   arena_catalog.WorldEventEffects? currentWorldEventEffects;
   mission_catalog.MissionEvent? currentMissionEvent;
-  bool missionEventResolved = false;
-  String missionEventResolvedKey = '';
-  String lastMissionEventOutcome = ''; 
   /// Additive expansion state; legacy campaign and save fields remain untouched.
   late Player player;
   late JoystickComponent moveJoystick;
@@ -2998,9 +2996,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void rollWorldAndMissionEvents({int? seed}) {
     currentWorldEvent = worldDirector.rollEvent(expansionBiome, floor: currentFloor, seed: seed);
     currentMissionEvent = missionEvents.roll(floor: currentFloor, alarm: campaign.alarm, seed: seed == null ? null : seed + 17);
-    missionEventResolved = false;
-    missionEventResolvedKey = '${currentFloor}_${currentMissionEvent?.type.name ?? 'none'}';
-    lastMissionEventOutcome = '';
     if (currentWorldEvent != null) {
       currentWorldEventEffects = worldDirector.applyEventModifiers(currentWorldEvent!, this);
       requisition += currentWorldEventEffects!.bonusRequisition;
@@ -3010,59 +3005,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       campaignChronicle.insert(0, 'Событие расследования: ${currentMissionEvent!.title}');
     }
     if (campaignChronicle.length > 80) campaignChronicle.removeRange(80, campaignChronicle.length);
-  }
-
-  void openMissionEvent() {
-    if (currentMissionEvent == null || missionEventResolved) return;
-    isPaused = true;
-    overlays.add('missionEvent');
-  }
-
-  Future<void> resolveMissionEvent({required bool chooseA}) async {
-    final event = currentMissionEvent;
-    if (event == null || missionEventResolved) {
-      overlays.remove('missionEvent');
-      isPaused = false;
-      return;
-    }
-    // Every investigation has a meaningful, persistent trade-off. The event's
-    // authored deltas are the baseline; choice-specific effects layer on top.
-    campaign.alarm = (campaign.alarm + (chooseA ? event.alarmDelta : -event.alarmDelta)).clamp(0, 100).toInt();
-    requisition = max(0, requisition + (chooseA ? event.requisitionDelta : max(0, event.requisitionDelta ~/ 2)));
-    switch (event.type) {
-      case mission_catalog.MissionEventType.civilianSurvivor:
-        if (chooseA) { campaign.evidence++; campaign.cluesFound++; lastMissionEventOutcome = 'Выживший эвакуирован: получены сведения и снижено давление на сектор.'; }
-        else { campaign.evidence += 2; campaign.cluesFound += 2; campaign.alarm = min(100, campaign.alarm + 2); lastMissionEventOutcome = 'Допрос дал две улики, но тревога выросла.'; }
-        break;
-      case mission_catalog.MissionEventType.corruptedCache:
-        if (chooseA) { warpCorruption = max(0, warpCorruption - 8); warpStability = min(100, warpStability + 8); lastMissionEventOutcome = 'Тайник очищен: стабильность Варпа восстановлена.'; }
-        else { warpCorruption = min(100, warpCorruption + 8); warpStability = max(0, warpStability - 12); scraps += 5; lastMissionEventOutcome = 'Добыча получена, но Варп оставил след.'; }
-        break;
-      case mission_catalog.MissionEventType.voxDistress:
-        if (chooseA) { campaign.cluesFound++; campaign.evidence++; lastMissionEventOutcome = 'Ответ на сигнал открыл дополнительную зацепку.'; }
-        else { campaign.alarm = max(0, campaign.alarm - 3); lastMissionEventOutcome = 'Радиомолчание помогло избежать обнаружения.'; }
-        break;
-      case mission_catalog.MissionEventType.inquisitorialOrder:
-        if (chooseA) { contractsCompleted++; campaign.evidence++; lastMissionEventOutcome = 'Приказ выполнен: отчёт Инквизиции усилен.'; }
-        else { campaign.suspicion = min(100, campaign.suspicion + 4); lastMissionEventOutcome = 'Приказ проигнорирован: подозрение конклава возросло.'; }
-        break;
-      case mission_catalog.MissionEventType.falseSignal:
-        if (chooseA) { campaign.evidence += 2; campaign.cluesFound += 2; campaign.alarm = min(100, campaign.alarm + 3); lastMissionEventOutcome = 'Ложный сигнал разоблачён; получены улики, но враг насторожился.'; }
-        else { campaign.alarm = max(0, campaign.alarm - 2); lastMissionEventOutcome = 'Сигнал обойдён без контакта.'; }
-        break;
-      case mission_catalog.MissionEventType.woundedAcolyte:
-        if (chooseA) { player.health = min(player.maxHealth, player.health + max(1, player.maxHealth ~/ 8)); campaign.evidence++; lastMissionEventOutcome = 'Аколит стабилизирован и поделился сведениями.'; }
-        else { requisition += 3; lastMissionEventOutcome = 'Снаряжение сохранено, но потенциальный свидетель потерян.'; }
-        break;
-    }
-    missionEventResolved = true;
-    investigationsResolved++;
-    campaignChronicle.insert(0, 'Расследование: ${event.title}. ${chooseA ? event.choiceA : event.choiceB}. $lastMissionEventOutcome');
-    if (campaignChronicle.length > 80) campaignChronicle.removeRange(80, campaignChronicle.length);
-    overlays.remove('missionEvent');
-    // Keep the underlying backpack paused until the player closes it.
-    isPaused = true;
-    await persistExpansion();
   }
 
   @override
@@ -3215,9 +3157,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         ownedArmor.addAll(((data['ownedArmor'] as List?) ?? ['flak', 'inquisitorial']).map((e) => ArmorPattern.values.firstWhere((a) => a.name == e.toString(), orElse: () => ArmorPattern.flak)));
         campaignChronicle.clear();
         campaignChronicle.addAll(((data['campaignChronicle'] as List?) ?? const []).map((e) => e.toString()).take(80));
-        missionEventResolved = data['missionEventResolved'] as bool? ?? false;
-        missionEventResolvedKey = data['missionEventResolvedKey']?.toString() ?? '';
-        lastMissionEventOutcome = data['lastMissionEventOutcome']?.toString() ?? '';
         armorForgePurchases = (data['armorForgePurchases'] as num?)?.toInt() ?? 0;
         modularWeapon.load(data['modularWeapon'] is Map ? Map<String, dynamic>.from(data['modularWeapon'] as Map) : null);
         storedItems.clear();
@@ -3570,8 +3509,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'progressionTrack': progressionTrack.toJson(),
         'worldEventType': currentWorldEvent?.type.name,
         'worldEventFloor': currentFloor,
-        'missionEventResolved': missionEventResolved, 'missionEventResolvedKey': missionEventResolvedKey,
-        'lastMissionEventOutcome': lastMissionEventOutcome,
         'unlockedAchievementIds': unlockedAchievementIds.toList(),
         'careerOperationsCompleted': careerOperationsCompleted, 'careerFloorsReached': careerFloorsReached,
         'careerKills': careerKills, 'careerEvidenceFound': careerEvidenceFound,
@@ -3616,8 +3553,6 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'progressionTrack': progressionTrack.toJson(),
         'worldEventType': currentWorldEvent?.type.name,
         'worldEventFloor': currentFloor,
-        'missionEventResolved': missionEventResolved, 'missionEventResolvedKey': missionEventResolvedKey,
-        'lastMissionEventOutcome': lastMissionEventOutcome,
         'unlockedAchievementIds': unlockedAchievementIds.toList(),
         'careerOperationsCompleted': careerOperationsCompleted, 'careerFloorsReached': careerFloorsReached,
         'careerKills': careerKills, 'careerEvidenceFound': careerEvidenceFound,
@@ -6236,36 +6171,6 @@ class LorePopupMenu extends StatelessWidget {
   }
 }
 
-class MissionEventDecisionMenu extends StatelessWidget {
-  final InquisitorGame game;
-  const MissionEventDecisionMenu(this.game, {super.key});
-  @override
-  Widget build(BuildContext context) {
-    final event = game.currentMissionEvent;
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.96),
-      body: SafeArea(child: Center(child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(22), child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560), child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const Icon(Icons.policy, color: Color(0xFFFFD700), size: 44),
-        const SizedBox(height: 10),
-        const Text('РАССЛЕДОВАНИЕ ИНКВИЗИЦИИ', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 14),
-        if (event == null) const Text('Нет активного события.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)) else ...[
-          Text(event.title, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(event.description, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-          const SizedBox(height: 18),
-          Text('Тревога: ${game.campaign.alarm} • Реквизиция: ${game.requisition} • Улики: ${game.campaign.evidence}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF263238), padding: const EdgeInsets.all(14)), onPressed: game.missionEventResolved ? null : () => game.resolveMissionEvent(chooseA: true), icon: const Icon(Icons.gavel), label: Text(event.choiceA, textAlign: TextAlign.center)),
-          OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFFFD700), padding: const EdgeInsets.all(14)), onPressed: game.missionEventResolved ? null : () => game.resolveMissionEvent(chooseA: false), icon: const Icon(Icons.visibility_off), label: Text(event.choiceB, textAlign: TextAlign.center)),
-        ],
-        const SizedBox(height: 12),
-        TextButton(onPressed: () { game.overlays.remove('missionEvent'); game.isPaused = true; }, child: const Text('ОТЛОЖИТЬ РЕШЕНИЕ', style: TextStyle(color: Colors.white54))),
-      ])))))),
-    );
-  }
-}
-
 class EventAltarMenu extends StatelessWidget {
   final InquisitorGame game;
   const EventAltarMenu(this.game, {super.key});
@@ -6706,24 +6611,6 @@ class _BackpackMenuState extends State<BackpackMenu> {
             children: [
               const Text('РЮКЗАК', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), fontSize: 26, fontWeight: FontWeight.bold)),
               Text('${g.playerName} • ${g.playerClass.title}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              const SizedBox(height: 10),
-              Card(color: const Color(0xFF202020), child: Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const Text('СОБЫТИЕ ОПЕРАЦИИ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
-                if (g.currentWorldEvent != null) Text('${g.currentWorldEvent!.title} — ${g.currentWorldEvent!.description}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                if (g.currentMissionEvent != null) Text('${g.currentMissionEvent!.title}: ${g.currentMissionEvent!.description}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                if (g.currentMissionEvent != null && !g.missionEventResolved)
-                  ElevatedButton.icon(onPressed: g.openMissionEvent, icon: const Icon(Icons.policy), label: const Text('РАССЛЕДОВАТЬ / ПРИНЯТЬ РЕШЕНИЕ')),
-                if (g.missionEventResolved) Text('Решение принято: ${g.lastMissionEventOutcome}', style: const TextStyle(color: Colors.greenAccent, fontSize: 11)),
-              ]))),
-              const SizedBox(height: 8),
-              Card(color: const Color(0xFF171717), child: Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('АКТИВНОЕ ДАЛЬНЕБОЙНОЕ ОРУЖИЕ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
-                Text('${g.activeWeaponData.nameRu} • ${g.activeWeaponData.damageType.name.toUpperCase()}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                Text('Урон каталога: ${g.activeWeaponData.damage.toStringAsFixed(0)} • Темп: ${(1 / g.activeWeaponData.cooldown).toStringAsFixed(1)} выстр./с • Дальность: ${g.activeWeaponData.range.toStringAsFixed(0)} • Снаряды: ${g.activeWeaponData.pellets}', style: const TextStyle(color: Colors.white60, fontSize: 11)),
-                if (g.activeWeaponData.armorPenetration > 0) Text('Пробитие брони: ${(g.activeWeaponData.armorPenetration * 100).round()}%', style: const TextStyle(color: Colors.orangeAccent, fontSize: 11)),
-                if (g.activeWeaponData.appliesBurn) const Text('Эффект: поджигание цели', style: TextStyle(color: Colors.deepOrangeAccent, fontSize: 11)),
-                if (g.activeWeaponData.areaDamage) const Text('Особенность: урон по области / несколько целей', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-              ]))),
               if (g.activeSynergyLabel != null)
                 Text(g.activeSynergyLabel!, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF81D4FA), fontSize: 12)),
               const SizedBox(height: 8),
@@ -6859,9 +6746,8 @@ class _BackpackMenuState extends State<BackpackMenu> {
     switch (g.playerClass) {
       case PlayerClass.xenos:
         add('Болтер', RangedWeapon.bolter, true);
-        add('Лазвинтовка', RangedWeapon.rifle, true);
-        add('Боевой дробовик', RangedWeapon.shotgun, true);
-        add('Плазмаган', RangedWeapon.plasmaGun, g.currentFloor >= 2 || g.overallLevel >= 10);
+        add('Винтовка', RangedWeapon.rifle, g.unlockedRifle);
+        add('Дробовик', RangedWeapon.shotgun, g.unlockedShotgun);
         add('Мельтаган', RangedWeapon.meltaGun, g.currentFloor >= 3 || g._everReached11);
         add('Огнемёт', RangedWeapon.flamer, g.currentFloor >= 4 || g.overallLevel >= 21);
         add('Тяжёлый болтер', RangedWeapon.heavyBolter, g.currentFloor >= 5 || g.overallLevel >= 31);
@@ -6953,6 +6839,8 @@ class CodexMenu extends StatelessWidget {
               style: const TextStyle(color: Colors.white54),
             ),
             TextButton.icon(onPressed: () { game.playClick(); game.overlays.add('chronicle'); }, icon: const Icon(Icons.menu_book, color: Color(0xFFFFD700)), label: const Text('Хроника событий кампании', style: TextStyle(color: Color(0xFFFFD700)))),
+            const WeaponCatalogPanel(),
+            const WorldCodexPanel(),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               child: Text('ДОПОЛНИТЕЛЬНЫЕ ДОСЬЕ УГРОЗ', style: TextStyle(color: Color(0xFFBCAAA4), fontSize: 11, letterSpacing: 1.4)),
