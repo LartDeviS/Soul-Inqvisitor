@@ -6809,7 +6809,7 @@ class _BackpackMenuState extends State<BackpackMenu> {
                     leading: Icon(Icons.shield_outlined, color: item.rarity >= 3 ? Colors.amber : Colors.white70),
                     title: Text(item.name, style: const TextStyle(color: Colors.white, fontSize: 12)),
                     subtitle: Text('${item.slot} • мощность ${item.power} • редкость ${item.rarity + 1}/5 • ${item.modifiers.entries.map((e) => '${e.key} +${(e.value * 100).round()}%').join(', ')}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
-                    trailing: Wrap(mainAxisSize: MainAxisSize.min, children: [
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                       IconButton(tooltip: 'Надеть', icon: const Icon(Icons.check_circle, color: Colors.lightBlueAccent), onPressed: () => setState(() => g.equipGear(item.id))),
                       IconButton(tooltip: 'Улучшить', icon: const Icon(Icons.upgrade, color: Colors.amber), onPressed: item.rarity >= 4 || g.equipmentInventory.state.shards < 2 + item.rarity * 2 + item.power ~/ 5 ? null : () => setState(() => g.upgradeGear(item.id))),
                       IconButton(tooltip: 'Разобрать', icon: const Icon(Icons.build, color: Colors.orangeAccent), onPressed: () => setState(() => g.dismantleGear(item.id))),
