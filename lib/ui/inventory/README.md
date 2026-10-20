@@ -1,1 +1,3 @@
-Inventory domain is implemented in progression/inventory_state.dart. The legacy BackpackMenu remains the visible inventory UI; new items can be passed through EquipmentInventory without changing old save keys.
+# Инвентарь и снаряжение
+
+Текущий UI рюкзака в `main.dart` показывает активное оружие, параметры каталога, мировое событие и доступность расследования. Полевой инвентарь/хранилище остаются совместимыми с существующей моделью `FieldLootItem` и ключом сохранения `storedItems`. Отдельный экран с экипируемыми характеристиками будет подключаться без миграции старых предметов.

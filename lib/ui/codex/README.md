@@ -1,1 +1,3 @@
-Mission and biome descriptions are data-driven in game/missions and game/world. The existing CodexMenu remains the UI entry point.
+# Кодекс оружия и расследований
+
+В `main.dart` подключён экран расследования `MissionEventDecisionMenu`, а каталог `game/weapons/weapon_data.dart` выводится в рюкзаке для текущего дальнобойного оружия. Новые события сохраняют результат в `inquisition_expansion`; старые сохранения продолжают загружаться с безопасными значениями по умолчанию.
