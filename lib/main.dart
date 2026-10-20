@@ -7912,6 +7912,8 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   late int maxHealth;
   double attackTimer = 0;
   double hurtFlash = 0;
+  bool emperorAegisSpent = false;
+  double shadowStrideSurge = 0;
   Vector2 aimDir = Vector2(0, -1);
   final List<StatusEffect> statuses = [];
 
@@ -7928,6 +7930,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   double get effectiveSpeed {
     var s = game.playerSpeed;
     if (game.dashActive > 0) s *= 1.32;
+    if (shadowStrideSurge > 0) s *= 1.22;
     if (game._hasteTimer > 0) s *= game.synergyBloodRush ? 1.18 : 1.12;
     if (statuses.any((e) => e.type == StatusType.slow || e.type == StatusType.plague)) s *= 0.65;
     return s;
@@ -7948,7 +7951,9 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       e.tickAcc += dt;
       if (e.tickAcc >= e.tickEvery) {
         e.tickAcc = 0;
-        if (e.tickDamage > 0 &&
+        final wardedCorruption = e.type == StatusType.corruption &&
+            game.equipmentInventory.containsUniquePower('warp_ward');
+        if (e.tickDamage > 0 && !wardedCorruption &&
             (e.type == StatusType.burn ||
                 e.type == StatusType.bleed ||
                 e.type == StatusType.corruption ||
@@ -7979,6 +7984,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     super.update(dt);
     if (!game.isPlaying || game.isPaused) return;
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
+    if (shadowStrideSurge > 0) shadowStrideSurge = max(0, shadowStrideSurge - dt);
     _tickStatuses(dt);
 
     if (moveJoystick.relativeDelta.length2 > 0.01) {
@@ -8273,6 +8279,12 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
 
   void takeDamage(int amount) {
     if (game.invulnTimer > 0 || game.dashActive > 0) return;
+    if (game.equipmentInventory.containsUniquePower('shadow_stride') && Random().nextDouble() < 0.12) {
+      shadowStrideSurge = 1.6;
+      game.grantInvuln(0.28);
+      game.spawnDamageNumber(position, 0, color: const Color(0xFF80DEEA), label: 'ШАГ ТЕНИ');
+      return;
+    }
     if (game.shieldTimer > 0) {
       game.shieldTimer = 0;
       return;
@@ -8281,6 +8293,15 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     amount = max(1, (amount * (1.0 - game.armorDamageReduction)).round());
     if (game.defenseChance > 0 && Random().nextDouble() < game.defenseChance) {
       game.spawnDamageNumber(position, 0, color: const Color(0xFF90CAF9), label: 'BLOCK');
+      return;
+    }
+    if (health - amount <= 0 && !emperorAegisSpent && game.equipmentInventory.containsUniquePower('unyielding_aegis')) {
+      emperorAegisSpent = true;
+      health = 1;
+      game.grantInvuln(1.5);
+      hurtFlash = 0;
+      game.spawnDamageNumber(position, 0, color: const Color(0xFFFFD54F), label: 'ЭГИДА ИМПЕРАТОРА');
+      game.triggerShake(power: 8, time: 0.2);
       return;
     }
     health = max(0, health - amount);
@@ -8357,6 +8378,41 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     final ang = atan2(aimDir.y, aimDir.x);
     WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.28, flash: hurtFlash / 0.15, custom: game.custom, cls: game.playerClass, healthRatio: maxHealth <= 0 ? 1 : health / maxHealth);
     _drawProceduralArmor(canvas, cx, cy, game.activeArmor, game.custom.armorColor(0.45), game.custom.trimColor(0.65));
+    // Stage 13: equipped items are visibly layered onto the live character, using Canvas only.
+    final wornArmor = game.equipmentInventory.state.equipped['armor'];
+    final wornBoots = game.equipmentInventory.state.equipped['boots'];
+    final wornRelic = game.equipmentInventory.state.equipped['relic'];
+    final wornWeapon = game.equipmentInventory.state.equipped['weapon'];
+    final setId = wornArmor?.setId ?? wornBoots?.setId ?? wornRelic?.setId ?? wornWeapon?.setId;
+    final setTrim = setId == 'deathwatch'
+        ? const Color(0xFF80DEEA)
+        : setId == 'ordo_malleus'
+            ? const Color(0xFFCE93D8)
+            : setId == 'inquisitorial'
+                ? const Color(0xFFFFD54F)
+                : game.custom.trimColor(0.65);
+    if (wornArmor != null) {
+      // Extra shoulder plates and central item badge make equipped armor distinct from the base pattern.
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 22, cy - 6), width: 15, height: 17), const Radius.circular(4)), Paint()..color = Color.lerp(game.custom.armorColor(0.45), setTrim, .38)!);
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 22, cy - 6), width: 15, height: 17), const Radius.circular(4)), Paint()..color = Color.lerp(game.custom.armorColor(0.45), setTrim, .38)!);
+      canvas.drawCircle(Offset(cx, cy + 4), wornArmor.rarity >= 4 ? 6.0 : 4.0, Paint()..color = setTrim);
+      canvas.drawCircle(Offset(cx, cy + 4), 2.0, Paint()..color = const Color(0xFF211D20));
+      if (wornArmor.rarity >= 4) {
+        canvas.drawCircle(Offset(cx, cy + 4), 9.0 + sin(game.combatAnimClock * 3).abs() * 1.5, Paint()..color = setTrim.withOpacity(.45)..style = PaintingStyle.stroke..strokeWidth = 1.4);
+      }
+    }
+    if (wornBoots != null) {
+      for (final side in [-1.0, 1.0]) {
+        final greave = Rect.fromCenter(center: Offset(cx + side * 10, cy + 28), width: 8, height: 10);
+        canvas.drawRRect(RRect.fromRectAndRadius(greave, const Radius.circular(2)), Paint()..color = Color.lerp(game.custom.armorColor(0.35), setTrim, .32)!);
+        canvas.drawLine(Offset(greave.left + 1, greave.center.dy), Offset(greave.right - 1, greave.center.dy), Paint()..color = setTrim..strokeWidth = 1.2);
+      }
+    }
+    if (wornRelic != null) {
+      final relicColor = wornRelic.uniquePower == 'warp_ward' ? const Color(0xFFCE93D8) : setTrim;
+      canvas.drawCircle(Offset(cx + 17, cy + 8), 5.0, Paint()..color = relicColor.withOpacity(.9));
+      canvas.drawCircle(Offset(cx + 17, cy + 8), 8.0, Paint()..color = relicColor.withOpacity(.35)..style = PaintingStyle.stroke..strokeWidth = 1.2);
+    }
     // Animated targeting servo and shoulder beacon are vector-only; phase follows game time.
     final servoPhase = sin(game.combatAnimClock * 5.0);
     canvas.drawCircle(Offset(cx + 21, cy - 14 + servoPhase * 1.2), 3.0, Paint()..color = const Color(0xFF80DEEA).withOpacity(0.55 + 0.35 * servoPhase.abs()));
@@ -8447,6 +8503,16 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
           canvas.drawRect(const Rect.fromLTWH(20, 3, 22, 7), Paint()..color = const Color(0xFF5D4037));
           canvas.drawLine(const Offset(43, -7), const Offset(53, -7), Paint()..color = const Color(0xFFFFCC80)..strokeWidth = 4);
           break;
+      }
+    }
+    // Equipment weapon relic overlays the currently selected weapon, without replacing its geometry.
+    if (wornWeapon != null) {
+      final relicWeaponColor = wornWeapon.uniquePower == 'executioner_oath' ? const Color(0xFF80DEEA) : setTrim;
+      canvas.drawLine(const Offset(18, -15), const Offset(46, -15), Paint()..color = relicWeaponColor.withOpacity(.85)..strokeWidth = 2.0..strokeCap = StrokeCap.round);
+      if (wornWeapon.rarity >= 4) {
+        for (int rune = 0; rune < 3; rune++) {
+          canvas.drawCircle(Offset(22 + rune * 9.0, -20), 1.7, Paint()..color = relicWeaponColor);
+        }
       }
     }
     // Legendary weapon evolution: procedural edge-light, runic ticks and rank rings.
@@ -8690,7 +8756,12 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
       game.spawnDamageNumber(e.position, 0, color: const Color(0xFFE040FB), label: 'ОТРАЖ');
     }
     final ratio = e.maxHp > 0 ? e.currentHp / e.maxHp : 1.0;
-    final dmg = game.hasExecutionerMark && ratio < 0.3 ? (damage * 1.2).round() : damage;
+    var dmg = game.hasExecutionerMark && ratio < 0.3 ? (damage * 1.2).round() : damage;
+    if (game.equipmentInventory.containsUniquePower('executioner_oath') && ratio < 0.35) dmg = (dmg * 1.25).round();
+    if (game.equipmentInventory.containsUniquePower('auspex_omniscience') && Random().nextDouble() < 0.10) {
+      dmg *= 2;
+      game.spawnDamageNumber(e.position, dmg, color: const Color(0xFF80DEEA), label: 'АУСПЕКС • КРИТ');
+    }
     e.applyCombatDamage(dmg, damageType: damageType, armorPenetration: armorPenetration);
     if (applyBurn || explosive || damageType == CombatDamageType.flame) e.applyStatus(StatusType.burn, 2.0 + game.codexBurnBonus, tickDamage: 1);
     if (explosive) {
