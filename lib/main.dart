@@ -2437,15 +2437,16 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void recomputeStats() {
-    var hpBonus = skills.hp + playerClass.hpMod + (hasIronWill ? 1 : 0) + medicaeUpgrade ~/ 2;
+    final gear = equipmentInventory.totalModifiers;
+    var hpBonus = skills.hp + playerClass.hpMod + (hasIronWill ? 1 : 0) + medicaeUpgrade ~/ 2 + (gear['health'] ?? 0).floor();
     if (specialization == 'sentinel' && playerClass == PlayerClass.xenos) hpBonus += 1;
     if (specialization == 'seer' && playerClass == PlayerClass.malleus) hpBonus += 1;
     maxHealth = (baseMaxHealth + hpBonus).clamp(3, 99);
-    playerSpeed = baseSpeed + skills.speed * 12.0 + playerClass.speedMod;
+    playerSpeed = (baseSpeed + skills.speed * 12.0 + playerClass.speedMod) * (1 + (gear['speed'] ?? 0));
     if (combatDoctrine == CombatDoctrine.mobile) playerSpeed *= 1.12;
     if (combatDoctrine == CombatDoctrine.heavy) playerSpeed *= 0.92;
     if (specialization == 'assassin' && playerClass == PlayerClass.hereticus) playerSpeed += 24;
-    defenseChance = min(0.45, skills.defense * 0.03 + (tacticalMods.contains('Armor-Seal') ? 0.025 : 0));
+    defenseChance = min(0.55, skills.defense * 0.03 + (tacticalMods.contains('Armor-Seal') ? 0.025 : 0) + (gear['defense'] ?? 0));
     if (specialization == 'duelist' && playerClass == PlayerClass.hereticus) defenseChance = min(0.50, defenseChance + 0.04);
     if (specialization == 'sentinel' && playerClass == PlayerClass.xenos) defenseChance = min(0.50, defenseChance + 0.05);
     var aspd = max(0.55, 1.0 - skills.attackSpeed * 0.04);
@@ -2464,7 +2465,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       aspd *= 1.0 + bolterHeat * 0.5;
     }
     if (tacticalMods.contains('Recoil Servo')) aspd *= 0.96;
-    attackSpeedMult = aspd;
+    attackSpeedMult = aspd * (1 + (gear['attackSpeed'] ?? 0));
 
     var doctrineDamage = 1.0;
     if (combatDoctrine == CombatDoctrine.heavy) doctrineDamage = 1.12;
@@ -2483,9 +2484,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final oathDamage = oathAcceptedThisRun ? 1.04 : 1.0;
     final woundSpeedPenalty = campaign.fieldWounds > 0 ? max(0.82, 1.0 - campaign.fieldWounds * 0.04) : 1.0;
     playerSpeed *= woundSpeedPenalty;
-    final dmgM = (1.0 + skills.damage * 0.06) * playerClass.dmgMod * setBonusDmg * specializationDamage * legendaryDamage * doctrineDamage * legendaryRankDamage * oathDamage;
-    double rangedM = dmgM * (1 + codexRangedBonus) * (tacticalMods.contains('Auspex Lens') ? 1.05 : 1.0) * modularWeapon.damageMultiplier;
-    double meleeM = dmgM * (1 + codexMeleeBonus) * (modularWeapon.underbarrel == 'bayonet' ? 1.08 : 1.0);
+    final dmgM = (1.0 + skills.damage * 0.06) * playerClass.dmgMod * setBonusDmg * specializationDamage * legendaryDamage * doctrineDamage * legendaryRankDamage * oathDamage * (1 + (gear['damage'] ?? 0));
+    double rangedM = dmgM * (1 + (gear['rangedDamage'] ?? 0)) * (1 + codexRangedBonus) * (tacticalMods.contains('Auspex Lens') ? 1.05 : 1.0) * modularWeapon.damageMultiplier;
+    double meleeM = dmgM * (1 + (gear['meleeDamage'] ?? 0)) * (1 + codexMeleeBonus) * (modularWeapon.underbarrel == 'bayonet' ? 1.08 : 1.0);
     if (combatDoctrine == CombatDoctrine.melee) { rangedM *= 0.92; meleeM *= 1.15; }
 
     if (playerClass == PlayerClass.xenos) {
@@ -3139,7 +3140,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         final data = Map<String, dynamic>.from(jsonDecode(ex) as Map);
         if (data['expansionSystems'] is Map) {
           expansionSystems.loadJson(data['expansionSystems']);
-          equipmentInventory.state.loadJson(data['expansionSystems'] is Map ? (data['expansionSystems'] as Map)['inventory'] : null);
+          equipmentInventory.state.loadJson(data['equipmentInventory'] ?? (data['expansionSystems'] is Map ? (data['expansionSystems'] as Map)['inventory'] : null));
           progressionTrack.loadJson((data['expansionSystems'] as Map)['progression']);
         }
         arsenalUpgrade = ((data['arsenal'] as num?)?.toInt() ?? 0).clamp(0, 5);
@@ -3376,6 +3377,68 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
     recomputeStats();
     persistExpansion();
+  }
+
+  void grantStarterGear() {
+    if (equipmentInventory.state.backpack.isNotEmpty || equipmentInventory.state.equipped.isNotEmpty || equipmentInventory.state.vault.isNotEmpty) return;
+    final items = <gear_catalog.GearItem>[
+      const gear_catalog.GearItem(id:'gear-flak-vest',name:'Панцирь караула',slot:'armor',rarity:0,power:5,modifiers:{'health':1,'defense':0.025}),
+      const gear_catalog.GearItem(id:'gear-auspex-seal',name:'Печать ауспекса',slot:'relic',rarity:0,power:4,modifiers:{'rangedDamage':0.04}),
+      const gear_catalog.GearItem(id:'gear-servo-greaves',name:'Сервоприводные поножи',slot:'boots',rarity:0,power:3,modifiers:{'speed':0.04}),
+    ];
+    equipmentInventory.state.backpack.addAll(items);
+    equipmentInventory.state.shards = max(equipmentInventory.state.shards, 8);
+    persistExpansion();
+  }
+
+  bool forgeGearFromLoot(FieldLootItem loot) {
+    if (!fieldInventory.any((e) => e.id == loot.id) || equipmentInventory.state.backpack.length >= equipmentInventory.state.capacity) return false;
+    final rarity = loot.rarity.index;
+    final slot = switch (loot.kind) {
+      LootKind.medicae => 'armor',
+      LootKind.relicShard || LootKind.evidence => 'relic',
+      LootKind.ammunition || LootKind.weaponPart => 'weapon',
+      LootKind.stim => 'boots',
+      LootKind.grenade => 'gloves',
+      _ => 'armor',
+    };
+    final base = 0.025 + rarity * 0.015 + loot.floorFound * 0.001;
+    final mods = <String, double>{
+      if (slot == 'armor') 'health': 1.0 + rarity * 0.35,
+      if (slot == 'armor') 'defense': base / 2,
+      if (slot == 'weapon') 'damage': base,
+      if (slot == 'relic') 'rangedDamage': base,
+      if (slot == 'relic') 'meleeDamage': base * 0.7,
+      if (slot == 'boots') 'speed': base,
+      if (slot == 'gloves') 'attackSpeed': base,
+    };
+    final gear = gear_catalog.GearItem(
+      id: 'gear-${loot.id}', name: '${loot.name} • ${switch (rarity) {0 => 'Полевой', 1 => 'Усиленный', 2 => 'Редкий', 3 => 'Реликтовый', _ => 'Священный'}}',
+      slot: slot, rarity: rarity, power: loot.value + loot.floorFound * 2, modifiers: mods,
+    );
+    if (!equipmentInventory.state.add(gear)) return false;
+    fieldInventory.removeWhere((e) => e.id == loot.id);
+    spawnDamageNumber(player.position, 0, color: loot.rarity.color, label: 'СОЗДАНО: ${gear.name}');
+    persistExpansion();
+    return true;
+  }
+
+  bool equipGear(String id) {
+    final ok = equipmentInventory.equipById(id);
+    if (ok) { recomputeStats(); if (isPlaying) { player.maxHealth=maxHealth; player.health=min(player.health,maxHealth); } persistExpansion(); }
+    return ok;
+  }
+
+  bool upgradeGear(String id) {
+    final ok = equipmentInventory.upgrade(id);
+    if (ok) { recomputeStats(); if (isPlaying) player.maxHealth=maxHealth; persistExpansion(); }
+    return ok;
+  }
+
+  bool dismantleGear(String id) {
+    final ok = equipmentInventory.dismantle(id);
+    if (ok) persistExpansion();
+    return ok;
   }
 
   void moveInventoryItem(FieldLootItem item, InventoryLocation target) {
@@ -6654,7 +6717,7 @@ class _BackpackMenuState extends State<BackpackMenu> {
                   child: ListTile(dense: true, leading: Icon(Icons.inventory_2, color: item.rarity.color),
                     title: Text(item.name, style: TextStyle(color: item.rarity.color, fontSize: 12)),
                     subtitle: Text('${item.rarity.labelRu} • этаж ${item.floorFound} • ${item.kind.name}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
-                    trailing: Wrap(children: [IconButton(tooltip: 'В экипировку', icon: const Icon(Icons.shield, color: Colors.lightBlueAccent), onPressed: () => setState(() => g.moveInventoryItem(item, InventoryLocation.equipment))), IconButton(tooltip: 'В хранилище', icon: const Icon(Icons.inventory, color: Colors.amber), onPressed: () => setState(() => g.moveInventoryItem(item, InventoryLocation.vault))), IconButton(tooltip: 'Разобрать', icon: const Icon(Icons.build, color: Colors.orangeAccent), onPressed: () => setState(() => g.salvageFieldItem(item)))]),
+                    trailing: Wrap(children: [IconButton(tooltip: 'Создать предмет экипировки', icon: const Icon(Icons.auto_fix_high, color: Colors.purpleAccent), onPressed: () { final ok = g.forgeGearFromLoot(item); setState(() {}); if (!ok) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Не хватает места или предмет уже использован'))); }), IconButton(tooltip: 'В экипировку', icon: const Icon(Icons.shield, color: Colors.lightBlueAccent), onPressed: () => setState(() => g.moveInventoryItem(item, InventoryLocation.equipment))), IconButton(tooltip: 'В хранилище', icon: const Icon(Icons.inventory, color: Colors.amber), onPressed: () => setState(() => g.moveInventoryItem(item, InventoryLocation.vault))), IconButton(tooltip: 'Разобрать', icon: const Icon(Icons.build, color: Colors.orangeAccent), onPressed: () => setState(() => g.salvageFieldItem(item)))]),
                   ),
                 )),
               ] else const Text('Пока ничего не найдено. Ищи контейнеры и предметы на этажах.', style: TextStyle(color: Colors.white38, fontSize: 11)),
@@ -6662,6 +6725,54 @@ class _BackpackMenuState extends State<BackpackMenu> {
                 OutlinedButton(onPressed: (!g.isPlaying || g.isPaused) ? () async { g.upgradeBackpack(); setState(() {}); } : null, child: Text('Расширить рюкзак (${25 + g.backpackUpgradeLevel * 20} рекв.)')),
                 OutlinedButton(onPressed: g.isPlaying ? () => setState(() => g.activateFieldTerminal()) : null, child: const Text('Использовать терминал')),
               ]),
+              const Divider(color: Colors.white24),
+              const Text('ЭКИПИРОВКА И УЛУЧШЕНИЯ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+              Text('Осколки: ${g.equipmentInventory.state.shards} • Бонусы: здоровье +${g.equipmentInventory.totalModifiers['health']?.floor() ?? 0}, урон +${(((g.equipmentInventory.totalModifiers['damage'] ?? 0)+(g.equipmentInventory.totalModifiers['rangedDamage'] ?? 0))*100).round()}%, защита +${((g.equipmentInventory.totalModifiers['defense'] ?? 0)*100).round()}%', style: const TextStyle(color: Colors.white70, fontSize: 11)),
+              if (g.equipmentInventory.state.backpack.isEmpty && g.equipmentInventory.state.equipped.isEmpty && g.equipmentInventory.state.vault.isEmpty)
+                OutlinedButton.icon(onPressed: () { g.grantStarterGear(); setState(() {}); }, icon: const Icon(Icons.shield), label: const Text('Получить стартовый комплект')),
+              if (g.equipmentInventory.state.equipped.isNotEmpty) ...[
+                const Text('НАДЕТО', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                ...g.equipmentInventory.state.equipped.values.map((item) => ListTile(
+                  dense: true,
+                  leading: Icon(Icons.verified, color: item.rarity >= 3 ? Colors.amber : Colors.lightBlueAccent),
+                  title: Text(item.name, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  subtitle: Text('${item.slot} • мощность ${item.power} • редкость ${item.rarity + 1}/5', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                  trailing: IconButton(
+                    tooltip: 'Улучшить', icon: const Icon(Icons.upgrade, color: Colors.amber),
+                    onPressed: item.rarity >= 4 || g.equipmentInventory.state.shards < 2 + item.rarity * 2 + item.power ~/ 5 ? null : () {
+                      final ok = g.upgradeGear(item.id);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? 'Снаряжение улучшено' : 'Не удалось улучшить предмет')));
+                      setState(() {});
+                    },
+                  ),
+                )),
+              ],
+              if (g.equipmentInventory.state.backpack.isNotEmpty) ...[
+                const Text('В РЮКЗАКЕ', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                ...g.equipmentInventory.state.backpack.map((item) => Card(
+                  color: const Color(0xFF15191D),
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.shield_outlined, color: item.rarity >= 3 ? Colors.amber : Colors.white70),
+                    title: Text(item.name, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    subtitle: Text('${item.slot} • мощность ${item.power} • редкость ${item.rarity + 1}/5 • ${item.modifiers.entries.map((e) => '${e.key} +${(e.value * 100).round()}%').join(', ')}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                    trailing: Wrap(mainAxisSize: MainAxisSize.min, children: [
+                      IconButton(tooltip: 'Надеть', icon: const Icon(Icons.check_circle, color: Colors.lightBlueAccent), onPressed: () => setState(() => g.equipGear(item.id))),
+                      IconButton(tooltip: 'Улучшить', icon: const Icon(Icons.upgrade, color: Colors.amber), onPressed: item.rarity >= 4 || g.equipmentInventory.state.shards < 2 + item.rarity * 2 + item.power ~/ 5 ? null : () => setState(() => g.upgradeGear(item.id))),
+                      IconButton(tooltip: 'Разобрать', icon: const Icon(Icons.build, color: Colors.orangeAccent), onPressed: () => setState(() => g.dismantleGear(item.id))),
+                    ]),
+                  ),
+                )),
+              ],
+              if (g.equipmentInventory.state.vault.isNotEmpty) ...[
+                const Text('ХРАНИЛИЩЕ СНАРЯЖЕНИЯ', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                ...g.equipmentInventory.state.vault.map((item) => ListTile(
+                  dense: true,
+                  title: Text(item.name, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                  subtitle: Text('${item.slot} • мощность ${item.power}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                  trailing: TextButton(onPressed: () => setState(() => g.equipmentInventory.state.toBackpack(item)), child: const Text('Вернуть')),
+                )),
+              ],
               const Text('МОДУЛЬНАЯ СБОРКА ОРУЖИЯ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
               Text('Урон ×${g.modularWeapon.damageMultiplier.toStringAsFixed(2)} • Темп ×${g.modularWeapon.rateMultiplier.toStringAsFixed(2)} • Точность ×${g.modularWeapon.precisionMultiplier.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
               Wrap(spacing: 4, runSpacing: 4, children: [
