@@ -2437,7 +2437,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void recomputeStats() {
-    final gear = equipmentInventory.totalModifiers;
+    final gear = <String,double>{...equipmentInventory.totalModifiers};
+    equipmentInventory.activeSetModifiers.forEach((k,v) => gear[k] = (gear[k] ?? 0) + v);
     var hpBonus = skills.hp + playerClass.hpMod + (hasIronWill ? 1 : 0) + medicaeUpgrade ~/ 2 + (gear['health'] ?? 0).floor();
     if (specialization == 'sentinel' && playerClass == PlayerClass.xenos) hpBonus += 1;
     if (specialization == 'seer' && playerClass == PlayerClass.malleus) hpBonus += 1;
@@ -3382,9 +3383,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void grantStarterGear() {
     if (equipmentInventory.state.backpack.isNotEmpty || equipmentInventory.state.equipped.isNotEmpty || equipmentInventory.state.vault.isNotEmpty) return;
     final items = <gear_catalog.GearItem>[
-      const gear_catalog.GearItem(id:'gear-flak-vest',name:'Панцирь караула',slot:'armor',rarity:0,power:5,modifiers:{'health':1,'defense':0.025}),
-      const gear_catalog.GearItem(id:'gear-auspex-seal',name:'Печать ауспекса',slot:'relic',rarity:0,power:4,modifiers:{'rangedDamage':0.04}),
-      const gear_catalog.GearItem(id:'gear-servo-greaves',name:'Сервоприводные поножи',slot:'boots',rarity:0,power:3,modifiers:{'speed':0.04}),
+      const gear_catalog.GearItem(id:'gear-flak-vest',name:'Панцирь караула',slot:'armor',rarity:0,power:5,modifiers:{'health':1,'defense':0.025},setId:'inquisitorial'),
+      const gear_catalog.GearItem(id:'gear-auspex-seal',name:'Печать ауспекса',slot:'relic',rarity:0,power:4,modifiers:{'rangedDamage':0.04},setId:'inquisitorial'),
+      const gear_catalog.GearItem(id:'gear-servo-greaves',name:'Сервоприводные поножи',slot:'boots',rarity:0,power:3,modifiers:{'speed':0.04},setId:'inquisitorial'),
     ];
     equipmentInventory.state.backpack.addAll(items);
     equipmentInventory.state.shards = max(equipmentInventory.state.shards, 8);
@@ -3412,15 +3413,57 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       if (slot == 'boots') 'speed': base,
       if (slot == 'gloves') 'attackSpeed': base,
     };
+    final setId = switch (playerClass) { PlayerClass.xenos => 'deathwatch', PlayerClass.malleus => 'ordo_malleus', PlayerClass.hereticus => 'inquisitorial' };
+    final legendaryPower = rarity >= 4 ? switch (slot) { 'armor' => 'unyielding_aegis', 'weapon' => 'executioner_oath', 'relic' => 'auspex_omniscience', 'boots' => 'shadow_stride', _ => 'sanctified_grip' } : null;
+    final legendaryBonus = rarity >= 4 ? switch (legendaryPower) {
+      'unyielding_aegis' => <String,double>{'health':2.0,'defense':0.06},
+      'executioner_oath' => <String,double>{'damage':0.14,'meleeDamage':0.08},
+      'auspex_omniscience' => <String,double>{'rangedDamage':0.10,'attackSpeed':0.05},
+      'shadow_stride' => <String,double>{'speed':0.10,'defense':0.02},
+      _ => <String,double>{'attackSpeed':0.08},
+    } : const <String,double>{};
+    legendaryBonus.forEach((k,v)=>mods[k]=(mods[k]??0)+v);
     final gear = gear_catalog.GearItem(
-      id: 'gear-${loot.id}', name: '${loot.name} • ${switch (rarity) {0 => 'Полевой', 1 => 'Усиленный', 2 => 'Редкий', 3 => 'Реликтовый', _ => 'Священный'}}',
-      slot: slot, rarity: rarity, power: loot.value + loot.floorFound * 2, modifiers: mods,
+      id: 'gear-${loot.id}', name: '${loot.name} • ${rarity >= 4 ? 'Легендарный артефакт' : switch (rarity) {0 => 'Полевой', 1 => 'Усиленный', 2 => 'Редкий', 3 => 'Реликтовый', _ => 'Священный'}}',
+      slot: slot, rarity: rarity, power: loot.value + loot.floorFound * 2, modifiers: mods, setId: setId, uniquePower: legendaryPower,
     );
     if (!equipmentInventory.state.add(gear)) return false;
     fieldInventory.removeWhere((e) => e.id == loot.id);
     spawnDamageNumber(player.position, 0, color: loot.rarity.color, label: 'СОЗДАНО: ${gear.name}');
     persistExpansion();
     return true;
+  }
+
+  void grantBossRelic({bool guaranteed = false}) {
+    final inv = equipmentInventory.state;
+    final ownedIds = <String>{...inv.backpack.map((e) => e.id), ...inv.vault.map((e) => e.id), ...inv.equipped.values.map((e) => e.id)};
+    final available = List<int>.generate(5, (i) => i).where((i) => !ownedIds.contains(_createBossRelic(i).id)).toList();
+    if (available.isEmpty) {
+      inv.shards += 8;
+      spawnDamageNumber(player.position, 0, color: const Color(0xFFFFC107), label: 'ДУБЛИКАТ РЕЛИКВИИ: +8 ОСКОЛКОВ');
+    } else {
+      final item = _createBossRelic(available[Random().nextInt(available.length)]);
+      if (inv.backpack.length < inv.capacity) {
+        inv.backpack.add(item);
+        spawnDamageNumber(player.position, 0, color: const Color(0xFFFFC107), label: 'ЛЕГЕНДАРНАЯ РЕЛИКВИЯ');
+      } else {
+        inv.vault.add(item);
+        spawnDamageNumber(player.position, 0, color: const Color(0xFFFFC107), label: 'РЕЛИКВИЯ В ХРАНИЛИЩЕ');
+      }
+    }
+    recomputeStats();
+    persistExpansion();
+  }
+
+  gear_catalog.GearItem _createBossRelic(int index) {
+    final catalog = <gear_catalog.GearItem>[
+      const gear_catalog.GearItem(id:'relic-emperors-aegis',name:'Реликвия: Эгида Императора',slot:'armor',rarity:4,power:35,modifiers:{'health':3,'defense':0.08},setId:'inquisitorial',uniquePower:'unyielding_aegis'),
+      const gear_catalog.GearItem(id:'relic-deathwatch-round',name:'Реликвия: Патрон Deathwatch',slot:'weapon',rarity:4,power:38,modifiers:{'rangedDamage':0.16,'damage':0.04},setId:'deathwatch',uniquePower:'executioner_oath'),
+      const gear_catalog.GearItem(id:'relic-ordo-malleus-seal',name:'Реликвия: Печать Ордо Маллеус',slot:'relic',rarity:4,power:34,modifiers:{'damage':0.10,'health':2},setId:'ordo_malleus',uniquePower:'warp_ward'),
+      const gear_catalog.GearItem(id:'relic-auspex-omnissiah',name:'Реликвия: Всевидящий ауспекс',slot:'relic',rarity:4,power:32,modifiers:{'rangedDamage':0.10,'attackSpeed':0.07},setId:'deathwatch',uniquePower:'auspex_omniscience'),
+      const gear_catalog.GearItem(id:'relic-shadow-greaves',name:'Реликвия: Поножи Тени',slot:'boots',rarity:4,power:31,modifiers:{'speed':0.12,'defense':0.025},setId:'inquisitorial',uniquePower:'shadow_stride'),
+    ];
+    return catalog[index.clamp(0,catalog.length-1).toInt()];
   }
 
   bool equipGear(String id) {
@@ -4512,7 +4555,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case EnemyType.necronImmortal: unlockCodex(CodexId.necronImmortal); break;
       }
     }
-    if (isBoss) { tacticalAchievements++; if (tacticalAchievements % 3 == 0) requisition += 5; persistExpansion(); }
+    if (isBoss) { tacticalAchievements++; if (tacticalAchievements % 3 == 0) requisition += 5; grantBossRelic(guaranteed: true); persistExpansion(); }
 
     // Tactical contract progress is event-driven and guarded so a multi-hit death cannot double-claim.
     final countsForContract = switch (activeContract) {
@@ -6728,6 +6771,16 @@ class _BackpackMenuState extends State<BackpackMenu> {
               const Divider(color: Colors.white24),
               const Text('ЭКИПИРОВКА И УЛУЧШЕНИЯ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
               Text('Осколки: ${g.equipmentInventory.state.shards} • Бонусы: здоровье +${g.equipmentInventory.totalModifiers['health']?.floor() ?? 0}, урон +${(((g.equipmentInventory.totalModifiers['damage'] ?? 0)+(g.equipmentInventory.totalModifiers['rangedDamage'] ?? 0))*100).round()}%, защита +${((g.equipmentInventory.totalModifiers['defense'] ?? 0)*100).round()}%', style: const TextStyle(color: Colors.white70, fontSize: 11)),
+              ...gear_catalog.gearSetCatalog.map((set) => Card(
+                color: const Color(0xFF15191D),
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.shield_moon, color: (g.equipmentInventory.equippedSetCounts[set.id] ?? 0) >= set.piecesForFull ? Colors.amber : (g.equipmentInventory.equippedSetCounts[set.id] ?? 0) >= set.piecesForTwo ? Colors.lightBlueAccent : Colors.white38),
+                  title: Text('${set.name} • ${g.equipmentInventory.equippedSetCounts[set.id] ?? 0} предмет(а)', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  subtitle: Text(set.description, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                  trailing: Text((g.equipmentInventory.equippedSetCounts[set.id] ?? 0) >= set.piecesForFull ? 'ПОЛНЫЙ' : (g.equipmentInventory.equippedSetCounts[set.id] ?? 0) >= set.piecesForTwo ? '2/4+' : '${g.equipmentInventory.equippedSetCounts[set.id] ?? 0}/${set.piecesForFull}', style: const TextStyle(color: Colors.amber, fontSize: 10)),
+                ),
+              )),
               if (g.equipmentInventory.state.backpack.isEmpty && g.equipmentInventory.state.equipped.isEmpty && g.equipmentInventory.state.vault.isEmpty)
                 OutlinedButton.icon(onPressed: () { g.grantStarterGear(); setState(() {}); }, icon: const Icon(Icons.shield), label: const Text('Получить стартовый комплект')),
               if (g.equipmentInventory.state.equipped.isNotEmpty) ...[
