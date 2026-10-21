@@ -6992,7 +6992,9 @@ class CodexMenu extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: Column(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
@@ -7013,11 +7015,7 @@ class CodexMenu extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text('Орочьи бойцы: штурмовые налёты и грубая броня.\nТиранидские гаунты: быстрые прыжки, когти и хитиновый панцирь.\nНекронские воины: металлические пластины и дисциплинированный дальний огонь.\nПсайкеры культа: варп-атаки и давление на дистанции.\nНосители чумы: тяжёлый шаг, заражение и высокая живучесть.', style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.35)),
             ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: CodexId.values.length,
-                itemBuilder: (_, i) {
-                  final id = CodexId.values[i];
+            ...CodexId.values.map((id) {
                   final open = game.codexUnlocked.contains(id);
                   final rank = game.loreRankOf(id);
                   return Card(
@@ -7051,9 +7049,7 @@ class CodexMenu extends StatelessWidget {
                             ],
                     ),
                   );
-                },
-              ),
-            ),
+                }),
             ElevatedButton(
               onPressed: () {
                 game.playClick();
@@ -7062,6 +7058,7 @@ class CodexMenu extends StatelessWidget {
               child: const Text('НАЗАД'),
             ),
           ],
+          ),
         ),
       ),
     );
