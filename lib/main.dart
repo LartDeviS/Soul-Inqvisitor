@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'game/inquisitor_game.dart' as expansion;
 import 'game/weapons/weapon_data.dart' as weapon_catalog;
+import 'game/weapons/ordo_specialization.dart' as ordo;
 import 'game/world/biome_data.dart' as world_catalog;
 import 'game/world/arena_events.dart' as arena_catalog;
 import 'ui/codex/weapon_catalog_panel.dart';
@@ -2585,6 +2586,59 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     return d;
   }
 
+  /// Ordo doctrine is applied at the hit resolution point, so it affects the real
+  /// Flame combat loop rather than only the catalogue preview.
+  bool unlockOrdoSkill(ordo.OrdoSkill id) {
+    final definition = ordo.ordoSkillCatalog.firstWhere((s) => s.id == id);
+    final requiredOrdo = switch (playerClass) {
+      PlayerClass.malleus => weapon_catalog.WeaponOrdo.malleus,
+      PlayerClass.hereticus => weapon_catalog.WeaponOrdo.hereticus,
+      PlayerClass.xenos => weapon_catalog.WeaponOrdo.xenos,
+    };
+    if (definition.ordo != requiredOrdo || expansionSystems.ordoDoctrine.has(id) || skillPoints < definition.cost) return false;
+    // Three-step specialization trees: the second and third skill require the
+    // previous node, preserving a readable progression path.
+    final prerequisites = switch (id) {
+      ordo.OrdoSkill.wardingSeal => <ordo.OrdoSkill>[],
+      ordo.OrdoSkill.daemonology => <ordo.OrdoSkill>[ordo.OrdoSkill.wardingSeal],
+      ordo.OrdoSkill.banishment => <ordo.OrdoSkill>[ordo.OrdoSkill.daemonology],
+      ordo.OrdoSkill.witchHunter => <ordo.OrdoSkill>[],
+      ordo.OrdoSkill.nullRounds => <ordo.OrdoSkill>[ordo.OrdoSkill.witchHunter],
+      ordo.OrdoSkill.interrogator => <ordo.OrdoSkill>[ordo.OrdoSkill.nullRounds],
+    };
+    if (prerequisites.any((skill) => !expansionSystems.ordoDoctrine.has(skill))) return false;
+    skillPoints -= definition.cost;
+    final unlocked = <ordo.OrdoSkill>{...expansionSystems.ordoDoctrine.unlockedSkills, id};
+    expansionSystems.ordoDoctrine = ordo.OrdoDoctrine(unlockedSkills: unlocked);
+    recordChronicle('Доктрина Ордо разблокирована: ${definition.nameRu}.');
+    recomputeStats();
+    persistExpansion();
+    return true;
+  }
+
+  double ordoDamageMultiplierForEnemy(Enemy enemy) {
+    final weaponOrdo = switch (rangedWeapon) {
+      RangedWeapon.psycannon || RangedWeapon.exorcistIncinerator || RangedWeapon.daemonbanePistol || RangedWeapon.staff || RangedWeapon.stormStaff || RangedWeapon.warpBeam => weapon_catalog.WeaponOrdo.malleus,
+      RangedWeapon.condemnorBoltgun || RangedWeapon.sanctifiedStakeCrossbow || RangedWeapon.infernoPistol || RangedWeapon.daggers || RangedWeapon.needles || RangedWeapon.sniperNeedle => weapon_catalog.WeaponOrdo.hereticus,
+      _ => playerClass == PlayerClass.malleus ? weapon_catalog.WeaponOrdo.malleus : playerClass == PlayerClass.hereticus ? weapon_catalog.WeaponOrdo.hereticus : weapon_catalog.WeaponOrdo.common,
+    };
+    final faction = switch (enemy.type) {
+      EnemyType.cultPsyker => 'psyker',
+      EnemyType.bloodletter || EnemyType.chaosSpawn => 'daemon',
+      EnemyType.plagueBearer => 'chaos',
+      EnemyType.shooter || EnemyType.melee || EnemyType.shielded || EnemyType.dog || EnemyType.shieldedShooter || EnemyType.flamer || EnemyType.sniper || EnemyType.brute => 'human',
+      _ => 'xenos',
+    };
+    return expansionSystems.ordoDoctrine.damageMultiplier(weaponOrdo: weaponOrdo, targetFaction: faction, damageType: switch (rangedWeapon) {
+      RangedWeapon.psycannon || RangedWeapon.daemonbanePistol || RangedWeapon.staff || RangedWeapon.stormStaff || RangedWeapon.warpBeam => weapon_catalog.DamageType.warp,
+      RangedWeapon.exorcistIncinerator => weapon_catalog.DamageType.flame,
+      RangedWeapon.infernoPistol => weapon_catalog.DamageType.melta,
+      _ => weapon_catalog.DamageType.kinetic,
+    });
+  }
+
+  double get ordoIncomingDamageMultiplier => (1.0 - expansionSystems.ordoDoctrine.warpDefenseBonus).clamp(0.0, 1.0).toDouble();
+
   void _checkUnlocks() {
     if (overallLevel >= 11) _everReached11 = true;
     if (overallLevel >= 21) _everReached21 = true;
@@ -3143,6 +3197,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       final ex = prefs.getString('inquisition_expansion');
       if (ex != null) {
         final data = Map<String, dynamic>.from(jsonDecode(ex) as Map);
+        if (data['ordoSkillPoints'] is num) skillPoints = max(0, (data['ordoSkillPoints'] as num).toInt());
         if (data['expansionSystems'] is Map) {
           expansionSystems.loadJson(data['expansionSystems']);
           equipmentInventory.state.loadJson(data['equipmentInventory'] ?? (data['expansionSystems'] is Map ? (data['expansionSystems'] as Map)['inventory'] : null));
@@ -3596,6 +3651,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
       await prefs.setString('inquisition_expansion', jsonEncode({
         'arsenal': arsenalUpgrade, 'shrine': shrineUpgrade, 'archive': archiveUpgrade, 'medicae': medicaeUpgrade,
+        'ordoSkillPoints': skillPoints,
         'alignment': inquisitionAlignment, 'specialization': specialization, 'legendary': legendaryWeapon, 'legendaryWeaponRank': legendaryWeaponRank,
         'investigations': investigationsResolved, 'requisition': requisition,
         'warpStability': warpStability, 'modularWeapon': modularWeapon.toJson(),
@@ -6661,6 +6717,49 @@ class _SkillsMenuState extends State<SkillsMenu> {
                     _row('Скор. атаки', s.attackSpeed, () => setState(() => g.spendSkill('attackSpeed'))),
                     _row('Защита', s.defense, () => setState(() => g.spendSkill('defense'))),
                     _row('Урон', s.damage, () => setState(() => g.spendSkill('damage'))),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(8, 22, 8, 8),
+                      child: Text('ДОКТРИНА ОРДО', style: TextStyle(color: Color(0xFFFFD700), fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Text(
+                        g.playerClass == PlayerClass.malleus
+                          ? 'Маллеус • защита от Варпа и охота на демонов'
+                          : g.playerClass == PlayerClass.hereticus
+                            ? 'Еретикус • охота на культистов и псайкеров'
+                            : 'Ксенос • доктрины Ордо недоступны для этого класса',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
+                    ...ordo.ordoSkillCatalog
+                      .where((skill) => skill.ordo == (g.playerClass == PlayerClass.malleus ? weapon_catalog.WeaponOrdo.malleus : g.playerClass == PlayerClass.hereticus ? weapon_catalog.WeaponOrdo.hereticus : weapon_catalog.WeaponOrdo.xenos))
+                      .map((skill) {
+                        final doctrine = g.expansionSystems.ordoDoctrine;
+                        final unlocked = doctrine.has(skill.id);
+                        final prerequisites = switch (skill.id) {
+                          ordo.OrdoSkill.wardingSeal => <ordo.OrdoSkill>[],
+                          ordo.OrdoSkill.daemonology => <ordo.OrdoSkill>[ordo.OrdoSkill.wardingSeal],
+                          ordo.OrdoSkill.banishment => <ordo.OrdoSkill>[ordo.OrdoSkill.daemonology],
+                          ordo.OrdoSkill.witchHunter => <ordo.OrdoSkill>[],
+                          ordo.OrdoSkill.nullRounds => <ordo.OrdoSkill>[ordo.OrdoSkill.witchHunter],
+                          ordo.OrdoSkill.interrogator => <ordo.OrdoSkill>[ordo.OrdoSkill.nullRounds],
+                        };
+                        final prereqMet = prerequisites.every(doctrine.has);
+                        final canUnlock = !unlocked && prereqMet && g.skillPoints >= skill.cost;
+                        return Card(
+                          color: const Color(0xFF171717),
+                          child: ListTile(
+                            title: Text(skill.nameRu, style: TextStyle(color: unlocked ? const Color(0xFF81C784) : Colors.white, fontWeight: FontWeight.bold)),
+                            subtitle: Text('${skill.description}\n${unlocked ? 'РАЗБЛОКИРОВАНО' : prereqMet ? 'Стоимость: ${skill.cost} SP' : 'Требуется предыдущий навык в ветке'}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                            isThreeLine: true,
+                            trailing: unlocked ? const Icon(Icons.check_circle, color: Color(0xFF81C784)) : ElevatedButton(
+                              onPressed: canUnlock ? () => setState(() { g.playClick(); g.unlockOrdoSkill(skill.id); }) : null,
+                              child: const Text('ОТКРЫТЬ'),
+                            ),
+                          ),
+                        );
+                      }),
                   ],
                 ),
               ),
@@ -8339,6 +8438,8 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
     if (game.holyAuraTimer > 0) amount = max(1, (amount * 0.7).round());
     amount = max(1, (amount * (1.0 - game.armorDamageReduction)).round());
+    // Warding Seal is a persistent, small mitigation bonus against incoming damage.
+    amount = max(1, (amount * game.ordoIncomingDamageMultiplier).round());
     if (game.defenseChance > 0 && Random().nextDouble() < game.defenseChance) {
       game.spawnDamageNumber(position, 0, color: const Color(0xFF90CAF9), label: 'BLOCK');
       return;
@@ -8834,6 +8935,8 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
     }
     final ratio = e.maxHp > 0 ? e.currentHp / e.maxHp : 1.0;
     var dmg = game.hasExecutionerMark && ratio < 0.3 ? (damage * 1.2).round() : damage;
+    final ordoMultiplier = game.ordoDamageMultiplierForEnemy(e);
+    if (ordoMultiplier > 1.0) dmg = (dmg * ordoMultiplier).round();
     if (game.equipmentInventory.containsUniquePower('executioner_oath') && ratio < 0.35) dmg = (dmg * 1.25).round();
     if (game.equipmentInventory.containsUniquePower('auspex_omniscience') && Random().nextDouble() < 0.10) {
       dmg *= 2;
@@ -8959,7 +9062,8 @@ class MeleeAttack extends PositionComponent with HasGameReference<InquisitorGame
       return;
     }
     if (other is Enemy && hit.add(other.hashCode) && _inArc(other.position)) {
-      other.applyDamage(damage);
+      final doctrineDamage = game.ordoDamageMultiplierForEnemy(other);
+      other.applyDamage((damage * doctrineDamage).round());
       if (game.synergyHereticusBleedDash || game.loadout.bladeEdge == BladeEdgeMod.serrated) {
         other.applyStatus(StatusType.bleed, 2.5, tickDamage: 1);
       }

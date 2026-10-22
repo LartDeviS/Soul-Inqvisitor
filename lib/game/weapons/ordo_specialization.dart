@@ -6,7 +6,7 @@ class OrdoSkillDefinition {
   const OrdoSkillDefinition(this.id,this.nameRu,this.description,this.ordo,{this.cost=1,this.damageBonus=0,this.defenseBonus=0});
 }
 const ordoSkillCatalog = <OrdoSkillDefinition>[
-  OrdoSkillDefinition(OrdoSkill.wardingSeal,'Печать защиты','Снижает входящий варп-урон; защитная печать Маллеус.',WeaponOrdo.malleus,defenseBonus:.06),
+  OrdoSkillDefinition(OrdoSkill.wardingSeal,'Печать защиты','Снижает весь входящий урон на 6%; защитная печать Маллеус.',WeaponOrdo.malleus,defenseBonus:.06),
   OrdoSkillDefinition(OrdoSkill.daemonology,'Знание демонологии','Увеличивает урон по демонам оружием Маллеус.',WeaponOrdo.malleus,damageBonus:.10),
   OrdoSkillDefinition(OrdoSkill.banishment,'Ритуал изгнания','Усиливает варп-оружие против демонов и элитных целей.',WeaponOrdo.malleus,damageBonus:.08),
   OrdoSkillDefinition(OrdoSkill.witchHunter,'Охотник на ведьм','Увеличивает урон по культистам и псайкерам.',WeaponOrdo.hereticus,damageBonus:.10),
