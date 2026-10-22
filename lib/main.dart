@@ -4698,8 +4698,16 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     world.add(EnemySpawnPortal(position: pos)..priority = 3);
     final forceChamp = isEliteNode && enemiesSpawned < 2;
     final isChamp = forceChamp || (overallLevel >= 5 && Random().nextDouble() < (0.08 + currentFloor * 0.015 + (highThreatOperation ? 0.08 : 0)));
-    final affix = isChamp ? rollAffix() : EliteAffix.none;
-    final e = Enemy(floor: currentFloor, type: _chooseEnemyType(), isChampion: isChamp, affix: affix);
+    final type = _chooseEnemyType();
+    // Warp summoners now occur as a deliberate battlefield role, not only as a
+    // random champion affix. They keep the existing cult-psyker combat/visual
+    // implementation and trigger their add-spawn at 50% HP.
+    final affix = isChamp
+        ? rollAffix()
+        : (type == EnemyType.cultPsyker && currentFloor >= 4 && Random().nextDouble() < 0.24
+            ? EliteAffix.summoner
+            : EliteAffix.none);
+    final e = Enemy(floor: currentFloor, type: type, isChampion: isChamp, affix: affix);
     e.position = pos;
     e.priority = 30;
     world.add(e);
@@ -10046,11 +10054,15 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     }
     if (attackWindup > 0) {
       final progress = (attackWindup / _attackWindupDuration).clamp(0.0, 1.0);
-      final warningColor = type == EnemyType.cultPsyker || type == EnemyType.bloodletter
-          ? const Color(0xFFCE93D8)
-          : type == EnemyType.necronWarrior || type == EnemyType.necronImmortal
-              ? const Color(0xFF00E5FF)
-              : const Color(0xFFFF5252);
+      final warningColor = affix == EliteAffix.summoner
+          ? const Color(0xFFB388FF)
+          : type == EnemyType.cultPsyker || type == EnemyType.bloodletter
+              ? const Color(0xFFCE93D8)
+              : type == EnemyType.necronWarrior || type == EnemyType.necronImmortal
+                  ? const Color(0xFF00E5FF)
+                  : type == EnemyType.sniper
+                      ? const Color(0xFFFFB74D)
+                      : const Color(0xFFFF5252);
       final warningPaint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0 + (1.0 - progress) * 2.0
@@ -10080,6 +10092,14 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
           }
         }
       }
+    }
+    if (affix == EliteAffix.summoner && currentHp > 0) {
+      final warpPulse = 0.5 + 0.5 * sin(animationClock * 5.5);
+      canvas.drawCircle(Offset(cx, cy), 31 + warpPulse * 4,
+        Paint()..color = const Color(0xFFB388FF).withOpacity(0.35 + warpPulse * 0.25)
+          ..style = PaintingStyle.stroke..strokeWidth = 2.2);
+      canvas.drawCircle(Offset(cx, cy - 24), 4 + warpPulse * 2,
+        Paint()..color = const Color(0xFFE1BEE7).withOpacity(0.8));
     }
     WHDraw.statusIcons(canvas, cx, -18, statuses);
     if (suppression > 2) {
@@ -10155,6 +10175,9 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       final a = base + o;
       game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 220)..priority = 22);
     }
+    // Every successful telegraph leaves a short, clear weak-point window in
+    // later phases. This rewards dodging rather than encouraging face-tanking.
+    if (phase >= 2) weakSpotTimer = phase >= 3 ? 1.8 : 1.4;
     game.markBossRetreat();
   }
 
@@ -10162,6 +10185,7 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void update(double dt) {
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
+    if (weakSpotTimer > 0) weakSpotTimer = max(0, weakSpotTimer - dt);
     if (!game.isPlaying || game.isPaused) return;
     for (final e in statuses.toList()) {
       e.remaining -= dt;
@@ -10297,9 +10321,12 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   int _lastBar = 0;
   double attackTimer = 0;
   double telegraphTimer = 0;
+  double weakSpotTimer = 0;
   bool telegraphing = false;
   int attackMode = 0;
-  bool get weakSpotExposed => phase >= 2 && telegraphing;
+  // The boss remains vulnerable briefly after a telegraphed attack resolves,
+  // creating a readable punish window instead of a one-frame opening.
+  bool get weakSpotExposed => phase >= 2 && (telegraphing || weakSpotTimer > 0);
   double hurtFlash = 0;
   final List<StatusEffect> statuses = [];
 
@@ -10359,6 +10386,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
       phase = nextPhase;
       attackTimer = 0;
       telegraphing = false;
+      weakSpotTimer = 0;
       _announceBossPhase(game, position, phase);
     }
     hurtFlash = 0.12;
