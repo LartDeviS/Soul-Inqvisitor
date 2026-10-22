@@ -1,6 +1,10 @@
 import 'weapon_data.dart';
 
-enum OrdoSkill { wardingSeal, daemonology, banishment, witchHunter, nullRounds, interrogator }
+enum OrdoSkill {
+  wardingSeal, daemonology, banishment,
+  witchHunter, nullRounds, interrogator,
+  xenology, auspexMastery, alienTechScavenger,
+}
 class OrdoSkillDefinition {
   final OrdoSkill id; final String nameRu, description; final WeaponOrdo ordo; final int cost; final double damageBonus, defenseBonus;
   const OrdoSkillDefinition(this.id,this.nameRu,this.description,this.ordo,{this.cost=1,this.damageBonus=0,this.defenseBonus=0});
@@ -12,6 +16,9 @@ const ordoSkillCatalog = <OrdoSkillDefinition>[
   OrdoSkillDefinition(OrdoSkill.witchHunter,'Охотник на ведьм','Увеличивает урон по культистам и псайкерам.',WeaponOrdo.hereticus,damageBonus:.10),
   OrdoSkillDefinition(OrdoSkill.nullRounds,'Нулевые заряды','Снижает эффективность варп-защиты псайкеров; бонус против хаоса.',WeaponOrdo.hereticus,damageBonus:.07),
   OrdoSkillDefinition(OrdoSkill.interrogator,'Искусство допроса','Повышает эффективность против человеческих фракций.',WeaponOrdo.hereticus,damageBonus:.05),
+  OrdoSkillDefinition(OrdoSkill.xenology,'Тактическая ксенология','+10% урона по оркам, тиранидам, некронам и генокульту. Знание анатомии чуждых видов превращается в точность.',WeaponOrdo.xenos,damageBonus:.10),
+  OrdoSkillDefinition(OrdoSkill.auspexMastery,'Ауспексная маркировка','Метки держатся дольше, а помеченные цели получают +40% урона вместо +25%.',WeaponOrdo.xenos,damageBonus:.15),
+  OrdoSkillDefinition(OrdoSkill.alienTechScavenger,'Трофейная ксенотехника','При убийстве ксеносов дополнительно получаются обломки для снабжения.',WeaponOrdo.xenos),
 ];
 
 class OrdoDoctrine {
@@ -27,12 +34,17 @@ class OrdoDoctrine {
         OrdoSkill.witchHunter => targetFaction=='cult' || targetFaction=='psyker' || targetFaction=='chaos',
         OrdoSkill.nullRounds => targetFaction=='psyker' || targetFaction=='chaos',
         OrdoSkill.interrogator => targetFaction=='cult' || targetFaction=='human',
+        OrdoSkill.xenology => targetFaction=='xenos',
+        OrdoSkill.auspexMastery => false, // Mark bonus is applied only while an enemy is marked.
+        OrdoSkill.alienTechScavenger => false,
       };
       if(applies) bonus+=skill.damageBonus;
     }
     return 1+bonus;
   }
   double get warpDefenseBonus => unlockedSkills.contains(OrdoSkill.wardingSeal) ? .06 : 0;
+  bool get hasAuspexMastery => unlockedSkills.contains(OrdoSkill.auspexMastery);
+  bool get hasAlienTechScavenger => unlockedSkills.contains(OrdoSkill.alienTechScavenger);
   Map<String,dynamic> toJson()=>{'unlockedSkills':unlockedSkills.map((e)=>e.name).toList()};
   factory OrdoDoctrine.fromJson(dynamic raw) {
     final values=raw is Map && raw['unlockedSkills'] is List ? raw['unlockedSkills'] as List : const [];

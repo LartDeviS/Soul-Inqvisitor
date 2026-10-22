@@ -111,7 +111,7 @@ enum CombatDamageType { kinetic, plasma, flame, warp, melee, explosive }
 enum LootRarity { common, uncommon, rare, epic, legendary }
 enum LootKind { ammunition, medicae, requisition, weaponPart, evidence, keycard, relicShard, stim, grenade, mod }
 enum TacticalConsumable { fragGrenade, stim, smoke, auspexPulse }
-enum MapLayout { cruciform, ring, corridors, chambers, openYard }
+enum MapLayout { cruciform, ring, corridors, chambers, openYard, spiral, fractured, killbox }
 enum InquisitionFaction { imperium, chaos, ork, tyranid, necron, daemon }
 enum BiomeId { manufactorum, hive, shrine, deathWorld, warpRuin, voidship, necronTomb }
 enum InventoryLocation { backpack, equipment, vault }
@@ -1132,7 +1132,7 @@ class OrdoAbilityCooldownHud extends PositionComponent with HasGameReference<Inq
   void render(Canvas canvas) {
     final cooldown = game.ordoAbilityCooldown;
     if (cooldown <= 0) return;
-    final total = game.playerClass == PlayerClass.malleus ? 13.0 : 11.0;
+    final total = game.playerClass == PlayerClass.malleus ? 13.0 : game.playerClass == PlayerClass.xenos ? 15.0 : 11.0;
     final progress = (cooldown / total).clamp(0.0, 1.0);
     canvas.drawArc(Rect.fromCircle(center: Offset.zero, radius: game.buttonSize * 0.49), -pi / 2, 2 * pi * progress, false,
       Paint()..color = const Color(0xFFFFD54F)..style = PaintingStyle.stroke..strokeWidth = 3.0..strokeCap = StrokeCap.round);
@@ -2273,7 +2273,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int supplyCachesOpened = 0;
   int randomMissionEvents = 0;
   double _fieldEventClock = 0;
-  MapLayout get activeMapLayout => MapLayout.values[(currentFloor * 3 + currentLevel + pathIndex) % MapLayout.values.length];
+  MapLayout get activeMapLayout => MapLayout.values[(currentFloor * 3 + currentLevel + pathIndex + (activeBiome.index * 2)) % MapLayout.values.length];
   String get activeOrdoContract => switch (playerClass) {
     PlayerClass.malleus => 'Ордо Маллеус: сорвать варп-ритуал и подавить демоническую угрозу',
     PlayerClass.hereticus => 'Ордо Еретикус: выявить культистов и собрать доказательства',
@@ -2746,6 +2746,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       ordo.OrdoSkill.witchHunter => <ordo.OrdoSkill>[],
       ordo.OrdoSkill.nullRounds => <ordo.OrdoSkill>[ordo.OrdoSkill.witchHunter],
       ordo.OrdoSkill.interrogator => <ordo.OrdoSkill>[ordo.OrdoSkill.nullRounds],
+      ordo.OrdoSkill.xenology => <ordo.OrdoSkill>[],
+      ordo.OrdoSkill.auspexMastery => <ordo.OrdoSkill>[ordo.OrdoSkill.xenology],
+      ordo.OrdoSkill.alienTechScavenger => <ordo.OrdoSkill>[ordo.OrdoSkill.auspexMastery],
     };
     if (prerequisites.any((skill) => !expansionSystems.ordoDoctrine.has(skill))) return false;
     skillPoints -= definition.cost;
@@ -2753,8 +2756,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     expansionSystems.ordoDoctrine = ordo.OrdoDoctrine(unlockedSkills: unlocked);
     recordChronicle('Доктрина Ордо разблокирована: ${definition.nameRu}.');
     if (isPlaying) {
-      world.add(OrdoPulseEffect(position: player.position.clone(), color: definition.ordo == weapon_catalog.WeaponOrdo.malleus ? const Color(0xFFB388FF) : const Color(0xFFFF5252), maxRadius: 115, life: 0.72)..priority = 45);
-      spawnDamageNumber(player.position, 0, color: definition.ordo == weapon_catalog.WeaponOrdo.malleus ? const Color(0xFFB388FF) : const Color(0xFFFF5252), label: 'ДОКТРИНА: ${definition.nameRu.toUpperCase()}');
+      world.add(OrdoPulseEffect(position: player.position.clone(), color: definition.ordo == weapon_catalog.WeaponOrdo.malleus ? const Color(0xFFB388FF) : definition.ordo == weapon_catalog.WeaponOrdo.hereticus ? const Color(0xFFFF5252) : const Color(0xFF4DD0E1), maxRadius: 115, life: 0.72)..priority = 45);
+      spawnDamageNumber(player.position, 0, color: definition.ordo == weapon_catalog.WeaponOrdo.malleus ? const Color(0xFFB388FF) : definition.ordo == weapon_catalog.WeaponOrdo.hereticus ? const Color(0xFFFF5252) : const Color(0xFF4DD0E1), label: 'ДОКТРИНА: ${definition.nameRu.toUpperCase()}');
     }
     recomputeStats();
     persistExpansion();
@@ -2765,21 +2768,26 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final weaponOrdo = switch (rangedWeapon) {
       RangedWeapon.psycannon || RangedWeapon.exorcistIncinerator || RangedWeapon.daemonbanePistol || RangedWeapon.staff || RangedWeapon.stormStaff || RangedWeapon.warpBeam => weapon_catalog.WeaponOrdo.malleus,
       RangedWeapon.condemnorBoltgun || RangedWeapon.sanctifiedStakeCrossbow || RangedWeapon.infernoPistol || RangedWeapon.daggers || RangedWeapon.needles || RangedWeapon.sniperNeedle => weapon_catalog.WeaponOrdo.hereticus,
-      _ => playerClass == PlayerClass.malleus ? weapon_catalog.WeaponOrdo.malleus : playerClass == PlayerClass.hereticus ? weapon_catalog.WeaponOrdo.hereticus : weapon_catalog.WeaponOrdo.common,
+      _ => playerClass == PlayerClass.malleus ? weapon_catalog.WeaponOrdo.malleus : playerClass == PlayerClass.hereticus ? weapon_catalog.WeaponOrdo.hereticus : weapon_catalog.WeaponOrdo.xenos,
     };
     final faction = switch (enemy.type) {
       EnemyType.cultPsyker => 'psyker',
       EnemyType.bloodletter || EnemyType.chaosSpawn => 'daemon',
       EnemyType.plagueBearer => 'chaos',
+      EnemyType.orkBoy || EnemyType.tyranidGaunt || EnemyType.necronWarrior || EnemyType.necronImmortal || EnemyType.genestealer => 'xenos',
       EnemyType.shooter || EnemyType.melee || EnemyType.shielded || EnemyType.dog || EnemyType.shieldedShooter || EnemyType.flamer || EnemyType.sniper || EnemyType.brute => 'human',
       _ => 'xenos',
     };
-    return expansionSystems.ordoDoctrine.damageMultiplier(weaponOrdo: weaponOrdo, targetFaction: faction, damageType: switch (rangedWeapon) {
+    final doctrineMultiplier = expansionSystems.ordoDoctrine.damageMultiplier(weaponOrdo: weaponOrdo, targetFaction: faction, damageType: switch (rangedWeapon) {
       RangedWeapon.psycannon || RangedWeapon.daemonbanePistol || RangedWeapon.staff || RangedWeapon.stormStaff || RangedWeapon.warpBeam => weapon_catalog.DamageType.warp,
       RangedWeapon.exorcistIncinerator => weapon_catalog.DamageType.flame,
       RangedWeapon.infernoPistol => weapon_catalog.DamageType.melta,
       _ => weapon_catalog.DamageType.kinetic,
     });
+    final markMultiplier = enemy.xenosMarkedTimer > 0 && playerClass == PlayerClass.xenos
+        ? (expansionSystems.ordoDoctrine.hasAuspexMastery ? 1.40 : 1.25)
+        : 1.0;
+    return doctrineMultiplier * markMultiplier;
   }
 
   double get ordoIncomingDamageMultiplier => (1.0 - expansionSystems.ordoDoctrine.warpDefenseBonus).clamp(0.0, 1.0).toDouble();
@@ -4311,6 +4319,41 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
           if (pos.distanceTo(playerSpawnPos) > 190 && !isInGuaranteedPath(pos)) world.add(Obstacle(position: pos)..priority = 5);
         }
       }
+    } else if (layout == MapLayout.spiral) {
+      // Broken spiral barricades create alternating lanes without sealing the route to the portal.
+      for (int ring = 0; ring < 4; ring++) {
+        final inset = 170.0 + ring * 105;
+        final candidates = <Vector2>[
+          Vector2(inset, inset + 120), Vector2(mapWidth - inset, inset + 270),
+          Vector2(inset + 150, mapHeight - inset), Vector2(mapWidth - inset - 120, mapHeight - inset - 250),
+        ];
+        for (final pos in candidates) {
+          if (pos.x > 100 && pos.x < mapWidth - 100 && pos.y > 100 && pos.y < mapHeight - 100 && pos.distanceTo(playerSpawnPos) > 220 && !isInGuaranteedPath(pos)) {
+            world.add(Obstacle(position: pos)..priority = 5);
+          }
+        }
+      }
+    } else if (layout == MapLayout.fractured) {
+      // Irregular islands leave several wide crossing lanes; seeded so revisiting the node is stable.
+      for (int i = 0; i < 18; i++) {
+        final x = 150.0 + rng.nextDouble() * (mapWidth - 300);
+        final y = 150.0 + rng.nextDouble() * (mapHeight - 300);
+        final pos = Vector2(x, y);
+        if (pos.distanceTo(playerSpawnPos) > 240 && !isInGuaranteedPath(pos) && getEnemySpawnPointsRaw().every((s) => s.distanceTo(pos) > 110)) {
+          world.add(Obstacle(position: pos)..priority = 5);
+        }
+      }
+    } else if (layout == MapLayout.killbox) {
+      // Alternating cover rows create dangerous firing lanes; keep the deployment zone open.
+      for (int row = 0; row < 6; row++) {
+        final y = 300.0 + row * 270;
+        for (int col = 0; col < 4; col++) {
+          if ((row + col) % 2 == 0) continue;
+          final x = 170.0 + col * 285;
+          final pos = Vector2(x, y);
+          if (pos.distanceTo(playerSpawnPos) > 230 && !isInGuaranteedPath(pos)) world.add(Obstacle(position: pos)..priority = 5);
+        }
+      }
     }
 
     // Rest node: heal + portal immediately
@@ -4616,10 +4659,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void _ensureOrdoAbilityButton() {
-    if (playerClass == PlayerClass.xenos || ordoAbilityButton != null) return;
+    if (ordoAbilityButton != null) return;
     final malleus = playerClass == PlayerClass.malleus;
+    final xenos = playerClass == PlayerClass.xenos;
     ordoAbilityButton = HudButtonComponent(
-      button: CircleComponent(radius: buttonSize * 0.45, paint: Paint()..color = malleus ? const Color(0xFF7E57C2) : const Color(0xFFC62828)),
+      button: CircleComponent(radius: buttonSize * 0.45, paint: Paint()..color = malleus ? const Color(0xFF7E57C2) : xenos ? const Color(0xFF00838F) : const Color(0xFFC62828)),
       margin: EdgeInsets.only(left: abilityClusterLeft + buttonSize * 5.4, bottom: abilityClusterBottom),
       onPressed: activateOrdoAbility,
     );
@@ -4633,10 +4677,27 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   /// Class-specific active ability. Effects are applied to live Enemy components,
   /// not just shown as a visual or catalogue description.
   void activateOrdoAbility() {
-    if (!isPlaying || isPaused || playerClass == PlayerClass.xenos || ordoAbilityCooldown > 0) return;
+    if (!isPlaying || isPaused || ordoAbilityCooldown > 0) return;
     final malleus = playerClass == PlayerClass.malleus;
+    final xenos = playerClass == PlayerClass.xenos;
     final center = player.position.clone();
-    if (malleus) {
+    if (xenos) {
+      ordoAbilityCooldown = 15.0;
+      final radius = expansionSystems.ordoDoctrine.hasAuspexMastery ? 330.0 : 285.0;
+      final markDuration = expansionSystems.ordoDoctrine.hasAuspexMastery ? 8.0 : 6.0;
+      world.add(OrdoPulseEffect(position: center, color: const Color(0xFF4DD0E1), maxRadius: radius, life: 0.95)..priority = 44);
+      var marked = 0;
+      for (final enemy in world.children.whereType<Enemy>().toList()) {
+        if (enemy.position.distanceTo(center) > radius) continue;
+        enemy.xenosMarkedTimer = max(enemy.xenosMarkedTimer, markDuration);
+        enemy.applyStatus(StatusType.slow, 1.4, tickDamage: 0);
+        marked++;
+        spawnDamageNumber(enemy.position, 0, color: const Color(0xFF80DEEA), label: 'КСЕНОС-МЕТКА');
+      }
+      spawnDamageNumber(center, 0, color: const Color(0xFF4DD0E1), label: 'АУСПЕКС • ${marked} ЦЕЛЕЙ');
+      playClick();
+      triggerShake(power: marked > 0 ? 2.8 : 1.0, time: 0.14);
+    } else if (malleus) {
       ordoAbilityCooldown = 13.0;
       ordoWardTimer = 4.0;
       world.add(OrdoPulseEffect(position: center, color: const Color(0xFFB388FF), maxRadius: 190, life: 0.85)..priority = 40);
@@ -4842,6 +4903,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case EnemyType.chaosSpawn: unlockCodex(CodexId.chaosSpawn); break;
         case EnemyType.necronImmortal: unlockCodex(CodexId.necronImmortal); break;
       }
+    }
+    if (playerClass == PlayerClass.xenos && expansionSystems.ordoDoctrine.hasAlienTechScavenger &&
+        (type == EnemyType.orkBoy || type == EnemyType.tyranidGaunt || type == EnemyType.necronWarrior || type == EnemyType.necronImmortal || type == EnemyType.genestealer)) {
+      scraps += 2 + (isChampion ? 2 : 0);
+      if (isChampion) spawnDamageNumber(at ?? player.position, 0, color: const Color(0xFF80DEEA), label: 'КСЕНОТЕХ +4');
     }
     if (isBoss) { tacticalAchievements++; if (tacticalAchievements % 3 == 0) requisition += 5; grantBossRelic(guaranteed: true); persistExpansion(); }
 
@@ -5069,8 +5135,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       _ordoAuraClock += dt;
       if (_ordoAuraClock >= 1.6) {
         _ordoAuraClock = 0;
-        final malleus = playerClass == PlayerClass.malleus;
-        world.add(OrdoPassivePulse(position: player.position.clone(), color: malleus ? const Color(0xFF9575CD) : const Color(0xFFEF5350))..priority = 21);
+        final pulseColor = playerClass == PlayerClass.malleus ? const Color(0xFF9575CD) : playerClass == PlayerClass.hereticus ? const Color(0xFFEF5350) : const Color(0xFF4DD0E1);
+        world.add(OrdoPassivePulse(position: player.position.clone(), color: pulseColor)..priority = 21);
       }
     }
     if (holyAuraTimer > 0) {
@@ -6147,6 +6213,30 @@ class Floor extends PositionComponent {
         canvas.drawCircle(Offset(size.x / 2, size.y / 2), min(size.x, size.y) * 0.18, inlay);
         canvas.drawCircle(Offset(size.x / 2, size.y / 2), min(size.x, size.y) * 0.29, inlay);
         break;
+      case MapLayout.spiral:
+        for (int i = 0; i < 5; i++) {
+          final inset = 110.0 + i * 95;
+          canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(inset, inset, size.x - inset * 2, size.y - inset * 2), const Radius.circular(18)), inlay);
+        }
+        break;
+      case MapLayout.fractured:
+        for (int i = 0; i < 20; i++) {
+          final x = 90.0 + ((i * 173) % (size.x - 180));
+          final y = 100.0 + ((i * 257) % (size.y - 200));
+          final path = Path()..moveTo(x, y)..lineTo(x + 34, y - 18)..lineTo(x + 72, y + 12)..lineTo(x + 45, y + 48)..close();
+          canvas.drawPath(path, inlay);
+        }
+        break;
+      case MapLayout.killbox:
+        for (int i = 1; i < 6; i++) {
+          final y = size.y * i / 6;
+          canvas.drawLine(Offset(80, y), Offset(size.x - 80, y), inlay);
+          for (int j = 0; j < 4; j++) {
+            final x = 140.0 + j * (size.x - 280) / 3;
+            if ((i + j) % 2 == 0) canvas.drawRect(Rect.fromCenter(center: Offset(x, y), width: 70, height: 48), inlay);
+          }
+        }
+        break;
     }
   }
 }
@@ -6968,17 +7058,16 @@ class _SkillsMenuState extends State<SkillsMenu> {
                           ? 'Маллеус • защита от Варпа и охота на демонов'
                           : g.playerClass == PlayerClass.hereticus
                             ? 'Еретикус • охота на культистов и псайкеров'
-                            : 'Ксенос • доктрины Ордо недоступны для этого класса',
+                            : 'Ксенос • ауспекс, маркировка чуждых целей и трофейная ксенотехника',
                         style: const TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                     ),
-                    if (g.playerClass == PlayerClass.malleus || g.playerClass == PlayerClass.hereticus)
-                      Card(
-                        color: g.playerClass == PlayerClass.malleus ? const Color(0xFF211638) : const Color(0xFF351717),
+                    Card(
+                        color: g.playerClass == PlayerClass.malleus ? const Color(0xFF211638) : g.playerClass == PlayerClass.hereticus ? const Color(0xFF351717) : const Color(0xFF10272B),
                         child: ListTile(
-                          leading: Icon(g.playerClass == PlayerClass.malleus ? Icons.auto_awesome : Icons.gavel, color: g.playerClass == PlayerClass.malleus ? const Color(0xFFB388FF) : const Color(0xFFFF5252)),
-                          title: Text(g.playerClass == PlayerClass.malleus ? 'АКТИВНАЯ СПОСОБНОСТЬ: ЭКЗОРЦИЗМ' : 'АКТИВНАЯ СПОСОБНОСТЬ: ПРИГОВОР', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                          subtitle: Text(g.playerClass == PlayerClass.malleus ? 'Кнопка O в бою • импульс радиусом 190 • повышенный урон демонам • защита на 4 с • перезарядка 13 с.' : 'Кнопка O в бою • поражает ближайшую цель до 360 • повышенный урон культистам и псайкерам • замедление • перезарядка 11 с.', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          leading: Icon(g.playerClass == PlayerClass.malleus ? Icons.auto_awesome : g.playerClass == PlayerClass.hereticus ? Icons.gavel : Icons.radar, color: g.playerClass == PlayerClass.malleus ? const Color(0xFFB388FF) : g.playerClass == PlayerClass.hereticus ? const Color(0xFFFF5252) : const Color(0xFF4DD0E1)),
+                          title: Text(g.playerClass == PlayerClass.malleus ? 'АКТИВНАЯ СПОСОБНОСТЬ: ЭКЗОРЦИЗМ' : g.playerClass == PlayerClass.hereticus ? 'АКТИВНАЯ СПОСОБНОСТЬ: ПРИГОВОР' : 'АКТИВНАЯ СПОСОБНОСТЬ: АУСПЕКС', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          subtitle: Text(g.playerClass == PlayerClass.malleus ? 'Кнопка O в бою • импульс радиусом 190 • повышенный урон демонам • защита на 4 с • перезарядка 13 с.' : g.playerClass == PlayerClass.hereticus ? 'Кнопка O в бою • поражает ближайшую цель до 360 • повышенный урон культистам и псайкерам • замедление • перезарядка 11 с.' : 'Кнопка O в бою • ауспексный импульс радиусом 285 • метка на 6 с • помеченные цели получают +25% урона • перезарядка 15 с. Улучшение расширяет радиус и время метки.', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                         ),
                       ),
                     ...ordo.ordoSkillCatalog
@@ -6993,6 +7082,9 @@ class _SkillsMenuState extends State<SkillsMenu> {
                           ordo.OrdoSkill.witchHunter => <ordo.OrdoSkill>[],
                           ordo.OrdoSkill.nullRounds => <ordo.OrdoSkill>[ordo.OrdoSkill.witchHunter],
                           ordo.OrdoSkill.interrogator => <ordo.OrdoSkill>[ordo.OrdoSkill.nullRounds],
+                          ordo.OrdoSkill.xenology => <ordo.OrdoSkill>[],
+                          ordo.OrdoSkill.auspexMastery => <ordo.OrdoSkill>[ordo.OrdoSkill.xenology],
+                          ordo.OrdoSkill.alienTechScavenger => <ordo.OrdoSkill>[ordo.OrdoSkill.auspexMastery],
                         };
                         final prereqMet = prerequisites.every(doctrine.has);
                         final canUnlock = !unlocked && prereqMet && g.skillPoints >= skill.cost;
@@ -9564,6 +9656,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   double regenTimer = 0;
   bool summonerTriggered = false;
   double suppression = 0;
+  double xenosMarkedTimer = 0;
   int morale = 100;
   final List<StatusEffect> statuses = [];
 
@@ -9828,6 +9921,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
     if (hitReactTimer > 0) hitReactTimer = max(0, hitReactTimer - dt);
     animationClock += dt;
+    if (xenosMarkedTimer > 0) xenosMarkedTimer = max(0.0, xenosMarkedTimer - dt);
     if (!game.isPlaying || game.isPaused) return;
     _tickStatuses(dt);
 
@@ -10061,6 +10155,11 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     final f = hurtFlash / 0.12;
+    if (xenosMarkedTimer > 0) {
+      final pulse = 0.72 + sin(animationClock * 8).abs() * 0.25;
+      canvas.drawCircle(Offset(cx, cy), 35 + sin(animationClock * 6).abs() * 3, Paint()..color = Color.fromRGBO(77, 208, 225, pulse)..style = PaintingStyle.stroke..strokeWidth = 2.5);
+      canvas.drawCircle(Offset(cx, cy), 28, Paint()..color = const Color(0xFF4DD0E1).withOpacity(0.12)..style = PaintingStyle.fill);
+    }
     switch (type) {
       case EnemyType.shooter:
         WHDraw.cultistShooter(canvas, cx, cy, 1.0, flash: f);
@@ -10296,7 +10395,9 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       final a = base + o;
       game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 220)..priority = 22);
     }
-    // Weak-point timing is handled by the phased Boss class, not MiniBoss.
+    // Every successful telegraph leaves a short, clear weak-point window in
+    // later phases. This rewards dodging rather than encouraging face-tanking.
+    if (phase >= 2) weakSpotTimer = phase >= 3 ? 1.8 : 1.4;
     game.markBossRetreat();
   }
 
@@ -10304,6 +10405,7 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void update(double dt) {
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
+    if (weakSpotTimer > 0) weakSpotTimer = max(0, weakSpotTimer - dt);
     if (!game.isPlaying || game.isPaused) return;
     for (final e in statuses.toList()) {
       e.remaining -= dt;
@@ -10600,8 +10702,6 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         }
         break;
     }
-    // After phase II, completing a telegraphed attack briefly exposes the boss's weak point.
-    if (phase >= 2) weakSpotTimer = phase >= 3 ? 1.8 : 1.4;
     game.markBossRetreat();
   }
 
@@ -10609,7 +10709,6 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   void update(double dt) {
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
-    if (weakSpotTimer > 0) weakSpotTimer = max(0.0, weakSpotTimer - dt);
     if (!game.isPlaying || game.isPaused) return;
     for (final e in statuses.toList()) {
       e.remaining -= dt;
