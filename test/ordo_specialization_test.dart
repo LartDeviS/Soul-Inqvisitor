@@ -1,0 +1,16 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:soul_of_the_inquisitor/game/weapons/ammo_types.dart';
+import 'package:soul_of_the_inquisitor/game/weapons/damage_system.dart';
+import 'package:soul_of_the_inquisitor/game/weapons/ordo_specialization.dart';
+import 'package:soul_of_the_inquisitor/game/weapons/weapon_data.dart';
+import 'package:soul_of_the_inquisitor/game/weapons/weapon_rarity.dart';
+import 'package:soul_of_the_inquisitor/game/weapons/weapon_system.dart';
+import 'package:soul_of_the_inquisitor/saves/save_migration.dart';
+void main(){
+ test('ammo profiles only allow compatible ammo',(){final runtime=WeaponRuntime(WeaponData.all[WeaponId.psycannon]!);expect(runtime.setAmmoType(AmmoType.warpStabilized),isTrue);expect(runtime.setAmmoType(AmmoType.incendiary),isFalse);});
+ test('rarity scales damage and penetration in runtime',(){final runtime=WeaponRuntime(WeaponData.all[WeaponId.condemnorBoltgun]!);final base=runtime.effectiveDamage;runtime.rarity=WeaponRarity.relic;expect(runtime.effectiveDamage,greaterThan(base));expect(runtime.effectiveArmorPenetration,greaterThan(runtime.data.armorPenetration));});
+ test('Malleus daemonology raises damage against daemon, not cult',(){const doctrine=OrdoDoctrine(unlockedSkills:{OrdoSkill.daemonology});final daemon=DamageSystem.calculate(baseDamage:20,type:DamageType.warp,target:const DamageContext(targetFaction:'daemon'),weaponOrdo:WeaponOrdo.malleus,doctrine:doctrine);final cult=DamageSystem.calculate(baseDamage:20,type:DamageType.warp,target:const DamageContext(targetFaction:'cult'),weaponOrdo:WeaponOrdo.malleus,doctrine:doctrine);expect(daemon.amount,greaterThan(cult.amount));});
+ test('Hereticus doctrine specializes against cultists',(){const doctrine=OrdoDoctrine(unlockedSkills:{OrdoSkill.witchHunter});final result=DamageSystem.calculate(baseDamage:20,type:DamageType.kinetic,target:const DamageContext(targetFaction:'cult'),weaponOrdo:WeaponOrdo.hereticus,doctrine:doctrine);expect(result.reason,contains('доктрина Ордо'));});
+ test('save migration v2 adds safe defaults for specialization',(){final migrated=SaveMigration.migrate({'schemaVersion':2,'weapons':{'equipped':'bolter','weapons':{'bolter':{'id':'bolter','ammo':10}}}});expect(migrated['schemaVersion'],3);expect(migrated['ordoDoctrine']['unlockedSkills'],isEmpty);expect(migrated['weapons']['weapons']['bolter']['rarity'],'common');});
+ test('weapon system persists ammo type and rarity',(){final system=WeaponSystem();system.equip(WeaponId.psycannon);system.selectAmmo(AmmoType.warpStabilized);system.setRarity(WeaponId.psycannon,WeaponRarity.relic);final restored=WeaponSystem()..loadJson(system.toJson());expect(restored.current.ammoType,AmmoType.warpStabilized);expect(restored.current.rarity,WeaponRarity.relic);});
+}

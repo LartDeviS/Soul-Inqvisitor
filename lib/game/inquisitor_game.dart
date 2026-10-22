@@ -10,6 +10,8 @@ import '../progression/progression_system.dart';
 import '../saves/save_manager.dart';
 import '../saves/save_migration.dart';
 import 'weapons/weapon_system.dart';
+import 'weapons/ordo_specialization.dart';
+import 'weapons/weapon_data.dart';
 import 'world/biome_data.dart';
 import 'world/arena_events.dart';
 
@@ -19,6 +21,8 @@ class InquisitorExpansionSystems {
   final CampaignProgress campaign=CampaignProgress();
   final InventoryState inventory=InventoryState();
   final WeaponSystem weapons=WeaponSystem();
+  OrdoDoctrine ordoDoctrine=const OrdoDoctrine();
+  bool unlockOrdoSkill(OrdoSkill id){if(ordoDoctrine.has(id))return false;final definition=ordoSkillCatalog.firstWhere((s)=>s.id==id);if(!progression.unlock(id.name,cost:definition.cost))return false;final next={...ordoDoctrine.unlockedSkills,id};ordoDoctrine=OrdoDoctrine(unlockedSkills:next);return true;}
   final ProgressionTrack progression=ProgressionTrack();
   final ContractBoard contracts=ContractBoard();
   final WorldDirector world=WorldDirector();
@@ -33,7 +37,7 @@ class InquisitorExpansionSystems {
   void beginMission(MissionData mission,{BiomeId? selectedBiome,DifficultyConfig? selectedDifficulty,int? seed}) {activeMission=mission;if(selectedBiome!=null)biome=selectedBiome;if(selectedDifficulty!=null)difficulty=selectedDifficulty;campaign.beginMission(mission.id);activeWorldEvent=world.rollEvent(biome,floor:mission.floor,seed:seed);activeMissionEvent=missionEvents.roll(floor:mission.floor,alarm:campaign.alarm,seed:seed==null?null:seed+17);trackedEnemies.clear();}
   void recordEnemyDefeated(EnemyRuntimeState enemy){enemy.isDefeated=true;campaign.recordKill(enemy.type.faction.name);contracts.recordKill(elite:enemy.type.archetype==EnemyArchetype.heavy||enemy.type.archetype==EnemyArchetype.sniper);progression.grantExperience(12);}
   void recordCacheFound(){contracts.recordCache();campaign.requisition+=activeWorldEvent?.requisition??5;progression.grantExperience(8);}
-  Map<String,dynamic> toJson()=>{'schemaVersion':2,'campaign':campaign.toJson(),'inventory':inventory.toJson(),'weapons':weapons.toJson(),'progression':progression.toJson(),'contracts':contracts.toJson(),'difficulty':difficulty.id,'biome':biome.name,'activeMissionId':activeMission?.id,'activeWorldEvent':activeWorldEvent?.type.name,'activeMissionEvent':activeMissionEvent?.type.name};
-  void loadJson(dynamic input,{List<MissionData> missions=const[]}){final migrated=SaveMigration.migrate(input);campaign.loadJson(migrated['campaign']);inventory.loadJson(migrated['inventory']);weapons.loadJson(migrated['weapons']);progression.loadJson(migrated['progression']);contracts.loadJson(migrated['contracts']);difficulty=DifficultyConfig.byId(migrated['difficulty'] as String? ?? 'normal');biome=BiomeId.values.firstWhere((e)=>e.name==migrated['biome'],orElse:()=>BiomeId.hive);final id=migrated['activeMissionId'];activeMission=id is String?missions.where((m)=>m.id==id).firstOrNull:null;trackedEnemies.clear();}
+  Map<String,dynamic> toJson()=>{'schemaVersion':3,'campaign':campaign.toJson(),'inventory':inventory.toJson(),'weapons':weapons.toJson(),'ordoDoctrine':ordoDoctrine.toJson(),'progression':progression.toJson(),'contracts':contracts.toJson(),'difficulty':difficulty.id,'biome':biome.name,'activeMissionId':activeMission?.id,'activeWorldEvent':activeWorldEvent?.type.name,'activeMissionEvent':activeMissionEvent?.type.name};
+  void loadJson(dynamic input,{List<MissionData> missions=const[]}){final migrated=SaveMigration.migrate(input);campaign.loadJson(migrated['campaign']);inventory.loadJson(migrated['inventory']);weapons.loadJson(migrated['weapons']);ordoDoctrine=OrdoDoctrine.fromJson(migrated['ordoDoctrine']);progression.loadJson(migrated['progression']);contracts.loadJson(migrated['contracts']);difficulty=DifficultyConfig.byId(migrated['difficulty'] as String? ?? 'normal');biome=BiomeId.values.firstWhere((e)=>e.name==migrated['biome'],orElse:()=>BiomeId.hive);final id=migrated['activeMissionId'];activeMission=id is String?missions.where((m)=>m.id==id).firstOrNull:null;trackedEnemies.clear();}
 }
 extension _FirstOrNull<T> on Iterable<T>{T? get firstOrNull=>isEmpty?null:first;}

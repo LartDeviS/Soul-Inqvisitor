@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../game/weapons/weapon_data.dart';
+import '../../game/weapons/ammo_types.dart';
+import '../../game/weapons/weapon_rarity.dart';
+import 'procedural_weapon_glyph.dart';
 
 /// Searchable, lore-styled weapon reference. It is a read-only codex and does not
 /// mutate the current loadout or the save file.
@@ -41,13 +44,15 @@ class _WeaponCatalogPanelState extends State<WeaponCatalogPanel> {
             dense: true,
             iconColor: Colors.amber,
             collapsedIconColor: Colors.white54,
-            title: Text(w.nameRu, style: const TextStyle(color: Colors.white, fontSize: 13)),
+            title: Row(children: [ProceduralWeaponGlyph(ordo: w.ordo, damageType: w.damageType, size: 30), const SizedBox(width: 8), Expanded(child: Text(w.nameRu, style: const TextStyle(color: Colors.white, fontSize: 13)))]),
             subtitle: Text('Урон ${w.damage.toStringAsFixed(1)} • ${w.damageType.name} • ${w.cooldown.toStringAsFixed(2)} с${w.ordo == WeaponOrdo.common ? '' : ' • ${w.ordo.name.toUpperCase()}'}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
             children: [Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 if (w.description.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(w.description, style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.3))),
                 _line('Принадлежность', w.ordo.name.toUpperCase()),
+                _line('Редкость', WeaponRarityProfile.byId(WeaponRarity.common).nameRu + ' (базовый экземпляр)'),
+                _line('Боеприпасы', AmmoProfile.all.values.where((a)=>a.compatibleWith(w.damageType)).map((a)=>a.nameRu).join(', ')),
                 _line('Дальность', '${w.range.round()} ед.'),
                 _line('Пробитие брони', '${(w.armorPenetration * 100).round()}%'),
                 _line('Снарядов за выстрел', '${w.pellets}'),
