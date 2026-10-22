@@ -1064,6 +1064,83 @@ class GameSave {
   }
 }
 
+/// Expanding class-colored pulse used by active Ordo abilities and skill unlocks.
+class OrdoPulseEffect extends PositionComponent {
+  final Color color;
+  final double maxRadius;
+  final double life;
+  double age = 0;
+  OrdoPulseEffect({required Vector2 position, required this.color, this.maxRadius = 180, this.life = 0.8})
+      : super(position: position.clone(), priority: 40);
+  @override
+  void update(double dt) { super.update(dt); age += dt; if (age >= life) removeFromParent(); }
+  @override
+  void render(Canvas canvas) {
+    final t = (age / life).clamp(0.0, 1.0);
+    final radius = maxRadius * Curves.easeOutCubic.transform(t);
+    final alpha = (1.0 - t).clamp(0.0, 1.0);
+    canvas.drawCircle(Offset.zero, radius, Paint()..color = color.withOpacity(0.10 * alpha)..style = PaintingStyle.fill);
+    canvas.drawCircle(Offset.zero, radius, Paint()..color = color.withOpacity(0.9 * alpha)..style = PaintingStyle.stroke..strokeWidth = 3.0 * (1.0 - t * 0.55));
+    canvas.drawCircle(Offset.zero, radius * 0.68, Paint()..color = color.withOpacity(0.35 * alpha)..style = PaintingStyle.stroke..strokeWidth = 1.5);
+  }
+}
+
+/// Soft periodic halo around the player when an Ordo passive is unlocked.
+class OrdoPassivePulse extends PositionComponent {
+  final Color color;
+  double age = 0;
+  OrdoPassivePulse({required Vector2 position, required this.color}) : super(position: position, priority: 21);
+  @override
+  void update(double dt) { super.update(dt); age += dt; if (age > 0.62) removeFromParent(); }
+  @override
+  void render(Canvas canvas) {
+    final t = (age / 0.62).clamp(0.0, 1.0);
+    final radius = 26 + 42 * t;
+    canvas.drawCircle(Offset.zero, radius, Paint()..color = color.withOpacity(0.34 * (1 - t))..style = PaintingStyle.stroke..strokeWidth = 2.0);
+  }
+}
+
+/// A brief red targeting slash from the Inquisitor to the selected target.
+class OrdoJudgmentEffect extends PositionComponent {
+  final Vector2 targetOffset;
+  final Color color;
+  final double life;
+  double age = 0;
+  OrdoJudgmentEffect({required Vector2 position, required this.targetOffset, required this.color, this.life = 0.42}) : super(position: position.clone(), priority: 42);
+  @override
+  void update(double dt) { super.update(dt); age += dt; if (age >= life) removeFromParent(); }
+  @override
+  void render(Canvas canvas) {
+    final t = (age / life).clamp(0.0, 1.0);
+    final alpha = (1 - t).clamp(0.0, 1.0);
+    final paint = Paint()..color = color.withOpacity(alpha)..strokeWidth = 5 * (1 - t * 0.65)..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset.zero, Offset(targetOffset.x, targetOffset.y), paint);
+    canvas.drawCircle(Offset(targetOffset.x, targetOffset.y), 15 + t * 24, Paint()..color = color.withOpacity(alpha * 0.65)..style = PaintingStyle.stroke..strokeWidth = 2.5);
+  }
+}
+
+/// Draws the active Ordo ability cooldown directly over its HUD button.
+class OrdoAbilityCooldownHud extends PositionComponent with HasGameReference<InquisitorGame> {
+  OrdoAbilityCooldownHud() : super(priority: 201);
+  @override
+  void update(double dt) {
+    super.update(dt);
+    position = Vector2(game.abilityClusterLeft + game.buttonSize * 5.4 + game.buttonSize * 0.45,
+      game.size.y - game.abilityClusterBottom - game.buttonSize * 0.45);
+  }
+  @override
+  void render(Canvas canvas) {
+    final cooldown = game.ordoAbilityCooldown;
+    if (cooldown <= 0) return;
+    final total = game.playerClass == PlayerClass.malleus ? 13.0 : 11.0;
+    final progress = (cooldown / total).clamp(0.0, 1.0);
+    canvas.drawArc(Rect.fromCircle(center: Offset.zero, radius: game.buttonSize * 0.49), -pi / 2, 2 * pi * progress, false,
+      Paint()..color = const Color(0xFFFFD54F)..style = PaintingStyle.stroke..strokeWidth = 3.0..strokeCap = StrokeCap.round);
+    final tp = TextPainter(text: TextSpan(text: cooldown.ceil().toString(), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 3)])), textDirection: TextDirection.ltr)..layout();
+    tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+  }
+}
+
 class DamageNumber extends PositionComponent {
   final int amount;
   final Color color;
@@ -1979,6 +2056,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   HudButtonComponent? laserButton;
   HudButtonComponent? artifactButton;
   HudButtonComponent? warpResetButton;
+  HudButtonComponent? ordoAbilityButton;
+  OrdoAbilityCooldownHud? ordoAbilityCooldownHud;
 
   int score = 0;
   int scraps = 0;
@@ -2008,6 +2087,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   double artifactCooldown = 0;
   double holyAuraTimer = 0;
   double _holyAuraDamageTick = 0;
+  double ordoAbilityCooldown = 0;
+  double ordoWardTimer = 0;
+  double _ordoAuraClock = 0;
   final ModularWeaponBuild modularWeapon = ModularWeaponBuild();
   final List<StoredInventoryItem> storedItems = [];
   ArmorPattern activeArmor = ArmorPattern.inquisitorial;
@@ -2611,6 +2693,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final unlocked = <ordo.OrdoSkill>{...expansionSystems.ordoDoctrine.unlockedSkills, id};
     expansionSystems.ordoDoctrine = ordo.OrdoDoctrine(unlockedSkills: unlocked);
     recordChronicle('Доктрина Ордо разблокирована: ${definition.nameRu}.');
+    if (isPlaying) {
+      world.add(OrdoPulseEffect(position: player.position.clone(), color: definition.ordo == weapon_catalog.WeaponOrdo.malleus ? const Color(0xFFB388FF) : const Color(0xFFFF5252), maxRadius: 115, life: 0.72)..priority = 45);
+      spawnDamageNumber(player.position, 0, color: definition.ordo == weapon_catalog.WeaponOrdo.malleus ? const Color(0xFFB388FF) : const Color(0xFFFF5252), label: 'ДОКТРИНА: ${definition.nameRu.toUpperCase()}');
+    }
     recomputeStats();
     persistExpansion();
     return true;
@@ -3786,6 +3872,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (warpResetButton != null && warpResetButton!.isMounted) {
       warpResetButton!.margin = EdgeInsets.only(left: abilityClusterLeft + buttonSize * 4.05, bottom: abilityClusterBottom);
     }
+    if (ordoAbilityButton != null && ordoAbilityButton!.isMounted) {
+      ordoAbilityButton!.margin = EdgeInsets.only(left: abilityClusterLeft + buttonSize * 5.4, bottom: abilityClusterBottom);
+    }
     for (final label in _controlHudLabels) {
       switch (label.text) {
         case 'M': label.updateMargin(EdgeInsets.only(left: moveJoystickLeft + 30, bottom: moveJoystickBottom + 30)); break;
@@ -3795,6 +3884,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case 'L': label.updateMargin(EdgeInsets.only(left: abilityClusterLeft + buttonSize * 1.35 + 10, bottom: abilityClusterBottom + 10)); break;
         case 'R': label.updateMargin(EdgeInsets.only(left: abilityClusterLeft + buttonSize * 2.7 + 10, bottom: abilityClusterBottom + 10)); break;
         case 'Ψ': label.updateMargin(EdgeInsets.only(left: abilityClusterLeft + buttonSize * 4.05 + 10, bottom: abilityClusterBottom + 10)); break;
+        case 'O': label.updateMargin(EdgeInsets.only(left: abilityClusterLeft + buttonSize * 5.4 + 10, bottom: abilityClusterBottom + 10)); break;
       }
     }
   }
@@ -4006,6 +4096,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     artifactButton = null;
     warpResetButton?.removeFromParent();
     warpResetButton = null;
+    ordoAbilityButton?.removeFromParent();
+    ordoAbilityButton = null;
+    ordoAbilityCooldownHud?.removeFromParent();
+    ordoAbilityCooldownHud = null;
 
     syncLevelFromPath();
     _checkUnlocks();
@@ -4336,6 +4430,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     _ensureLaserButton();
     _ensureArtifactButton();
     _ensureWarpResetButton();
+    _ensureOrdoAbilityButton();
   }
 
   void _forceSpawnPortal() {
@@ -4388,6 +4483,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void _startArenaLevel() {
     world.removeAll(world.children.toList());
     camera.viewport.children.whereType<HudLabel>().toList().forEach((c) => c.removeFromParent());
+    ordoAbilityButton?.removeFromParent();
+    ordoAbilityButton = null;
+    ordoAbilityCooldownHud?.removeFromParent();
+    ordoAbilityCooldownHud = null;
     portalButton?.removeFromParent();
     portalButton = null;
     currentEvent = EventRoomType.none;
@@ -4455,6 +4554,68 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     );
     camera.viewport.add(warpResetButton!);
     _addControlLabel(HudLabel(text: 'Ψ', margin: EdgeInsets.only(left: abilityClusterLeft + buttonSize * 4.05 + 10, bottom: abilityClusterBottom + 10)));
+  }
+
+  void _ensureOrdoAbilityButton() {
+    if (playerClass == PlayerClass.xenos || ordoAbilityButton != null) return;
+    final malleus = playerClass == PlayerClass.malleus;
+    ordoAbilityButton = HudButtonComponent(
+      button: CircleComponent(radius: buttonSize * 0.45, paint: Paint()..color = malleus ? const Color(0xFF7E57C2) : const Color(0xFFC62828)),
+      margin: EdgeInsets.only(left: abilityClusterLeft + buttonSize * 5.4, bottom: abilityClusterBottom),
+      onPressed: activateOrdoAbility,
+    );
+    camera.viewport.add(ordoAbilityButton!);
+    ordoAbilityCooldownHud?.removeFromParent();
+    ordoAbilityCooldownHud = OrdoAbilityCooldownHud()..priority = 201;
+    camera.viewport.add(ordoAbilityCooldownHud!);
+    _addControlLabel(HudLabel(text: 'O', margin: EdgeInsets.only(left: abilityClusterLeft + buttonSize * 5.4 + 10, bottom: abilityClusterBottom + 10)));
+  }
+
+  /// Class-specific active ability. Effects are applied to live Enemy components,
+  /// not just shown as a visual or catalogue description.
+  void activateOrdoAbility() {
+    if (!isPlaying || isPaused || playerClass == PlayerClass.xenos || ordoAbilityCooldown > 0) return;
+    final malleus = playerClass == PlayerClass.malleus;
+    final center = player.position.clone();
+    if (malleus) {
+      ordoAbilityCooldown = 13.0;
+      ordoWardTimer = 4.0;
+      world.add(OrdoPulseEffect(position: center, color: const Color(0xFFB388FF), maxRadius: 190, life: 0.85)..priority = 40);
+      var hitCount = 0;
+      for (final enemy in world.children.whereType<Enemy>().toList()) {
+        final distance = enemy.position.distanceTo(center);
+        if (distance > 190) continue;
+        final daemon = enemy.type == EnemyType.bloodletter || enemy.type == EnemyType.chaosSpawn;
+        final damage = (12 + overallLevel * 2) * (daemon ? 1.75 : 1.0);
+        enemy.applyDamage(damage.round());
+        enemy.applyStatus(StatusType.slow, daemon ? 2.8 : 1.4, tickDamage: 0);
+        hitCount++;
+        spawnDamageNumber(enemy.position, (damage.round()), color: const Color(0xFFD1C4E9), label: daemon ? 'ИЗГНАНИЕ' : null);
+      }
+      spawnDamageNumber(center, 0, color: const Color(0xFFB388FF), label: 'ЭКЗОРЦИЗМ • ЩИТ 4с');
+      playClick();
+      triggerShake(power: hitCount > 0 ? 4.0 : 1.5, time: 0.16);
+    } else {
+      ordoAbilityCooldown = 11.0;
+      Enemy? target;
+      var bestDistance = 360.0;
+      for (final enemy in world.children.whereType<Enemy>()) {
+        final distance = enemy.position.distanceTo(center);
+        if (distance < bestDistance) { bestDistance = distance; target = enemy; }
+      }
+      final aim = target?.position.clone() ?? (center + (player.aimDir.length2 > 0.01 ? player.aimDir.normalized() * 300 : Vector2(0, -300)));
+      world.add(OrdoJudgmentEffect(position: center, targetOffset: aim - center, color: const Color(0xFFFF5252), life: 0.42)..priority = 42);
+      if (target != null) {
+        final cultOrPsyker = target.type == EnemyType.cultPsyker || target.type == EnemyType.shooter || target.type == EnemyType.melee || target.type == EnemyType.shielded || target.type == EnemyType.shieldedShooter || target.type == EnemyType.sniper || target.type == EnemyType.flamer;
+        final damage = (20 + overallLevel * 2) * (cultOrPsyker ? 1.55 : 1.0);
+        target.applyDamage(damage.round());
+        target.applyStatus(StatusType.slow, 2.4, tickDamage: 0);
+        spawnDamageNumber(target.position, damage.round(), color: const Color(0xFFFF8A80), label: cultOrPsyker ? 'ПРИГОВОР' : null);
+      }
+      spawnDamageNumber(center, 0, color: const Color(0xFFFF5252), label: 'ПРИГОВОР ИНКВИЗИТОРА');
+      playShoot();
+      triggerShake(power: 3.0, time: 0.12);
+    }
   }
 
   void activateDash() {
@@ -4835,6 +4996,16 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
     if (laserCooldown > 0) laserCooldown = max(0, laserCooldown - dt);
     if (artifactCooldown > 0) artifactCooldown = max(0, artifactCooldown - dt);
+    if (ordoAbilityCooldown > 0) ordoAbilityCooldown = max(0, ordoAbilityCooldown - dt);
+    if (ordoWardTimer > 0) ordoWardTimer = max(0, ordoWardTimer - dt);
+    if (expansionSystems.ordoDoctrine.unlockedSkills.isNotEmpty) {
+      _ordoAuraClock += dt;
+      if (_ordoAuraClock >= 1.6) {
+        _ordoAuraClock = 0;
+        final malleus = playerClass == PlayerClass.malleus;
+        world.add(OrdoPassivePulse(position: player.position.clone(), color: malleus ? const Color(0xFF9575CD) : const Color(0xFFEF5350))..priority = 21);
+      }
+    }
     if (holyAuraTimer > 0) {
       holyAuraTimer = max(0, holyAuraTimer - dt);
       _holyAuraDamageTick -= dt;
@@ -5299,6 +5470,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     relics.clear();
     loadout = WeaponLoadout();
     activeArtifact = ActiveArtifact.fragGrenade;
+    ordoAbilityCooldown = 0;
+    ordoWardTimer = 0;
     arenaMode = false;
     arenaKills = 0;
     legendaryKillCounter = 0;
@@ -6732,6 +6905,15 @@ class _SkillsMenuState extends State<SkillsMenu> {
                         style: const TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                     ),
+                    if (g.playerClass == PlayerClass.malleus || g.playerClass == PlayerClass.hereticus)
+                      Card(
+                        color: g.playerClass == PlayerClass.malleus ? const Color(0xFF211638) : const Color(0xFF351717),
+                        child: ListTile(
+                          leading: Icon(g.playerClass == PlayerClass.malleus ? Icons.auto_awesome : Icons.gavel, color: g.playerClass == PlayerClass.malleus ? const Color(0xFFB388FF) : const Color(0xFFFF5252)),
+                          title: Text(g.playerClass == PlayerClass.malleus ? 'АКТИВНАЯ СПОСОБНОСТЬ: ЭКЗОРЦИЗМ' : 'АКТИВНАЯ СПОСОБНОСТЬ: ПРИГОВОР', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          subtitle: Text(g.playerClass == PlayerClass.malleus ? 'Кнопка O в бою • импульс радиусом 190 • повышенный урон демонам • защита на 4 с • перезарядка 13 с.' : 'Кнопка O в бою • поражает ближайшую цель до 360 • повышенный урон культистам и псайкерам • замедление • перезарядка 11 с.', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        ),
+                      ),
                     ...ordo.ordoSkillCatalog
                       .where((skill) => skill.ordo == (g.playerClass == PlayerClass.malleus ? weapon_catalog.WeaponOrdo.malleus : g.playerClass == PlayerClass.hereticus ? weapon_catalog.WeaponOrdo.hereticus : weapon_catalog.WeaponOrdo.xenos))
                       .map((skill) {
@@ -8437,6 +8619,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       return;
     }
     if (game.holyAuraTimer > 0) amount = max(1, (amount * 0.7).round());
+    if (game.ordoWardTimer > 0) amount = max(1, (amount * 0.55).round());
     amount = max(1, (amount * (1.0 - game.armorDamageReduction)).round());
     // Warding Seal is a persistent, small mitigation bonus against incoming damage.
     amount = max(1, (amount * game.ordoIncomingDamageMultiplier).round());
