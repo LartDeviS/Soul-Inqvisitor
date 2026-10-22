@@ -1299,6 +1299,58 @@ class AfterImage extends PositionComponent {
   }
 }
 
+enum BossHitZoneKind { core, head, limb, armor }
+
+class BossHitZoneOutcome {
+  final BossHitZoneKind zone;
+  final double multiplier;
+  final String label;
+  const BossHitZoneOutcome(this.zone, this.multiplier, this.label);
+}
+
+/// Resolves a projectile/melee contact against normalized boss-local coordinates.
+/// The core is only a high-damage target while the boss is in its exposed phase.
+BossHitZoneOutcome resolveBossHitZone({
+  required Vector2 impact,
+  required Vector2 center,
+  required Vector2 size,
+  bool exposed = false,
+}) {
+  final w = max(1.0, size.x), h = max(1.0, size.y);
+  final x = ((impact.x - (center.x - w / 2)) / w).clamp(0.0, 1.0);
+  final y = ((impact.y - (center.y - h / 2)) / h).clamp(0.0, 1.0);
+  if ((x - 0.5).abs() <= 0.15 && y >= 0.30 && y <= 0.57) {
+    return exposed
+        ? const BossHitZoneOutcome(BossHitZoneKind.core, 1.8, 'ЯДРО • КРИТИЧЕСКОЕ ПОПАДАНИЕ')
+        : const BossHitZoneOutcome(BossHitZoneKind.armor, 0.72, 'ЯДРО ЗАКРЫТО');
+  }
+  if ((x - 0.5).abs() <= 0.13 && y < 0.30) {
+    return const BossHitZoneOutcome(BossHitZoneKind.head, 1.4, 'ГОЛОВА • ТОЧНОЕ ПОПАДАНИЕ');
+  }
+  if ((x < 0.24 || x > 0.76) && y > 0.42) {
+    return const BossHitZoneOutcome(BossHitZoneKind.limb, 0.9, 'КОНЕЧНОСТЬ');
+  }
+  return const BossHitZoneOutcome(BossHitZoneKind.armor, 0.72, 'БРОНЯ');
+}
+
+void drawBossHitZones(Canvas canvas, Vector2 size, {bool exposed = false}) {
+  final cx = size.x / 2, cy = size.y / 2;
+  final pulse = 0.55 + 0.45 * sin(DateTime.now().millisecondsSinceEpoch / 170).abs();
+  final outline = Paint()..style = PaintingStyle.stroke..strokeWidth = 1.7;
+  canvas.drawCircle(Offset(cx, cy - size.y * 0.30), size.x * 0.105,
+      outline..color = const Color(0xFFFFD180).withOpacity(0.38));
+  canvas.drawCircle(Offset(cx - size.x * 0.30, cy + size.y * 0.12), size.x * 0.075,
+      outline..color = const Color(0xFF80DEEA).withOpacity(0.32));
+  canvas.drawCircle(Offset(cx + size.x * 0.30, cy + size.y * 0.12), size.x * 0.075,
+      outline..color = const Color(0xFF80DEEA).withOpacity(0.32));
+  canvas.drawCircle(Offset(cx, cy - size.y * 0.05), size.x * 0.13,
+      outline..color = (exposed ? const Color(0xFFFF1744) : const Color(0xFFFFD54F)).withOpacity(exposed ? pulse : 0.24));
+  if (exposed) {
+    canvas.drawCircle(Offset(cx, cy - size.y * 0.05), size.x * 0.18,
+        outline..color = const Color(0xFFFF1744).withOpacity(0.55));
+  }
+}
+
 class TelegraphZone extends PositionComponent {
   final String shape;
   final double radius;
@@ -1339,6 +1391,13 @@ class TelegraphZone extends PositionComponent {
       canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: radius * 2, height: 28), p);
       canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: 28, height: radius * 2), p);
     }
+    // Canvas-rendered telegraph label remains readable without Flutter overlays.
+    final painter = TextPainter(
+      text: const TextSpan(text: 'УКЛОНИСЬ!', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black, blurRadius: 4)])),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: 110);
+    painter.paint(canvas, Offset(-painter.width / 2, -max(28.0, radius * 0.62)));
+    canvas.drawCircle(Offset.zero, 10 + 2 * t, Paint()..color = color.withOpacity(0.8)..style = PaintingStyle.stroke..strokeWidth = 1.5);
   }
 }
 
@@ -9145,39 +9204,64 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is Enemy) _hitEnemy(other);
+    final impact = intersectionPoints.isNotEmpty ? intersectionPoints.first : position;
     if (other is MiniBoss) {
-      other.takeDamage(_adjustBossDamage(other));
+      final zone = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (_adjustBossDamage(other) * zone.multiplier).round());
+      other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -48), dealt, color: zone.zone == BossHitZoneKind.core ? const Color(0xFFFF1744) : const Color(0xFFFFD54F), label: zone.label);
       if (!pierce) removeFromParent();
     }
     if (other is Boss) {
-      other.takeCombatDamage(damage, damageType: damageType, armorPenetration: armorPenetration);
+      final zone = resolveBossHitZone(impact: impact, center: other.position, size: other.size, exposed: other.weakSpotExposed);
+      final scaledDamage = max(1, (damage * zone.multiplier).round());
+      other.takeCombatDamage(scaledDamage, damageType: damageType, armorPenetration: armorPenetration);
+      game.spawnDamageNumber(other.position + Vector2(0, -48), scaledDamage, color: zone.zone == BossHitZoneKind.core ? const Color(0xFFFF1744) : const Color(0xFFFFD54F), label: zone.label);
       game.noteBossDamagedByRanged();
       if (!pierce) removeFromParent();
     }
     if (other is KnightBoss) {
-      other.takeDamage(_adjustBossDamage(other));
+      final zone = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (_adjustBossDamage(other) * zone.multiplier).round());
+      other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -48), dealt, color: zone.zone == BossHitZoneKind.core ? const Color(0xFFFF1744) : const Color(0xFFFFD54F), label: zone.label);
       game.noteBossDamagedByRanged();
       if (!pierce) removeFromParent();
     }
     if (other is KingBoss) {
-      other.takeDamage(_adjustBossDamage(other));
+      final zone = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (_adjustBossDamage(other) * zone.multiplier).round());
+      other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -48), dealt, color: zone.zone == BossHitZoneKind.core ? const Color(0xFFFF1744) : const Color(0xFFFFD54F), label: zone.label);
       game.noteBossDamagedByRanged();
       if (!pierce) removeFromParent();
     }
     if (other is TentacleBoss) {
-      other.takeDamage(_adjustBossDamage(other));
+      final zone = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (_adjustBossDamage(other) * zone.multiplier).round());
+      other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -48), dealt, color: zone.zone == BossHitZoneKind.core ? const Color(0xFFFF1744) : const Color(0xFFFFD54F), label: zone.label);
       if (!pierce) removeFromParent();
     }
     if (other is CyclopsBoss) {
-      other.takeDamage(_adjustBossDamage(other));
+      final zone = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (_adjustBossDamage(other) * zone.multiplier).round());
+      other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -48), dealt, color: zone.zone == BossHitZoneKind.core ? const Color(0xFFFF1744) : const Color(0xFFFFD54F), label: zone.label);
       if (!pierce) removeFromParent();
     }
     if (other is PlagueLordBoss) {
-      other.takeDamage(_adjustBossDamage(other));
+      final zone = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (_adjustBossDamage(other) * zone.multiplier).round());
+      other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -48), dealt, color: zone.zone == BossHitZoneKind.core ? const Color(0xFFFF1744) : const Color(0xFFFFD54F), label: zone.label);
       if (!pierce) removeFromParent();
     }
     if (other is BloodChampionBoss) {
-      other.takeDamage(_adjustBossDamage(other));
+      final zone = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (_adjustBossDamage(other) * zone.multiplier).round());
+      other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -48), dealt, color: zone.zone == BossHitZoneKind.core ? const Color(0xFFFF1744) : const Color(0xFFFFD54F), label: zone.label);
       if (!pierce) removeFromParent();
     }
     if (other is BreakableBarrel) {
@@ -9259,14 +9343,47 @@ class MeleeAttack extends PositionComponent with HasGameReference<InquisitorGame
         other.applyStatus(StatusType.bleed, 2.5, tickDamage: 1);
       }
     }
-    if (other is MiniBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is Boss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is KnightBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is KingBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is TentacleBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is CyclopsBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is PlagueLordBoss && hit.add(other.hashCode)) other.takeDamage(damage);
-    if (other is BloodChampionBoss && hit.add(other.hashCode)) other.takeDamage(damage);
+    final impact = intersectionPoints.isNotEmpty ? intersectionPoints.first : other.position;
+    if (other is MiniBoss && hit.add(other.hashCode)) {
+      final z = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (damage * z.multiplier).round()); other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -46), dealt, color: const Color(0xFFFFD54F), label: z.label);
+    }
+    if (other is Boss && hit.add(other.hashCode)) {
+      final z = resolveBossHitZone(impact: impact, center: other.position, size: other.size, exposed: other.weakSpotExposed);
+      final dealt = max(1, (damage * z.multiplier).round()); other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -46), dealt, color: z.zone == BossHitZoneKind.core ? const Color(0xFFFF1744) : const Color(0xFFFFD54F), label: z.label);
+    }
+    if (other is KnightBoss && hit.add(other.hashCode)) {
+      final z = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (damage * z.multiplier).round()); other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -46), dealt, color: const Color(0xFFFFD54F), label: z.label);
+    }
+    if (other is KingBoss && hit.add(other.hashCode)) {
+      final z = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (damage * z.multiplier).round()); other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -46), dealt, color: const Color(0xFFFFD54F), label: z.label);
+    }
+    if (other is TentacleBoss && hit.add(other.hashCode)) {
+      final z = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (damage * z.multiplier).round()); other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -46), dealt, color: const Color(0xFFFFD54F), label: z.label);
+    }
+    if (other is CyclopsBoss && hit.add(other.hashCode)) {
+      final z = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (damage * z.multiplier).round()); other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -46), dealt, color: const Color(0xFFFFD54F), label: z.label);
+    }
+    if (other is PlagueLordBoss && hit.add(other.hashCode)) {
+      final z = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (damage * z.multiplier).round()); other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -46), dealt, color: const Color(0xFFFFD54F), label: z.label);
+    }
+    if (other is BloodChampionBoss && hit.add(other.hashCode)) {
+      final z = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
+      final dealt = max(1, (damage * z.multiplier).round()); other.takeDamage(dealt);
+      game.spawnDamageNumber(other.position + Vector2(0, -46), dealt, color: const Color(0xFFFFD54F), label: z.label);
+    }
     if (other is Obstacle && hit.add(other.hashCode)) other.removeFromParent();
     if (other is BreakableBarrel) other.hit();
   }
@@ -9388,7 +9505,11 @@ class BossProjectile extends PositionComponent with HasGameReference<InquisitorG
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is Player) {
+      final wasDodging = game.dashActive > 0;
       other.takeDamage((1 * game.difficulty.dmgMult).ceil());
+      if (wasDodging) {
+        game.spawnDamageNumber(other.position + Vector2(0, -42), 0, color: const Color(0xFF80DEEA), label: 'УКЛОНЕНИЕ');
+      }
       removeFromParent();
     }
     if (other is Wall) removeFromParent();
@@ -10262,6 +10383,7 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       Rect.fromLTWH(cx - 40, -18, 80 * ratio, 8),
       Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFFF9800),
     );
+    drawBossHitZones(canvas, size, exposed: false);
     WHDraw.statusIcons(canvas, cx, -28, statuses);
   }
 }
@@ -10577,6 +10699,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFFE53935),
       );
     }
+    drawBossHitZones(canvas, size, exposed: weakSpotExposed);
     WHDraw.statusIcons(canvas, cx, -34, statuses);
   }
 }
@@ -10797,6 +10920,7 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
         Paint()..color = isEcho ? const Color(0xFF9C27B0) : const Color(0xFF90CAF9),
       );
     }
+    drawBossHitZones(canvas, size, exposed: false);
     WHDraw.statusIcons(canvas, cx, -32, statuses);
   }
 }
@@ -11065,6 +11189,7 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
         Paint()..color = colors[i % colors.length],
       );
     }
+    drawBossHitZones(canvas, size, exposed: false);
     WHDraw.statusIcons(canvas, cx, -68, statuses);
   }
 }
@@ -11296,6 +11421,7 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
         Paint()..color = phase == 1 ? const Color(0xFF8BC34A) : const Color(0xFF558B2F),
       );
     }
+    drawBossHitZones(canvas, size, exposed: false);
     WHDraw.statusIcons(canvas, cx, -62, statuses);
   }
 }
@@ -11522,6 +11648,7 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
         Paint()..color = Color.lerp(const Color(0xFFB71C1C), const Color(0xFFFF1744), rage)!,
       );
     }
+    drawBossHitZones(canvas, size, exposed: false);
     WHDraw.statusIcons(canvas, cx, -60, statuses);
   }
 }
@@ -11700,6 +11827,7 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
         Paint()..color = phase == 1 ? const Color(0xFF9C27B0) : const Color(0xFFFF1744),
       );
     }
+      drawBossHitZones(canvas, size, exposed: false);
   }
 }
 
@@ -11917,6 +12045,7 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
         Paint()..color = phase == 1 ? const Color(0xFFFF6D00) : const Color(0xFFFF1744),
       );
     }
+      drawBossHitZones(canvas, size, exposed: false);
   }
 }
 class TentacleSlam extends CircleComponent {
