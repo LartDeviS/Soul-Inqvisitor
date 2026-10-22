@@ -21,11 +21,44 @@ import 'weapons/ordo_specialization.dart';
 import 'weapons/weapon_data.dart';
 import 'world/biome_data.dart';
 import 'world/arena_events.dart';
+import '../progression/lore_campaign_system.dart';
 
 /// Connected data layer for new combat, world, mission and gear systems.
 /// Legacy Flame components remain in main.dart while this facade owns testable domain state.
 class InquisitorExpansionSystems {
   final CampaignProgress campaign=CampaignProgress();
+  final OrdoReputation ordoReputation = OrdoReputation();
+  final CampaignConsequences campaignConsequences = CampaignConsequences();
+  final Map<String, InvestigationState> investigations = <String, InvestigationState>{};
+  final Set<String> studiedEnemyDossiers = <String>{};
+  final Set<String> acquiredRelics = <String>{};
+  final Map<String, BranchingContract> branchingContracts = {for (final c in BranchingContractCatalog.all) c.id: c};
+  int studyEnemy(String enemyId) {
+    final dossier = EnemyDossierCatalog.byId(enemyId);
+    if (dossier == null || !studiedEnemyDossiers.add(enemyId)) return 0;
+    progression.grantExperience(dossier.studyReward);
+    return dossier.studyReward;
+  }
+  InvestigationState beginInvestigation({required String id, required String title, required String briefing}) {
+    return investigations.putIfAbsent(id, () => InvestigationState(id: id, title: title, briefing: briefing));
+  }
+  bool collectInvestigationEvidence(String investigationId, String evidenceId) => investigations[investigationId]?.collectEvidence(evidenceId) ?? false;
+  bool interrogateWitness(String investigationId, String witnessId) => investigations[investigationId]?.interrogate(witnessId) ?? false;
+  Map<String, int>? concludeInvestigation(String investigationId, InvestigationDecision decision) {
+    final investigation = investigations[investigationId];
+    if (investigation == null || investigation.completed) return null;
+    final result = investigation.conclude(decision);
+    campaign.investigationClues += result['clues'] ?? 0;
+    campaign.requisition += result['requisition'] ?? 0;
+    campaign.alarm = (campaign.alarm + (result['alarm'] ?? 0)).clamp(0, 100).toInt();
+    ordoReputation.add('hereticus', result['reputation'] ?? 0);
+    if (decision == InvestigationDecision.rapidPurge) campaignConsequences.recordSectorPurged();
+    return result;
+  }
+  bool chooseBranchingContractRoute(String contractId, String routeId) => branchingContracts[contractId]?.choose(routeId) ?? false;
+  bool acquireRelic(String relicId) => RelicCatalog.byId(relicId) != null && acquiredRelics.add(relicId);
+  double get relicDamageMultiplier => acquiredRelics.fold<double>(1.0, (value, id) => value * (RelicCatalog.byId(id)?.damageMultiplier ?? 1.0));
+  double get relicIncomingDamageMultiplier => acquiredRelics.fold<double>(1.0, (value, id) => value * (RelicCatalog.byId(id)?.incomingDamageMultiplier ?? 1.0));
   final InventoryState inventory=InventoryState();
   final WeaponSystem weapons=WeaponSystem();
   OrdoDoctrine ordoDoctrine=const OrdoDoctrine();
@@ -72,7 +105,7 @@ class InquisitorExpansionSystems {
   void beginMission(MissionData mission,{BiomeId? selectedBiome,DifficultyConfig? selectedDifficulty,int? seed}) {activeMission=mission;if(selectedBiome!=null)biome=selectedBiome;if(selectedDifficulty!=null)difficulty=selectedDifficulty;campaign.beginMission(mission.id);activeWorldEvent=world.rollEvent(biome,floor:mission.floor,seed:seed);activeOperationModifier=operationModifiers.roll(seed:seed == null ? null : seed + 41);activeBoss=null;activeBossAttack=null;_bossAttackResolved=false;enemyStatuses.clear();activeMissionEvent=missionEvents.roll(floor:mission.floor,alarm:campaign.alarm,seed:seed==null?null:seed+17);trackedEnemies.clear();}
   void recordEnemyDefeated(EnemyRuntimeState enemy){enemy.isDefeated=true;recentKills++;campaign.recordKill(enemy.type.faction.name);contracts.recordKill(elite:enemy.type.archetype==EnemyArchetype.heavy||enemy.type.archetype==EnemyArchetype.sniper);progression.grantExperience(12);}
   void recordCacheFound(){contracts.recordCache();campaign.requisition+=activeWorldEvent?.requisition??5;progression.grantExperience(8);}
-  Map<String,dynamic> toJson()=>{'schemaVersion':3,'campaign':campaign.toJson(),'inventory':inventory.toJson(),'weapons':weapons.toJson(),'ordoDoctrine':ordoDoctrine.toJson(),'progression':progression.toJson(),'contracts':contracts.toJson(),'difficulty':difficulty.id,'biome':biome.name,'activeMissionId':activeMission?.id,'activeWorldEvent':activeWorldEvent?.type.name,'activeMissionEvent':activeMissionEvent?.type.name,'activeOperationModifier':activeOperationModifier?.id.name,'recentDeaths':recentDeaths,'recentKills':recentKills};
-  void loadJson(dynamic input,{List<MissionData> missions=const[]}){final migrated=SaveMigration.migrate(input);campaign.loadJson(migrated['campaign']);inventory.loadJson(migrated['inventory']);weapons.loadJson(migrated['weapons']);ordoDoctrine=OrdoDoctrine.fromJson(migrated['ordoDoctrine']);progression.loadJson(migrated['progression']);contracts.loadJson(migrated['contracts']);difficulty=DifficultyConfig.byId(migrated['difficulty'] as String? ?? 'normal');biome=BiomeId.values.firstWhere((e)=>e.name==migrated['biome'],orElse:()=>BiomeId.hive);final id=migrated['activeMissionId'];activeMission=id is String?missions.where((m)=>m.id==id).firstOrNull:null;activeOperationModifier=OperationModifier.values.where((e)=>e.name==migrated['activeOperationModifier']).map(OperationModifierSystem.byId).firstOrNull;recentDeaths=(migrated['recentDeaths'] as num?)?.toInt() ?? 0;recentKills=(migrated['recentKills'] as num?)?.toInt() ?? 0;activeBoss=null;activeBossAttack=null;_bossAttackResolved=false;enemyStatuses.clear();trackedEnemies.clear();}
+  Map<String,dynamic> toJson()=>{'schemaVersion':4,'loreStage4':{'ordoReputation':ordoReputation.toJson(),'campaignConsequences':campaignConsequences.toJson(),'investigations':investigations.map((k,v)=>MapEntry(k,v.toJson())),'studiedEnemyDossiers':studiedEnemyDossiers.toList(),'acquiredRelics':acquiredRelics.toList(),'branchingContracts':branchingContracts.map((k,v)=>MapEntry(k,v.toJson()))},'campaign':campaign.toJson(),'inventory':inventory.toJson(),'weapons':weapons.toJson(),'ordoDoctrine':ordoDoctrine.toJson(),'progression':progression.toJson(),'contracts':contracts.toJson(),'difficulty':difficulty.id,'biome':biome.name,'activeMissionId':activeMission?.id,'activeWorldEvent':activeWorldEvent?.type.name,'activeMissionEvent':activeMissionEvent?.type.name,'activeOperationModifier':activeOperationModifier?.id.name,'recentDeaths':recentDeaths,'recentKills':recentKills};
+  void loadJson(dynamic input,{List<MissionData> missions=const[]}){final migrated=SaveMigration.migrate(input);final lore=migrated['loreStage4'];if(lore is Map){ordoReputation.loadJson(lore['ordoReputation']);campaignConsequences.loadJson(lore['campaignConsequences']);studiedEnemyDossiers..clear()..addAll((lore['studiedEnemyDossiers'] as List? ?? const []).whereType<String>());acquiredRelics..clear()..addAll((lore['acquiredRelics'] as List? ?? const []).whereType<String>());investigations.clear();if(lore['investigations'] is Map){(lore['investigations'] as Map).forEach((key,value){if(key is String && value is Map){final item=InvestigationState(id:key,title:value['title'] as String? ?? key,briefing:value['briefing'] as String? ?? '');item.loadJson(value);investigations[key]=item;}});}if(lore['branchingContracts'] is Map){(lore['branchingContracts'] as Map).forEach((key,value){final contract=branchingContracts[key];if(contract!=null && value is Map){contract.choose(value['selectedRouteId'] as String? ?? contract.selectedRouteId);contract.completed=value['completed']==true;}});}}campaign.loadJson(migrated['campaign']);inventory.loadJson(migrated['inventory']);weapons.loadJson(migrated['weapons']);ordoDoctrine=OrdoDoctrine.fromJson(migrated['ordoDoctrine']);progression.loadJson(migrated['progression']);contracts.loadJson(migrated['contracts']);difficulty=DifficultyConfig.byId(migrated['difficulty'] as String? ?? 'normal');biome=BiomeId.values.firstWhere((e)=>e.name==migrated['biome'],orElse:()=>BiomeId.hive);final id=migrated['activeMissionId'];activeMission=id is String?missions.where((m)=>m.id==id).firstOrNull:null;activeOperationModifier=OperationModifier.values.where((e)=>e.name==migrated['activeOperationModifier']).map(OperationModifierSystem.byId).firstOrNull;recentDeaths=(migrated['recentDeaths'] as num?)?.toInt() ?? 0;recentKills=(migrated['recentKills'] as num?)?.toInt() ?? 0;activeBoss=null;activeBossAttack=null;_bossAttackResolved=false;enemyStatuses.clear();trackedEnemies.clear();}
 }
 extension _FirstOrNull<T> on Iterable<T>{T? get firstOrNull=>isEmpty?null:first;}
