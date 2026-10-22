@@ -10395,9 +10395,6 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
       final a = base + o;
       game.world.add(BossProjectile(position: position.clone(), direction: Vector2(cos(a), sin(a)), speed: 220)..priority = 22);
     }
-    // Every successful telegraph leaves a short, clear weak-point window in
-    // later phases. This rewards dodging rather than encouraging face-tanking.
-    if (phase >= 2) weakSpotTimer = phase >= 3 ? 1.8 : 1.4;
     game.markBossRetreat();
   }
 
@@ -10405,7 +10402,6 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
   void update(double dt) {
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
-    if (weakSpotTimer > 0) weakSpotTimer = max(0, weakSpotTimer - dt);
     if (!game.isPlaying || game.isPaused) return;
     for (final e in statuses.toList()) {
       e.remaining -= dt;
@@ -10702,6 +10698,8 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         }
         break;
     }
+    // Later phases expose the weak spot briefly after the attack, rewarding a successful dodge.
+    if (phase >= 2) weakSpotTimer = phase >= 3 ? 1.8 : 1.4;
     game.markBossRetreat();
   }
 
@@ -10709,6 +10707,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   void update(double dt) {
     super.update(dt);
     if (hurtFlash > 0) hurtFlash = max(0, hurtFlash - dt);
+    if (weakSpotTimer > 0) weakSpotTimer = max(0.0, weakSpotTimer - dt);
     if (!game.isPlaying || game.isPaused) return;
     for (final e in statuses.toList()) {
       e.remaining -= dt;
