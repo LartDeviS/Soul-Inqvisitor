@@ -1,12 +1,33 @@
-/// Data-driven weapon catalog used by the legacy Flame combat loop and new equipment systems.
-enum WeaponId { bolter, rifle, shotgun, plasmaGun, staff, stormStaff, warpBeam, daggers, needles, sniperNeedle, meltaGun, flamer, heavyBolter, psycannon, incinerator, daemonHammer, condemnorBoltgun, stakeCrossbow, infernoPistol }
+/// Data-driven weapon catalog used by the legacy Flame combat loop and expansion systems.
+enum WeaponId {
+  bolter, rifle, shotgun, plasmaGun, staff, stormStaff, warpBeam, daggers,
+  needles, sniperNeedle, meltaGun, flamer, heavyBolter,
+  // Ordo Malleus additions
+  psycannon, exorcistIncinerator, daemonbanePistol,
+  // Ordo Hereticus additions
+  condemnorBoltgun, sanctifiedStakeCrossbow, infernoPistol,
+}
 enum DamageType { kinetic, plasma, melta, flame, melee, warp, explosive }
+enum WeaponOrdo { common, xenos, malleus, hereticus }
+
 class WeaponData {
-  final WeaponId id; final String nameRu; final DamageType damageType;
+  final WeaponId id;
+  final String nameRu;
+  final DamageType damageType;
   final double damage, cooldown, range, armorPenetration, spread, projectileSpeed;
-  final int pellets, magazine; final bool piercing, areaDamage, appliesBurn;
-  const WeaponData(this.id, this.nameRu, {required this.damageType, required this.damage, required this.cooldown, required this.range, this.armorPenetration=0, this.spread=0, this.projectileSpeed=500, this.pellets=1, this.magazine=0, this.piercing=false, this.areaDamage=false, this.appliesBurn=false});
-  static const Map<WeaponId,WeaponData> all={
+  final int pellets, magazine;
+  final bool piercing, areaDamage, appliesBurn;
+  final WeaponOrdo ordo;
+  final String description;
+  const WeaponData(this.id, this.nameRu, {
+    required this.damageType, required this.damage, required this.cooldown,
+    required this.range, this.armorPenetration=0, this.spread=0,
+    this.projectileSpeed=500, this.pellets=1, this.magazine=0,
+    this.piercing=false, this.areaDamage=false, this.appliesBurn=false,
+    this.ordo=WeaponOrdo.common, this.description='',
+  });
+
+  static const Map<WeaponId, WeaponData> all = {
     WeaponId.bolter: WeaponData(WeaponId.bolter,'Болтер',damageType:DamageType.kinetic,damage:8,cooldown:.28,range:520,projectileSpeed:520,magazine:30),
     WeaponId.rifle: WeaponData(WeaponId.rifle,'Лазвинтовка',damageType:DamageType.kinetic,damage:18,cooldown:.55,range:680,projectileSpeed:680,magazine:24),
     WeaponId.shotgun: WeaponData(WeaponId.shotgun,'Боевой дробовик',damageType:DamageType.kinetic,damage:10,cooldown:.72,range:320,spread:.22,pellets:3,projectileSpeed:480,magazine:8),
@@ -20,14 +41,13 @@ class WeaponData {
     WeaponId.meltaGun: WeaponData(WeaponId.meltaGun,'Мельтаган',damageType:DamageType.melta,damage:42,cooldown:1.05,range:170,armorPenetration:.72,projectileSpeed:330,magazine:5,piercing:true,areaDamage:true),
     WeaponId.flamer: WeaponData(WeaponId.flamer,'Огнемёт',damageType:DamageType.flame,damage:4,cooldown:.12,range:145,spread:.315,pellets:7,projectileSpeed:270,magazine:100,areaDamage:true,appliesBurn:true),
     WeaponId.heavyBolter: WeaponData(WeaponId.heavyBolter,'Тяжёлый болтер',damageType:DamageType.kinetic,damage:6,cooldown:.20,range:520,spread:.035,pellets:3,projectileSpeed:470,magazine:80),
-    // Ordo Malleus: anti-daemon / anti-warp armaments.
-    WeaponId.psycannon: WeaponData(WeaponId.psycannon,'Психопушка Маллеус',damageType:DamageType.warp,damage:24,cooldown:.62,range:610,armorPenetration:.38,projectileSpeed:650,magazine:18,piercing:true),
-    WeaponId.incinerator: WeaponData(WeaponId.incinerator,'Экзорцистский инцинератор',damageType:DamageType.flame,damage:7,cooldown:.16,range:185,spread:.24,pellets:5,projectileSpeed:300,magazine:72,areaDamage:true,appliesBurn:true),
-    WeaponId.daemonHammer: WeaponData(WeaponId.daemonHammer,'Демонический молот-печать',damageType:DamageType.warp,damage:48,cooldown:1.10,range:95,armorPenetration:.62,areaDamage:true),
-    // Ordo Hereticus: witch-hunter / anti-cult tools.
-    WeaponId.condemnorBoltgun: WeaponData(WeaponId.condemnorBoltgun,'Осудительный болтер',damageType:DamageType.kinetic,damage:19,cooldown:.58,range:570,armorPenetration:.28,projectileSpeed:620,magazine:16,piercing:true),
-    WeaponId.stakeCrossbow: WeaponData(WeaponId.stakeCrossbow,'Пургатусный арбалет',damageType:DamageType.kinetic,damage:27,cooldown:.92,range:440,armorPenetration:.40,projectileSpeed:520,magazine:6,piercing:true),
-    WeaponId.infernoPistol: WeaponData(WeaponId.infernoPistol,'Инферно-пистолет',damageType:DamageType.melta,damage:36,cooldown:.88,range:155,armorPenetration:.70,projectileSpeed:340,magazine:5,piercing:true,areaDamage:true),
+    WeaponId.psycannon: WeaponData(WeaponId.psycannon,'Психопушка Маллеус',damageType:DamageType.warp,damage:30,cooldown:.68,range:650,armorPenetration:.38,projectileSpeed:660,magazine:18,piercing:true,ordo:WeaponOrdo.malleus,description:'Тяжёлые психически заряженные снаряды, особенно эффективные против варп-сущностей.'),
+    WeaponId.exorcistIncinerator: WeaponData(WeaponId.exorcistIncinerator,'Экзорцистский инцинератор',damageType:DamageType.flame,damage:7,cooldown:.18,range:190,spread:.25,pellets:5,projectileSpeed:300,magazine:70,areaDamage:true,appliesBurn:true,ordo:WeaponOrdo.malleus,description:'Короткий веер очищающего пламени для срыва атак и уничтожения скоплений демонов.'),
+    WeaponId.daemonbanePistol: WeaponData(WeaponId.daemonbanePistol,'Пистолет «Губитель демонов»',damageType:DamageType.warp,damage:24,cooldown:.48,range:390,armorPenetration:.28,projectileSpeed:560,magazine:10,piercing:true,ordo:WeaponOrdo.malleus,description:'Компактное оружие с антиварп-боеприпасом; точный выстрел с умеренной скорострельностью.'),
+    WeaponId.condemnorBoltgun: WeaponData(WeaponId.condemnorBoltgun,'Осудительный болтер',damageType:DamageType.kinetic,damage:25,cooldown:.72,range:610,armorPenetration:.20,projectileSpeed:650,magazine:18,piercing:true,ordo:WeaponOrdo.hereticus,description:'Болтер с особым осудительным зарядом для поражения опасных псайкеров.'),
+    WeaponId.sanctifiedStakeCrossbow: WeaponData(WeaponId.sanctifiedStakeCrossbow,'Арбалет освящённых кольев',damageType:DamageType.kinetic,damage:22,cooldown:.82,range:560,armorPenetration:.32,projectileSpeed:740,magazine:6,piercing:true,ordo:WeaponOrdo.hereticus,description:'Точный одиночный выстрел; пробивает броню и вознаграждает аккуратное прицеливание.'),
+    WeaponId.infernoPistol: WeaponData(WeaponId.infernoPistol,'Инферно-пистолет',damageType:DamageType.melta,damage:38,cooldown:.95,range:210,armorPenetration:.65,projectileSpeed:380,magazine:5,piercing:true,areaDamage:true,ordo:WeaponOrdo.hereticus,description:'Крайне мощный пистолет короткой дистанции с малым магазином.'),
   };
+
   static WeaponData forLegacyName(String name) => all.values.firstWhere((w)=>w.id.name==name,orElse:()=>all[WeaponId.bolter]!);
 }

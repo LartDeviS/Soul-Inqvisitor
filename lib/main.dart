@@ -63,6 +63,10 @@ enum RangedWeapon {
   staff, stormStaff, warpBeam,
   daggers, needles, sniperNeedle,
   meltaGun, flamer, heavyBolter,
+  // Ordo Malleus: daemon-hunting ranged arsenal
+  psycannon, exorcistIncinerator, daemonbanePistol,
+  // Ordo Hereticus: witch-hunter ranged arsenal
+  condemnorBoltgun, sanctifiedStakeCrossbow, infernoPistol,
 }
 enum MeleeWeapon {
   sword, axe, hammer,
@@ -6920,11 +6924,17 @@ class _BackpackMenuState extends State<BackpackMenu> {
         add('Посох', RangedWeapon.staff, true);
         add('Шторм', RangedWeapon.stormStaff, g.unlockedStormStaff);
         add('Варп', RangedWeapon.warpBeam, g.unlockedWarpBeam);
+        add('Психопушка', RangedWeapon.psycannon, g.currentFloor >= 2 || g.overallLevel >= 11);
+        add('Экзорцистский инцинератор', RangedWeapon.exorcistIncinerator, g.currentFloor >= 4 || g.overallLevel >= 21);
+        add('Пистолет «Губитель демонов»', RangedWeapon.daemonbanePistol, g.currentFloor >= 5 || g.overallLevel >= 26);
         break;
       case PlayerClass.hereticus:
         add('Кинжалы', RangedWeapon.daggers, true);
         add('Иглы', RangedWeapon.needles, g.unlockedNeedles);
         add('Снайпер', RangedWeapon.sniperNeedle, g.unlockedSniperNeedle);
+        add('Осудительный болтер', RangedWeapon.condemnorBoltgun, g.currentFloor >= 2 || g.overallLevel >= 11);
+        add('Арбалет кольев', RangedWeapon.sanctifiedStakeCrossbow, g.currentFloor >= 4 || g.overallLevel >= 21);
+        add('Инферно-пистолет', RangedWeapon.infernoPistol, g.currentFloor >= 5 || g.overallLevel >= 26);
         break;
     }
     return list;
@@ -6992,74 +7002,48 @@ class CodexMenu extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('КОДЕКС ИНКВИЗИЦИИ', style: TextStyle(color: Color(0xFFFFD700), fontSize: 22, fontWeight: FontWeight.bold)),
-            ),
-            Text(
-              '${game.codexUnlocked.length} / ${CodexId.values.length}',
-              style: const TextStyle(color: Colors.white54),
-            ),
-            TextButton.icon(onPressed: () { game.playClick(); game.overlays.add('chronicle'); }, icon: const Icon(Icons.menu_book, color: Color(0xFFFFD700)), label: const Text('Хроника событий кампании', style: TextStyle(color: Color(0xFFFFD700)))),
-            const WeaponCatalogPanel(),
-            const WorldCodexPanel(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              child: Text('ДОПОЛНИТЕЛЬНЫЕ ДОСЬЕ УГРОЗ', style: TextStyle(color: Color(0xFFBCAAA4), fontSize: 11, letterSpacing: 1.4)),
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text('Орочьи бойцы: штурмовые налёты и грубая броня.\nТиранидские гаунты: быстрые прыжки, когти и хитиновый панцирь.\nНекронские воины: металлические пластины и дисциплинированный дальний огонь.\nПсайкеры культа: варп-атаки и давление на дистанции.\nНосители чумы: тяжёлый шаг, заражение и высокая живучесть.', style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.35)),
-            ),
-            ...CodexId.values.map((id) {
-                  final open = game.codexUnlocked.contains(id);
-                  final rank = game.loreRankOf(id);
-                  return Card(
-                    color: const Color(0xFF1A1A1A),
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: ExpansionTile(
-                      title: Text(open ? id.title : '???', style: TextStyle(color: open ? const Color(0xFFFFD700) : Colors.white38)),
-                      subtitle: open
-                          ? Text('${id.knowledgeBonus} • знание $rank/2', style: TextStyle(color: rank > 0 ? Colors.greenAccent : Colors.white54, fontSize: 11))
-                          : null,
-                      children: open
-                          ? [
-                              Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Text(id.lore, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.35)),
-                              ),
-                              if (rank < 2)
-                                TextButton(
-                                  onPressed: () {
-                                    game.playClick();
-                                    game.acceptLore(id, fromPopup: false);
-                                  },
-                                  child: Text(rank == 0 ? 'Принять знание' : 'Углубить (1 SP)'),
-                                ),
-                            ]
-                          : [
-                              const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Text('Убейте цель, чтобы открыть.', style: TextStyle(color: Colors.white38)),
-                              ),
-                            ],
-                    ),
-                  );
-                }),
-            ElevatedButton(
-              onPressed: () {
-                game.playClick();
-                game.closeCodex();
-              },
-              child: const Text('НАЗАД'),
-            ),
-          ],
+        child: Column(children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: Text('КОДЕКС ИНКВИЗИЦИИ', textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFFFFD700), fontSize: 20, fontWeight: FontWeight.bold)),
           ),
-        ),
+          Text('${game.codexUnlocked.length} / ${CodexId.values.length}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+          Expanded(child: LayoutBuilder(builder: (context, constraints) {
+            final wide = constraints.maxWidth > constraints.maxHeight * 1.25;
+            return ListView(padding: const EdgeInsets.only(bottom: 8), children: [
+              Align(alignment: Alignment.center, child: TextButton.icon(
+                onPressed: () { game.playClick(); game.overlays.add('chronicle'); },
+                icon: const Icon(Icons.menu_book, color: Color(0xFFFFD700)),
+                label: const Text('Хроника событий кампании', style: TextStyle(color: Color(0xFFFFD700))),
+              )),
+              if (wide) ...[
+                const WeaponCatalogPanel(), const WorldCodexPanel(),
+              ] else ...[
+                const WeaponCatalogPanel(), const WorldCodexPanel(),
+              ],
+              const Padding(padding: EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                child: Text('ДОПОЛНИТЕЛЬНЫЕ ДОСЬЕ УГРОЗ', style: TextStyle(color: Color(0xFFBCAAA4), fontSize: 11, letterSpacing: 1.4))),
+              const Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text('Орочьи бойцы: штурмовые налёты и грубая броня.\nТиранидские гаунты: быстрые прыжки, когти и хитиновый панцирь.\nНекронские воины: металлические пластины и дисциплинированный дальний огонь.\nПсайкеры культа: варп-атаки и давление на дистанции.\nНосители чумы: тяжёлый шаг, заражение и высокая живучесть.', style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.35))),
+              ...CodexId.values.map((id) {
+                final open = game.codexUnlocked.contains(id);
+                final rank = game.loreRankOf(id);
+                return Card(color: const Color(0xFF1A1A1A), margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: ExpansionTile(
+                    title: Text(open ? id.title : '???', style: TextStyle(color: open ? const Color(0xFFFFD700) : Colors.white38)),
+                    subtitle: open ? Text('${id.knowledgeBonus} • знание $rank/2', style: TextStyle(color: rank > 0 ? Colors.greenAccent : Colors.white54, fontSize: 11)) : null,
+                    children: open ? [
+                      Padding(padding: const EdgeInsets.all(12), child: Text(id.lore, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.35))),
+                      if (rank < 2) TextButton(onPressed: () { game.playClick(); game.acceptLore(id, fromPopup: false); }, child: Text(rank == 0 ? 'Принять знание' : 'Углубить (1 SP)')),
+                    ] : [const Padding(padding: EdgeInsets.all(12), child: Text('Убейте цель, чтобы открыть.', style: TextStyle(color: Colors.white38)))],
+                  ));
+              }),
+            ]);
+          })),
+          Padding(padding: const EdgeInsets.fromLTRB(12, 4, 12, 8), child: SizedBox(width: double.infinity,
+            child: ElevatedButton(onPressed: () { game.playClick(); game.closeCodex(); }, child: const Text('НАЗАД')))),
+        ]),
       ),
     );
   }
@@ -7417,10 +7401,18 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
       body: Stack(
         children: [
           Positioned.fill(child: CustomPaint(painter: _MP(symbols, repaint: _controller))),
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+          LayoutBuilder(builder: (context, constraints) {
+            final landscape = constraints.maxWidth > constraints.maxHeight;
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: landscape ? 8 : 18, horizontal: 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                 const Text(
                   'SOUL OF THE\nINQUISITOR',
                   textAlign: TextAlign.center,
@@ -7466,9 +7458,13 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
                   widget.game.playClick();
                   widget.game.openSettings();
                 }),
-              ],
-            ),
-          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -8026,6 +8022,12 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       RangedWeapon.meltaGun => 1.05,
       RangedWeapon.flamer => 0.12,
       RangedWeapon.heavyBolter => 0.20,
+      RangedWeapon.psycannon => 0.68,
+      RangedWeapon.exorcistIncinerator => 0.18,
+      RangedWeapon.daemonbanePistol => 0.48,
+      RangedWeapon.condemnorBoltgun => 0.72,
+      RangedWeapon.sanctifiedStakeCrossbow => 0.82,
+      RangedWeapon.infernoPistol => 0.95,
     };
     return base * game.attackSpeedMult / game.modularWeapon.rateMultiplier;
   }
@@ -8072,7 +8074,9 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       if (game.playerClass == PlayerClass.malleus &&
           (game.rangedWeapon == RangedWeapon.staff ||
               game.rangedWeapon == RangedWeapon.stormStaff ||
-              game.rangedWeapon == RangedWeapon.warpBeam)) {
+              game.rangedWeapon == RangedWeapon.warpBeam ||
+              game.rangedWeapon == RangedWeapon.psycannon ||
+              game.rangedWeapon == RangedWeapon.daemonbanePistol)) {
         var stressGain = 0.10;
         if (game.hasWarpAnchor) stressGain *= 0.7;
         if (game.loadout.staffFocus == StaffFocusMod.dissipator) stressGain *= 0.6;
@@ -8198,6 +8202,45 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
               const Color(0xFFFFB74D), 470, 6.5);
         }
         break;
+      case RangedWeapon.psycannon:
+        game.world.add(Bullet(position: origin.clone(), direction: dir,
+          damage: game.scaleDamage((game.rifleDamage * 1.55).round()),
+          color: const Color(0xFFB388FF), speed: 660, radius: 7,
+          pierce: true, damageType: CombatDamageType.warp, armorPenetration: 0.38)..priority = 13);
+        break;
+      case RangedWeapon.exorcistIncinerator:
+        for (int i = 0; i < 5; i++) {
+          final a = atan2(dir.y, dir.x) + (i - 2) * 0.12;
+          game.world.add(Bullet(position: origin.clone(), direction: Vector2(cos(a), sin(a)),
+            damage: game.scaleDamage(max(2, (game.bolterDamage * 0.68).round())),
+            color: i.isEven ? const Color(0xFFFF7043) : const Color(0xFFFFD180),
+            speed: 300, radius: 6, applyBurn: true, damageType: CombatDamageType.flame)..priority = 13);
+        }
+        break;
+      case RangedWeapon.daemonbanePistol:
+        game.world.add(Bullet(position: origin.clone(), direction: dir,
+          damage: game.scaleDamage((game.rifleDamage * 1.35).round()),
+          color: const Color(0xFFCE93D8), speed: 560, radius: 5,
+          pierce: true, damageType: CombatDamageType.warp, armorPenetration: 0.28)..priority = 13);
+        break;
+      case RangedWeapon.condemnorBoltgun:
+        game.world.add(Bullet(position: origin.clone(), direction: dir,
+          damage: game.scaleDamage((game.rifleDamage * 1.3).round()),
+          color: const Color(0xFFFFD54F), speed: 650, radius: 5.5,
+          pierce: true, damageType: CombatDamageType.kinetic, armorPenetration: 0.20)..priority = 13);
+        break;
+      case RangedWeapon.sanctifiedStakeCrossbow:
+        game.world.add(Bullet(position: origin.clone(), direction: dir,
+          damage: game.scaleDamage((game.rifleDamage * 1.25).round()),
+          color: const Color(0xFF80CBC4), speed: 740, radius: 4,
+          pierce: true, damageType: CombatDamageType.kinetic, armorPenetration: 0.32)..priority = 13);
+        break;
+      case RangedWeapon.infernoPistol:
+        game.world.add(Bullet(position: origin.clone(), direction: dir,
+          damage: game.scaleDamage((game.shotgunDamage * 3.8).round()),
+          color: const Color(0xFFFF5722), speed: 380, radius: 8,
+          pierce: true, explosive: true, damageType: CombatDamageType.plasma, armorPenetration: 0.65)..priority = 13);
+        break;
       case RangedWeapon.staff:
         final rad = 160.0 * game.staffRadiusMult();
         game.world.add(PsyWave(
@@ -8257,7 +8300,10 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       damageType: switch (game.rangedWeapon) {
         RangedWeapon.plasmaGun => CombatDamageType.plasma,
         RangedWeapon.warpBeam || RangedWeapon.staff || RangedWeapon.stormStaff => CombatDamageType.warp,
-        RangedWeapon.daggers || RangedWeapon.needles || RangedWeapon.sniperNeedle || RangedWeapon.heavyBolter => CombatDamageType.kinetic,
+        RangedWeapon.daggers || RangedWeapon.needles || RangedWeapon.sniperNeedle || RangedWeapon.heavyBolter || RangedWeapon.condemnorBoltgun || RangedWeapon.sanctifiedStakeCrossbow => CombatDamageType.kinetic,
+        RangedWeapon.psycannon || RangedWeapon.daemonbanePistol => CombatDamageType.warp,
+        RangedWeapon.exorcistIncinerator => CombatDamageType.flame,
+        RangedWeapon.infernoPistol => CombatDamageType.plasma,
         RangedWeapon.flamer => CombatDamageType.flame,
         RangedWeapon.meltaGun => CombatDamageType.plasma,
         RangedWeapon.shotgun => exp ? CombatDamageType.explosive : CombatDamageType.kinetic,
@@ -8269,6 +8315,11 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
         RangedWeapon.warpBeam => 0.18,
         RangedWeapon.meltaGun => 0.72,
         RangedWeapon.heavyBolter => 0.12,
+        RangedWeapon.psycannon => 0.38,
+        RangedWeapon.daemonbanePistol => 0.28,
+        RangedWeapon.condemnorBoltgun => 0.20,
+        RangedWeapon.sanctifiedStakeCrossbow => 0.32,
+        RangedWeapon.infernoPistol => 0.65,
         _ => game.ammoDoctrine == AmmoDoctrine.armorPiercing ? 0.25 : 0.0,
       },
     )..priority = 13);
@@ -8499,6 +8550,35 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
           WHDraw.bolter(canvas, 0, 0, 1.32, accent: const Color(0xFFFFB74D));
           canvas.drawRect(const Rect.fromLTWH(20, 3, 22, 7), Paint()..color = const Color(0xFF5D4037));
           canvas.drawLine(const Offset(43, -7), const Offset(53, -7), Paint()..color = const Color(0xFFFFCC80)..strokeWidth = 4);
+          break;
+        case RangedWeapon.psycannon:
+          WHDraw.bolter(canvas, 0, 0, 1.30, accent: const Color(0xFFB388FF));
+          canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(18, -18, 25, 12), const Radius.circular(3)), Paint()..color = const Color(0xFF4527A0));
+          canvas.drawCircle(const Offset(43, -7), 6, Paint()..color = const Color(0xFFB388FF));
+          canvas.drawCircle(const Offset(43, -7), 10, Paint()..color = const Color(0xFFB388FF).withOpacity(.18));
+          break;
+        case RangedWeapon.exorcistIncinerator:
+          WHDraw.shotgun(canvas, 0, 0, 1.18, accent: const Color(0xFFFF7043));
+          canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(13, -19, 20, 12), const Radius.circular(3)), Paint()..color = const Color(0xFF6D3426));
+          canvas.drawCircle(const Offset(39, -7), 5, Paint()..color = const Color(0xFFFFD180));
+          break;
+        case RangedWeapon.daemonbanePistol:
+          WHDraw.bolter(canvas, 0, 0, .78, accent: const Color(0xFFCE93D8));
+          canvas.drawCircle(const Offset(35, -7), 4, Paint()..color = const Color(0xFFCE93D8));
+          break;
+        case RangedWeapon.condemnorBoltgun:
+          WHDraw.bolter(canvas, 0, 0, 1.12, accent: const Color(0xFFFFD54F));
+          canvas.drawLine(const Offset(19, -17), const Offset(42, -17), Paint()..color = const Color(0xFFFFD54F)..strokeWidth = 2);
+          break;
+        case RangedWeapon.sanctifiedStakeCrossbow:
+          WHDraw.rifle(canvas, 0, 0, 1.05, accent: const Color(0xFF80CBC4));
+          canvas.drawLine(const Offset(28, -20), const Offset(28, 8), Paint()..color = const Color(0xFF80CBC4)..strokeWidth = 3);
+          canvas.drawLine(const Offset(18, -15), const Offset(38, -15), Paint()..color = const Color(0xFF80CBC4)..strokeWidth = 2);
+          break;
+        case RangedWeapon.infernoPistol:
+          WHDraw.bolter(canvas, 0, 0, .90, accent: const Color(0xFFFF5722));
+          canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(19, -16, 16, 11), const Radius.circular(3)), Paint()..color = const Color(0xFF4E342E));
+          canvas.drawCircle(const Offset(39, -7), 5, Paint()..color = const Color(0xFFFF5722));
           break;
       }
     }
