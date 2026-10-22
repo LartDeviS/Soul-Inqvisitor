@@ -1,5 +1,8 @@
 import 'balance/difficulty_config.dart';
 import 'balance/adaptive_difficulty.dart';
+import 'balance/floor_balance_profile.dart';
+import 'enemies/boss_tactics.dart';
+import 'enemies/boss_weak_spots.dart';
 import 'enemies/boss_encounter.dart';
 import 'missions/operation_modifiers.dart';
 import 'weapons/weapon_synergy.dart';
@@ -33,13 +36,30 @@ class InquisitorExpansionSystems {
   final OperationModifierSystem operationModifiers=OperationModifierSystem();
   OperationModifierData? activeOperationModifier;
   BossEncounter? activeBoss;
+  BossAttackRuntime? activeBossAttack;
+  FloorBalanceProfile get floorBalance => FloorBalanceProfile.calculate(
+    floor: activeMission?.floor ?? 1, recentDeaths: recentDeaths, recentKills: recentKills,
+    difficultyHp: difficulty.hpMultiplier, difficultyDamage: difficulty.damageMultiplier,
+    difficultySpawn: difficulty.spawnMultiplier);
+  bool get bossAttackResolved => _bossAttackResolved;
+  bool _bossAttackResolved = false;
+  String? get bossAttackWarning => activeBossAttack?.warning;
+  BossHitZoneResult resolveBossHit({required HitPoint normalizedPoint, int baseDamage = 10, double phaseMultiplier = 1}) {
+    final hit = BossWeakSpotSystem.resolve(normalizedPoint: normalizedPoint, weakSpotExposed: activeBoss?.isWeakSpotExposed ?? false);
+    if (activeBoss != null) {
+      final damage = BossWeakSpotSystem.applyDamage(baseDamage: baseDamage, point: normalizedPoint,
+        weakSpotExposed: activeBoss!.isWeakSpotExposed, phaseMultiplier: phaseMultiplier);
+      activeBoss!.applyDamage(damage.round());
+    }
+    return hit;
+  }
   final Map<String, Set<CombatStatus>> enemyStatuses = {};
   int recentDeaths = 0;
   int recentKills = 0;
   AdaptiveDifficulty get adaptiveDifficulty => AdaptiveDifficulty.calculate(floor: activeMission?.floor ?? 1, recentDeaths: recentDeaths, recentKills: recentKills, baseHp: difficulty.hpMultiplier, baseDamage: difficulty.damageMultiplier, baseSpawn: difficulty.spawnMultiplier);
   SynergyResult resolveWeaponHit({required String enemyId, required String targetFaction, required DamageType weaponType, bool armorPiercing = false}) { final current = enemyStatuses[enemyId] ?? <CombatStatus>{}; final result = WeaponSynergySystem.resolve(weaponType: weaponType, targetStatuses: current, targetFaction: targetFaction, armorPiercing: armorPiercing); enemyStatuses[enemyId] = {...current, ...result.appliedStatuses}; return result; }
-  void startBoss({required String id, required int hp}) { activeBoss = BossEncounter(bossId: id, maxHp: hp); }
-  void updateCombatSystems(double dt) { activeBoss?.update(dt); weapons.update(dt); }
+  void startBoss({required String id, required int hp}) { activeBoss = BossEncounter(bossId: id, maxHp: hp); activeBossAttack = BossAttackRuntime(bossId: id); }
+  void updateCombatSystems(double dt) { activeBoss?.update(dt); _bossAttackResolved = activeBossAttack?.update(dt) ?? false; weapons.update(dt); }
   void recordPlayerDeath() { recentDeaths++; }
   final MissionEventDirector missionEvents=MissionEventDirector();
   final ExpansionSaveManager saves=ExpansionSaveManager();
@@ -49,10 +69,10 @@ class InquisitorExpansionSystems {
   WorldEvent? activeWorldEvent;
   MissionEvent? activeMissionEvent;
   final List<EnemyRuntimeState> trackedEnemies=[];
-  void beginMission(MissionData mission,{BiomeId? selectedBiome,DifficultyConfig? selectedDifficulty,int? seed}) {activeMission=mission;if(selectedBiome!=null)biome=selectedBiome;if(selectedDifficulty!=null)difficulty=selectedDifficulty;campaign.beginMission(mission.id);activeWorldEvent=world.rollEvent(biome,floor:mission.floor,seed:seed);activeOperationModifier=operationModifiers.roll(seed:seed == null ? null : seed + 41);activeBoss=null;enemyStatuses.clear();activeMissionEvent=missionEvents.roll(floor:mission.floor,alarm:campaign.alarm,seed:seed==null?null:seed+17);trackedEnemies.clear();}
+  void beginMission(MissionData mission,{BiomeId? selectedBiome,DifficultyConfig? selectedDifficulty,int? seed}) {activeMission=mission;if(selectedBiome!=null)biome=selectedBiome;if(selectedDifficulty!=null)difficulty=selectedDifficulty;campaign.beginMission(mission.id);activeWorldEvent=world.rollEvent(biome,floor:mission.floor,seed:seed);activeOperationModifier=operationModifiers.roll(seed:seed == null ? null : seed + 41);activeBoss=null;activeBossAttack=null;_bossAttackResolved=false;enemyStatuses.clear();activeMissionEvent=missionEvents.roll(floor:mission.floor,alarm:campaign.alarm,seed:seed==null?null:seed+17);trackedEnemies.clear();}
   void recordEnemyDefeated(EnemyRuntimeState enemy){enemy.isDefeated=true;recentKills++;campaign.recordKill(enemy.type.faction.name);contracts.recordKill(elite:enemy.type.archetype==EnemyArchetype.heavy||enemy.type.archetype==EnemyArchetype.sniper);progression.grantExperience(12);}
   void recordCacheFound(){contracts.recordCache();campaign.requisition+=activeWorldEvent?.requisition??5;progression.grantExperience(8);}
   Map<String,dynamic> toJson()=>{'schemaVersion':3,'campaign':campaign.toJson(),'inventory':inventory.toJson(),'weapons':weapons.toJson(),'ordoDoctrine':ordoDoctrine.toJson(),'progression':progression.toJson(),'contracts':contracts.toJson(),'difficulty':difficulty.id,'biome':biome.name,'activeMissionId':activeMission?.id,'activeWorldEvent':activeWorldEvent?.type.name,'activeMissionEvent':activeMissionEvent?.type.name,'activeOperationModifier':activeOperationModifier?.id.name,'recentDeaths':recentDeaths,'recentKills':recentKills};
-  void loadJson(dynamic input,{List<MissionData> missions=const[]}){final migrated=SaveMigration.migrate(input);campaign.loadJson(migrated['campaign']);inventory.loadJson(migrated['inventory']);weapons.loadJson(migrated['weapons']);ordoDoctrine=OrdoDoctrine.fromJson(migrated['ordoDoctrine']);progression.loadJson(migrated['progression']);contracts.loadJson(migrated['contracts']);difficulty=DifficultyConfig.byId(migrated['difficulty'] as String? ?? 'normal');biome=BiomeId.values.firstWhere((e)=>e.name==migrated['biome'],orElse:()=>BiomeId.hive);final id=migrated['activeMissionId'];activeMission=id is String?missions.where((m)=>m.id==id).firstOrNull:null;activeOperationModifier=OperationModifier.values.where((e)=>e.name==migrated['activeOperationModifier']).map(OperationModifierSystem.byId).firstOrNull;recentDeaths=(migrated['recentDeaths'] as num?)?.toInt() ?? 0;recentKills=(migrated['recentKills'] as num?)?.toInt() ?? 0;activeBoss=null;enemyStatuses.clear();trackedEnemies.clear();}
+  void loadJson(dynamic input,{List<MissionData> missions=const[]}){final migrated=SaveMigration.migrate(input);campaign.loadJson(migrated['campaign']);inventory.loadJson(migrated['inventory']);weapons.loadJson(migrated['weapons']);ordoDoctrine=OrdoDoctrine.fromJson(migrated['ordoDoctrine']);progression.loadJson(migrated['progression']);contracts.loadJson(migrated['contracts']);difficulty=DifficultyConfig.byId(migrated['difficulty'] as String? ?? 'normal');biome=BiomeId.values.firstWhere((e)=>e.name==migrated['biome'],orElse:()=>BiomeId.hive);final id=migrated['activeMissionId'];activeMission=id is String?missions.where((m)=>m.id==id).firstOrNull:null;activeOperationModifier=OperationModifier.values.where((e)=>e.name==migrated['activeOperationModifier']).map(OperationModifierSystem.byId).firstOrNull;recentDeaths=(migrated['recentDeaths'] as num?)?.toInt() ?? 0;recentKills=(migrated['recentKills'] as num?)?.toInt() ?? 0;activeBoss=null;activeBossAttack=null;_bossAttackResolved=false;enemyStatuses.clear();trackedEnemies.clear();}
 }
 extension _FirstOrNull<T> on Iterable<T>{T? get firstOrNull=>isEmpty?null:first;}
