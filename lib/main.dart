@@ -3248,6 +3248,10 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     }
   }
 
+  void spawnCombatBurst(Vector2 at, {Color color = const Color(0xFFFFC857), bool explosive = false}) {
+    world.add(CombatBurst(position: at, color: color, explosive: explosive)..priority = 18);
+  }
+
   void playShoot() => _playSfx('shoot.mp3');
   void playMelee() => _playSfx('melee.mp3');
   void playClick() => _playSfx('click.mp3');
@@ -4231,6 +4235,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
     final wallColor = Color.lerp(const Color(0xFF5D4037), const Color(0xFF3E2723), ((currentFloor - 1) % 5) / 4)!;
     world.add(Floor(size: Vector2(mapWidth, mapHeight), biome: activeBiome.index, layout: activeMapLayout));
+    world.add(ProceduralDecorations(size: Vector2(mapWidth, mapHeight), seed: currentFloor * 100 + currentLevel * 13 + pathIndex * 7, biome: activeBiome.index));
+    world.add(AmbientLightLayer(size: Vector2(mapWidth, mapHeight), biome: activeBiome.index));
+    if (node == PathNodeKind.ritual || activeBiome == BiomeId.warpRuin || activeBiome == BiomeId.shrine) {
+      final sealColor = activeBiome == BiomeId.warpRuin ? const Color(0xFFCE93D8) : const Color(0xFFFFC857);
+      world.add(RitualSeal(position: Vector2(mapWidth * .72, mapHeight * .28), color: sealColor, radius: 76));
+      if (node == PathNodeKind.ritual) world.add(RitualSeal(position: Vector2(mapWidth * .30, mapHeight * .70), color: sealColor, radius: 92));
+    }
     world.add(Wall(position: Vector2(0, 0), size: Vector2(mapWidth, 70), color: wallColor));
     world.add(Wall(position: Vector2(0, mapHeight - 70), size: Vector2(mapWidth, 70), color: wallColor));
     world.add(Wall(position: Vector2(0, 0), size: Vector2(70, mapHeight), color: wallColor));
@@ -5786,6 +5797,7 @@ class BreakableBarrel extends PositionComponent with HasGameReference<Inquisitor
   Future<void> onLoad() async => add(CircleHitbox(radius: 20));
 
   void hit() {
+    game.spawnCombatBurst(position, color: kind == 1 ? const Color(0xFFFF7043) : const Color(0xFFFFC857), explosive: kind == 1);
     hp--;
     if (hp <= 0) {
       final r = Random().nextDouble();
@@ -5815,6 +5827,12 @@ class BreakableBarrel extends PositionComponent with HasGameReference<Inquisitor
   @override
   void render(Canvas canvas) {
     WHDraw.barrel(canvas, size.x / 2, size.y / 2, kind: kind);
+    if (hp <= 1) {
+      final crack = Paint()..color = const Color(0xFFFF7043)..style = PaintingStyle.stroke..strokeWidth = 2.0..strokeCap = StrokeCap.round;
+      canvas.drawLine(Offset(size.x * .38, size.y * .28), Offset(size.x * .52, size.y * .48), crack);
+      canvas.drawLine(Offset(size.x * .52, size.y * .48), Offset(size.x * .43, size.y * .68), crack);
+      canvas.drawCircle(Offset(size.x * .68, size.y * .28), 2.0, Paint()..color = const Color(0xFFFFC857).withOpacity(.8));
+    }
   }
 }
 
@@ -6016,7 +6034,9 @@ class EnemySpawnPortal extends PositionComponent {
   @override
   void render(Canvas canvas) {
     canvas.drawCircle(Offset(size.x / 2, size.y / 2), 18, Paint()..color = Color.fromRGBO(255, 140, 0, 0.45 + 0.4 * sin(flicker)));
-  }
+  
+
+}
 }
 
 class PlayerSpawnPoint extends PositionComponent {
@@ -6025,7 +6045,9 @@ class PlayerSpawnPoint extends PositionComponent {
   @override
   void render(Canvas canvas) {
     canvas.drawCircle(Offset(size.x / 2, size.y / 2), 22, Paint()..color = const Color(0xFF9C27B0).withOpacity(0.75));
-  }
+  
+
+}
 }
 
 class FieldLootPickup extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
@@ -6093,6 +6115,224 @@ class FieldTerminal extends PositionComponent with HasGameReference<InquisitorGa
     canvas.drawRect(Rect.fromLTWH(14, 16, 13, 2), Paint()..color = c.withOpacity(0.8));
     canvas.drawRect(Rect.fromLTWH(14, 21, 16, 2), Paint()..color = c.withOpacity(0.6));
     canvas.drawLine(const Offset(23, 32), const Offset(23, 43), Paint()..color = const Color(0xFF90A4AE)..strokeWidth = 3);
+  }
+}
+
+/// Code-only visual layer: gothic ambient light, biome haze and procedural scenery.
+class AmbientLightLayer extends PositionComponent {
+  final int biome;
+  double clock = 0;
+  AmbientLightLayer({required Vector2 size, required this.biome})
+      : super(size: size, position: Vector2.zero(), priority: 2);
+  @override
+  void update(double dt) { super.update(dt); clock += dt; }
+  @override
+  void render(Canvas canvas) {
+    final tint = switch (biome % 7) {
+      0 => const Color(0xFF78909C), 1 => const Color(0xFF263238),
+      2 => const Color(0xFFFFB74D), 3 => const Color(0xFF78909C),
+      4 => const Color(0xFF9C27B0), 5 => const Color(0xFF80DEEA),
+      _ => const Color(0xFF00E5A8),
+    };
+    canvas.drawRect(size.toRect(), Paint()..color = const Color(0xFF020509).withOpacity(0.13));
+    final pulse = 0.78 + 0.22 * sin(clock * (biome == 4 ? 3.4 : 1.8));
+    final centers = <Offset>[
+      Offset(size.x * .22, size.y * .24), Offset(size.x * .78, size.y * .31),
+      Offset(size.x * .52, size.y * .78),
+    ];
+    for (int i = 0; i < centers.length; i++) {
+      final radius = (biome == 4 ? 270.0 : 220.0) * (i == 1 ? 0.8 : 1.0) * pulse;
+      final rect = Rect.fromCircle(center: centers[i], radius: radius);
+      canvas.drawCircle(centers[i], radius, Paint()..shader = RadialGradient(
+        colors: [tint.withOpacity((biome == 4 ? .13 : .085) * pulse), tint.withOpacity(.025), Colors.transparent],
+        stops: const [0, .48, 1],
+      ).createShader(rect));
+    }
+    // Biome-dependent drifting motes: ash, dust, warp sparks or tomb-energy flecks.
+    final moteColor = switch (biome % 7) {
+      2 => const Color(0xFFFFD180), 3 => const Color(0xFFB0BEC5),
+      4 => const Color(0xFFE1BEE7), 5 => const Color(0xFF80DEEA),
+      6 => const Color(0xFF69F0AE), _ => const Color(0xFFCFD8DC),
+    };
+    for (int i = 0; i < 34; i++) {
+      final x = (i * 137.0 + clock * (biome == 4 ? 17.0 : 5.0)) % size.x;
+      final y = (i * 89.0 + sin(clock * 1.4 + i) * 18 + clock * (biome == 3 ? 9.0 : 3.0)) % size.y;
+      final a = .12 + .18 * (0.5 + 0.5 * sin(clock * 2.0 + i * .7));
+      if (biome == 4 || biome == 6) {
+        canvas.drawLine(Offset(x, y), Offset(x + 3.0, y - 5.0), Paint()..color = moteColor.withOpacity(a)..strokeWidth = 1.2);
+      } else {
+        canvas.drawCircle(Offset(x, y), i % 5 == 0 ? 1.8 : 1.0, Paint()..color = moteColor.withOpacity(a));
+      }
+    }
+    // Vignette frames the arena without obscuring combat silhouettes.
+    canvas.drawRect(size.toRect(), Paint()..shader = RadialGradient(
+      colors: [Colors.transparent, const Color(0xFF020307).withOpacity(.36)],
+      stops: const [.58, 1],
+    ).createShader(size.toRect()));
+  }
+}
+
+/// Reproducible vector-only debris and gothic machinery markings.
+class ProceduralDecorations extends PositionComponent {
+  final int seed;
+  final int biome;
+  ProceduralDecorations({required Vector2 size, required this.seed, required this.biome})
+      : super(size: size, position: Vector2.zero(), priority: 1);
+  @override
+  void render(Canvas canvas) {
+    final rng = Random(seed);
+    final metal = switch (biome % 7) {
+      2 => const Color(0xFFD7B46A), 4 => const Color(0xFFB66CDB),
+      6 => const Color(0xFF00D7B0), _ => const Color(0xFF78909C),
+    };
+    final line = Paint()..color = metal.withOpacity(.22)..style = PaintingStyle.stroke..strokeWidth = 2;
+    final fill = Paint()..color = const Color(0xFF090D12).withOpacity(.35);
+    for (int i = 0; i < 42; i++) {
+      final x = 95.0 + rng.nextDouble() * (size.x - 190.0);
+      final y = 95.0 + rng.nextDouble() * (size.y - 190.0);
+      final w = 12.0 + rng.nextDouble() * 32.0;
+      final h = 8.0 + rng.nextDouble() * 24.0;
+      final rect = Rect.fromCenter(center: Offset(x, y), width: w, height: h);
+      switch (i % 4) {
+        case 0:
+          canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(3)), fill);
+          canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(3)), line);
+          canvas.drawCircle(Offset(x - w * .28, y), 1.5, Paint()..color = metal.withOpacity(.4));
+          canvas.drawCircle(Offset(x + w * .28, y), 1.5, Paint()..color = metal.withOpacity(.4));
+          break;
+        case 1:
+          canvas.drawLine(Offset(x - w, y - h), Offset(x + w, y + h), line);
+          canvas.drawLine(Offset(x - w, y + h), Offset(x + w, y - h), line);
+          break;
+        case 2:
+          canvas.drawRect(rect, line);
+          canvas.drawLine(Offset(x - w * .3, y), Offset(x + w * .3, y), line);
+          break;
+        default:
+          final path = Path()..moveTo(x - w, y + h)..lineTo(x - w * .35, y - h)..lineTo(x + w, y - h * .2)..lineTo(x + w * .45, y + h)..close();
+          canvas.drawPath(path, line);
+      }
+    }
+  }
+}
+
+/// Animated Inquisitorial seal, used in ritual sectors and warp-tainted arenas.
+class RitualSeal extends PositionComponent {
+  final Color color;
+  double clock = 0;
+  RitualSeal({required Vector2 position, this.color = const Color(0xFFFFC857), double radius = 82})
+      : super(position: position.clone(), size: Vector2.all(radius * 2), anchor: Anchor.center, priority: 3);
+  @override
+  void update(double dt) { super.update(dt); clock += dt; }
+  @override
+  void render(Canvas canvas) {
+    final c = Offset(size.x / 2, size.y / 2);
+    final pulse = .65 + .25 * sin(clock * 2.8);
+    final p = Paint()..color = color.withOpacity(.45 * pulse)..style = PaintingStyle.stroke..strokeWidth = 2;
+    canvas.drawCircle(c, size.x * .42, Paint()..color = color.withOpacity(.06 * pulse));
+    canvas.drawCircle(c, size.x * .42, p);
+    canvas.drawCircle(c, size.x * .32, p..strokeWidth = 1.2);
+    canvas.drawCircle(c, size.x * .22, p..strokeWidth = 1.8);
+    canvas.save(); canvas.translate(c.dx, c.dy); canvas.rotate(clock * .16);
+    for (int i = 0; i < 12; i++) {
+      final a = i * pi / 6;
+      final r1 = size.x * .25, r2 = size.x * .40;
+      canvas.drawLine(Offset(cos(a) * r1, sin(a) * r1), Offset(cos(a) * r2, sin(a) * r2), p);
+      final rune = Path()..moveTo(cos(a) * size.x * .34, sin(a) * size.x * .34)
+        ..lineTo(cos(a + .10) * size.x * .38, sin(a + .10) * size.x * .38)
+        ..lineTo(cos(a - .08) * size.x * .40, sin(a - .08) * size.x * .40);
+      canvas.drawPath(rune, p..strokeWidth = 1.4);
+    }
+    canvas.drawLine(Offset(-size.x * .15, 0), Offset(size.x * .15, 0), p..strokeWidth = 3);
+    canvas.drawLine(Offset(0, -size.y * .15), Offset(0, size.y * .15), p..strokeWidth = 3);
+    canvas.restore();
+  }
+}
+
+/// Short-lived impact/explosion sparks drawn with deterministic vector strokes.
+class CombatBurst extends PositionComponent {
+  final Color color;
+  final bool explosive;
+  final int seed;
+  double age = 0;
+  final double duration;
+  CombatBurst({required Vector2 position, required this.color, this.explosive = false, int? seed})
+      : seed = seed ?? position.hashCode,
+        duration = explosive ? .42 : .22,
+        super(position: position.clone(), size: Vector2.all(explosive ? 88 : 42), anchor: Anchor.center, priority: 18);
+  @override
+  void update(double dt) { super.update(dt); age += dt; if (age >= duration) removeFromParent(); }
+  @override
+  void render(Canvas canvas) {
+    final t = (age / duration).clamp(0.0, 1.0).toDouble();
+    final c = Offset(size.x / 2, size.y / 2);
+    final r = (explosive ? 8.0 : 4.0) + t * (explosive ? 34.0 : 17.0);
+    final alpha = 1 - t;
+    canvas.drawCircle(c, r, Paint()..color = color.withOpacity(.22 * alpha));
+    canvas.drawCircle(c, r, Paint()..color = color.withOpacity(.8 * alpha)..style = PaintingStyle.stroke..strokeWidth = explosive ? 3 : 1.7);
+    final rng = Random(seed);
+    for (int i = 0; i < (explosive ? 18 : 8); i++) {
+      final a = 2 * pi * i / (explosive ? 18 : 8) + rng.nextDouble() * .22;
+      final len = (explosive ? 13.0 : 7.0) * (1 - t) + 2;
+      final start = Offset(c.dx + cos(a) * r * .35, c.dy + sin(a) * r * .35);
+      final end = Offset(c.dx + cos(a) * (r + len), c.dy + sin(a) * (r + len));
+      canvas.drawLine(start, end, Paint()..color = (i % 3 == 0 ? Colors.white : color).withOpacity(alpha)..strokeWidth = (i % 3 == 0 ? 2.0 : 1.2)..strokeCap = StrokeCap.round);
+    }
+  }
+}
+
+/// Weapon-specific muzzle flash; all silhouettes are Canvas paths, not sprites.
+class WeaponMuzzleFlash extends PositionComponent {
+  final Vector2 direction;
+  final String weapon;
+  double age = 0;
+  WeaponMuzzleFlash({required Vector2 position, required Vector2 direction, required this.weapon})
+      : direction = direction.normalized(),
+        super(position: position.clone(), size: Vector2.all(58), anchor: Anchor.center, priority: 19);
+  @override
+  void update(double dt) { super.update(dt); age += dt; if (age >= .105) removeFromParent(); }
+  @override
+  void render(Canvas canvas) {
+    final fade = 1 - age / .105;
+    canvas.save(); canvas.translate(size.x / 2, size.y / 2); canvas.rotate(atan2(direction.y, direction.x));
+    final plasma = weapon.toLowerCase().contains('plasma') || weapon.toLowerCase().contains('inferno');
+    final warp = weapon.toLowerCase().contains('staff') || weapon.toLowerCase().contains('warp') || weapon.toLowerCase().contains('psy');
+    final flame = weapon.toLowerCase().contains('flamer') || weapon.toLowerCase().contains('incinerator') || weapon.toLowerCase().contains('melta');
+    final color = warp ? const Color(0xFFCE93D8) : plasma ? const Color(0xFF80DEEA) : flame ? const Color(0xFFFF7043) : const Color(0xFFFFC857);
+    final p = Paint()..color = color.withOpacity(.85 * fade)..style = PaintingStyle.fill;
+    if (warp) {
+      final path = Path()..moveTo(0, 0)..lineTo(26, -7)..lineTo(18, 0)..lineTo(28, 6)..lineTo(0, 0);
+      canvas.drawPath(path, p); canvas.drawCircle(const Offset(12, 0), 7 * fade, Paint()..color = color.withOpacity(.55 * fade)..style = PaintingStyle.stroke..strokeWidth = 2);
+    } else if (flame) {
+      final path = Path()..moveTo(0, -5)..quadraticBezierTo(13, -18, 29, 0)..quadraticBezierTo(12, 17, 0, 5)..close();
+      canvas.drawPath(path, p); canvas.drawCircle(const Offset(7, 0), 4 * fade, Paint()..color = Colors.white.withOpacity(.7 * fade));
+    } else if (plasma) {
+      canvas.drawCircle(const Offset(11, 0), 10 * fade, Paint()..color = color.withOpacity(.3 * fade));
+      canvas.drawCircle(const Offset(11, 0), 5 * fade, Paint()..color = Colors.white.withOpacity(.9 * fade));
+      canvas.drawLine(const Offset(0, 0), const Offset(29, 0), Paint()..color = color.withOpacity(.8 * fade)..strokeWidth = 4);
+    } else {
+      final path = Path()..moveTo(0, 0)..lineTo(27, -10)..lineTo(20, 0)..lineTo(27, 10)..close();
+      canvas.drawPath(path, p); canvas.drawCircle(const Offset(5, 0), 5 * fade, Paint()..color = Colors.white.withOpacity(.9 * fade));
+      for (int i = 0; i < 3; i++) canvas.drawLine(Offset(8.0, -7.0 + i * 7.0), Offset(20.0 + i * 2.0, -10.0 + i * 10.0), Paint()..color = color.withOpacity(.8 * fade)..strokeWidth = 1.3);
+    }
+    canvas.restore();
+  }
+}
+
+/// Fading energy wake emitted by the player's dash or rapid movement.
+class DashAfterimage extends PositionComponent {
+  final Color color;
+  double age = 0;
+  DashAfterimage({required Vector2 position, this.color = const Color(0xFF80DEEA)})
+      : super(position: position.clone(), size: Vector2.all(64), anchor: Anchor.center, priority: 17);
+  @override
+  void update(double dt) { super.update(dt); age += dt; if (age >= .28) removeFromParent(); }
+  @override
+  void render(Canvas canvas) {
+    final t = age / .28;
+    final c = Offset(size.x / 2, size.y / 2);
+    canvas.drawOval(Rect.fromCenter(center: c, width: 25 + 30 * t, height: 44 + 14 * t), Paint()..color = color.withOpacity(.20 * (1 - t))..style = PaintingStyle.stroke..strokeWidth = 3 * (1 - t) + .3);
+    canvas.drawLine(Offset(c.dx - 15, c.dy + 12), Offset(c.dx + 15, c.dy - 12), Paint()..color = color.withOpacity(.35 * (1 - t))..strokeWidth = 2);
   }
 }
 
@@ -6185,6 +6425,29 @@ class Floor extends PositionComponent {
           canvas.drawLine(Offset(x + 88, y - 88), Offset(x - 88, y + 88), motif);
         }
         break;
+    }
+    // Micro-detail pass: rivets, hazard stripes, maintenance hatches and deterministic cracks.
+    final detailRng = Random((biome + 1) * 7919 + layout.index * 313);
+    final rivet = Paint()..color = gridColor.withOpacity(.42);
+    final hatch = Paint()..color = const Color(0xFF080C10).withOpacity(.32)..style = PaintingStyle.stroke..strokeWidth = 2;
+    for (int i = 0; i < 58; i++) {
+      final x = 90.0 + detailRng.nextDouble() * (size.x - 180.0);
+      final y = 90.0 + detailRng.nextDouble() * (size.y - 180.0);
+      if (i % 3 == 0) {
+        final r = Rect.fromCenter(center: Offset(x, y), width: 30.0 + detailRng.nextDouble() * 28.0, height: 18.0 + detailRng.nextDouble() * 18.0);
+        canvas.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(3)), hatch);
+        canvas.drawLine(Offset(r.left + 4, r.top + 4), Offset(r.right - 4, r.top + 4), hatch);
+        for (final dx in [r.left + 4, r.right - 4]) {
+          for (final dy in [r.top + 4, r.bottom - 4]) canvas.drawCircle(Offset(dx, dy), 1.8, rivet);
+        }
+      } else if (i % 3 == 1) {
+        for (int k = 0; k < 3; k++) {
+          canvas.drawLine(Offset(x + k * 7, y - 7), Offset(x + k * 7 + 5, y + 7), Paint()..color = (biome == 4 ? const Color(0xFF9C27B0) : const Color(0xFFFFC857)).withOpacity(.24)..strokeWidth = 3);
+        }
+      } else {
+        final crack = Path()..moveTo(x, y)..lineTo(x + 8, y + 4)..lineTo(x + 13, y - 5)..lineTo(x + 21, y + 2);
+        canvas.drawPath(crack, Paint()..color = gridColor.withOpacity(.30)..style = PaintingStyle.stroke..strokeWidth = 1.2);
+      }
     }
     switch (layout) {
       case MapLayout.cruciform:
@@ -8421,10 +8684,14 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     _tickStatuses(dt);
 
     if (moveJoystick.relativeDelta.length2 > 0.01) {
+      final previousPosition = position.clone();
       final next = position + moveJoystick.relativeDelta.normalized() * effectiveSpeed * dt;
       if (_canMoveTo(next)) position = next;
       position.x = position.x.clamp(70, game.mapWidth - 70);
       position.y = position.y.clamp(70, game.mapHeight - 70);
+      if (game.dashActive > 0 && previousPosition.distanceTo(position) > 2) {
+        game.world.add(DashAfterimage(position: previousPosition, color: game.playerClass == PlayerClass.malleus ? const Color(0xFFCE93D8) : const Color(0xFF80DEEA)));
+      }
     }
 
     final atk = game.attackJoystick.relativeDelta;
@@ -8528,6 +8795,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
         }
       }
       game.playShoot();
+      game.world.add(WeaponMuzzleFlash(position: position + dir * 32, direction: dir, weapon: game.rangedWeapon.name)..priority = 19);
       _ranged(dir);
     }
   }
@@ -9075,7 +9343,18 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
       canvas.drawRect(Rect.fromLTWH(cx - 24, size.y, 48 * game.staffWarpStress, 4), Paint()..color = const Color(0xFF9C27B0));
     }
     WHDraw.statusIcons(canvas, cx, -8, statuses);
-  }
+  
+    // Compact dynamic vitality and armor rings make defensive state readable in combat.
+    final hpRatio = maxHealth <= 0 ? 0.0 : (health / maxHealth).clamp(0.0, 1.0).toDouble();
+    final armorRatio = (game.armorDamageReduction / .30).clamp(0.0, 1.0).toDouble();
+    final ring = Rect.fromCircle(center: Offset(cx, cy), radius: 45);
+    canvas.drawArc(ring, -pi / 2, 2 * pi, false, Paint()..color = const Color(0xFF263238)..style = PaintingStyle.stroke..strokeWidth = 3);
+    final hpPaint = Paint()..color = (hpRatio < .3 ? const Color(0xFFFF1744) : const Color(0xFF66BB6A))..style = PaintingStyle.stroke..strokeWidth = 3.5..strokeCap = StrokeCap.round;
+    canvas.drawArc(ring, -pi / 2, 2 * pi * hpRatio, false, hpPaint);
+    final armorRing = Rect.fromCircle(center: Offset(cx, cy), radius: 49);
+    canvas.drawArc(armorRing, pi * .72, pi * .56, false, Paint()..color = const Color(0xFF263238)..style = PaintingStyle.stroke..strokeWidth = 2.5);
+    canvas.drawArc(armorRing, pi * .72, pi * .56 * armorRatio, false, Paint()..color = const Color(0xFF80DEEA)..style = PaintingStyle.stroke..strokeWidth = 2.5..strokeCap = StrokeCap.round);
+}
 }
 
 class PsyWave extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
@@ -9271,6 +9550,7 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
 
   void _hitEnemy(Enemy e) {
     if (!hitIds.add(e.hashCode)) return;
+    game.spawnCombatBurst(e.position, color: color, explosive: explosive || damageType == CombatDamageType.explosive);
     if (e.affix == EliteAffix.reflect && Random().nextDouble() < 0.25) {
       game.world.add(EnemyBullet(position: e.position.clone(), direction: (game.player.position - e.position).normalized(), damage: 1)..priority = 16);
       game.spawnDamageNumber(e.position, 0, color: const Color(0xFFE040FB), label: 'ОТРАЖ');
@@ -9297,6 +9577,9 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
     super.onCollision(intersectionPoints, other);
     if (other is Enemy) _hitEnemy(other);
     final impact = intersectionPoints.isNotEmpty ? intersectionPoints.first : position;
+    if (other is MiniBoss || other is Boss || other is KnightBoss || other is KingBoss || other is TentacleBoss || other is CyclopsBoss || other is PlagueLordBoss || other is BloodChampionBoss) {
+      game.spawnCombatBurst(impact, color: color, explosive: explosive || damageType == CombatDamageType.explosive);
+    }
     if (other is MiniBoss) {
       final zone = resolveBossHitZone(impact: impact, center: other.position, size: other.size);
       final dealt = max(1, (_adjustBossDamage(other) * zone.multiplier).round());
@@ -10326,7 +10609,20 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       canvas.drawRect(Rect.fromLTWH(cx - 18, 5, 36, 3), Paint()..color = const Color(0xFF263238));
       canvas.drawRect(Rect.fromLTWH(cx - 18, 5, 36 * suppression / 100, 3), Paint()..color = morale <= 0 ? const Color(0xFFEF5350) : const Color(0xFF4FC3F7));
     }
-  }
+  
+    // Dynamic health/armor status bar; elite traits are visible without opening a menu.
+    final hpRatio = maxHp <= 0 ? 0.0 : (currentHp / maxHp).clamp(0.0, 1.0).toDouble();
+    final barW = isChampion ? 52.0 : 38.0;
+    final barY = -size.y * .50 - 8.0;
+    final barRect = Rect.fromLTWH(size.x / 2 - barW / 2, barY, barW, 4.5);
+    canvas.drawRRect(RRect.fromRectAndRadius(barRect, const Radius.circular(2)), Paint()..color = const Color(0xFF090B0D));
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(barRect.left, barRect.top, barW * hpRatio, barRect.height), const Radius.circular(2)), Paint()..color = hpRatio < .3 ? const Color(0xFFFF1744) : isChampion ? const Color(0xFFFFC857) : const Color(0xFF66BB6A));
+    if (isChampion || affix == EliteAffix.reflect || affix == EliteAffix.regenerating) {
+      final armorRect = Rect.fromLTWH(barRect.left, barRect.top - 3, barW, 1.6);
+      canvas.drawRect(armorRect, Paint()..color = const Color(0xFF263238));
+      canvas.drawRect(Rect.fromLTWH(armorRect.left, armorRect.top, barW * (isChampion ? .82 : .45), armorRect.height), Paint()..color = const Color(0xFF80DEEA));
+    }
+}
 }
 
 class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
@@ -10799,7 +11095,17 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     }
     drawBossHitZones(canvas, size, exposed: weakSpotExposed);
     WHDraw.statusIcons(canvas, cx, -34, statuses);
-  }
+  
+    // Segmented boss vitality and phase strip, directly tied to current combat state.
+    final ratio = maxHp <= 0 ? 0.0 : (currentHp / maxHp).clamp(0.0, 1.0).toDouble();
+    final bw = min(150.0, max(76.0, size.x * 1.8)).toDouble();
+    final bx = (size.x - bw) / 2, by = -size.y * .5 - 15.0;
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(bx, by, bw, 7), const Radius.circular(3)), Paint()..color = const Color(0xFF10090C));
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(bx, by, bw * ratio, 7), const Radius.circular(3)), Paint()..color = ratio < .25 ? const Color(0xFFFF1744) : const Color(0xFFB71C1C));
+    for (int i = 1; i < 5; i++) canvas.drawLine(Offset(bx + bw * i / 5, by), Offset(bx + bw * i / 5, by + 7), Paint()..color = const Color(0xFF160A0C)..strokeWidth = 1.5);
+    canvas.drawRect(Rect.fromLTWH(bx, by + 9, bw, 2), Paint()..color = const Color(0xFF263238));
+    canvas.drawRect(Rect.fromLTWH(bx, by + 9, bw * (phase / 3).clamp(0.0, 1.0).toDouble(), 2), Paint()..color = const Color(0xFFFFC857));
+}
 }
 
 class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
