@@ -3483,7 +3483,48 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     world.add(CombatBurst(position: at, color: color, explosive: explosive)..priority = 18);
   }
 
-  void playShoot() => _playSfx('shoot.mp3');
+  void playShoot() => playWeaponShoot(rangedWeapon);
+
+  /// Distinct, locally generated weapon reports. All clips are synthesized from
+  /// oscillators/noise envelopes and stored as tiny WAV assets; no recordings are used.
+  void playWeaponShoot(RangedWeapon weapon) {
+    final file = switch (weapon) {
+      RangedWeapon.bolter => 'weapon_bolter.wav',
+      RangedWeapon.rifle => 'weapon_lasgun.wav',
+      RangedWeapon.shotgun => 'weapon_shotgun.wav',
+      RangedWeapon.plasmaGun => 'weapon_plasma_gun.wav',
+      RangedWeapon.staff => 'weapon_force_staff.wav',
+      RangedWeapon.stormStaff => 'weapon_storm_staff.wav',
+      RangedWeapon.warpBeam => 'weapon_warp_beam.wav',
+      RangedWeapon.daggers => 'weapon_throwing_daggers.wav',
+      RangedWeapon.needles => 'weapon_needler.wav',
+      RangedWeapon.sniperNeedle => 'weapon_sniper_needle.wav',
+      RangedWeapon.meltaGun => 'weapon_melta_gun.wav',
+      RangedWeapon.flamer => 'weapon_flamer.wav',
+      RangedWeapon.heavyBolter => 'weapon_heavy_bolter.wav',
+      RangedWeapon.psycannon => 'weapon_psycannon.wav',
+      RangedWeapon.exorcistIncinerator => 'weapon_exorcist_incinerator.wav',
+      RangedWeapon.daemonbanePistol => 'weapon_daemonbane_pistol.wav',
+      RangedWeapon.condemnorBoltgun => 'weapon_condemnor_boltgun.wav',
+      RangedWeapon.sanctifiedStakeCrossbow => 'weapon_sanctified_crossbow.wav',
+      RangedWeapon.infernoPistol => 'weapon_inferno_pistol.wav',
+    };
+    _playSfx(file);
+  }
+
+  void playEnemyWeapon(EnemyType type) {
+    final file = switch (type) {
+      EnemyType.flamer => 'enemy_flamer.wav',
+      EnemyType.cultPsyker || EnemyType.bloodletter || EnemyType.chaosSpawn => 'weapon_warp.wav',
+      EnemyType.sniper => 'weapon_sniper.wav',
+      EnemyType.necronWarrior || EnemyType.necronImmortal => 'enemy_gauss.wav',
+      EnemyType.orkBoy || EnemyType.brute => 'enemy_heavy.wav',
+      EnemyType.shooter || EnemyType.shieldedShooter => 'enemy_lasgun.wav',
+      _ => 'melee.wav',
+    };
+    _playSfx(file);
+  }
+
   void playMelee() => _playSfx('melee.mp3');
   void playClick() => _playSfx('click.mp3');
 
@@ -9783,6 +9824,55 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
           break;
       }
     }
+    // High-detail weapon pass: casing bevels, fasteners, cooling fins and energized coils.
+    // These are vector primitives only; the active weapon's silhouette remains the source of truth.
+    final weaponAccent = switch (game.rangedWeapon) {
+      RangedWeapon.plasmaGun || RangedWeapon.psycannon || RangedWeapon.stormStaff || RangedWeapon.warpBeam => const Color(0xFF80D8FF),
+      RangedWeapon.meltaGun || RangedWeapon.infernoPistol || RangedWeapon.flamer || RangedWeapon.exorcistIncinerator => const Color(0xFFFF8A50),
+      RangedWeapon.staff => const Color(0xFFCE93D8),
+      RangedWeapon.sanctifiedStakeCrossbow => const Color(0xFF80CBC4),
+      _ => const Color(0xFFC7C9CC),
+    };
+    if (!game.usingMelee) {
+      final body = Paint()..color = const Color(0xFF20252A);
+      final edge = Paint()..color = const Color(0xFF87919A)..strokeWidth = 1.1..style = PaintingStyle.stroke;
+      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(8, -11, 27, 14), const Radius.circular(2)), body);
+      canvas.drawLine(const Offset(10, -12), const Offset(34, -12), edge);
+      canvas.drawLine(const Offset(11, 2), const Offset(31, 2), edge);
+      for (int rivet = 0; rivet < 4; rivet++) {
+        canvas.drawCircle(Offset(12 + rivet * 6.0, -8), 1.15, Paint()..color = const Color(0xFFD6D0C2));
+      }
+      if (game.rangedWeapon == RangedWeapon.heavyBolter || game.rangedWeapon == RangedWeapon.bolter || game.rangedWeapon == RangedWeapon.condemnorBoltgun) {
+        for (int fin = 0; fin < 3; fin++) {
+          canvas.drawLine(Offset(21 + fin * 4.0, -15), Offset(21 + fin * 4.0, -11), Paint()..color = const Color(0xFF56616A)..strokeWidth = 1.4);
+        }
+        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(15, 3, 9, 6), const Radius.circular(1)), Paint()..color = const Color(0xFF3C454B));
+      }
+      if (game.rangedWeapon == RangedWeapon.plasmaGun || game.rangedWeapon == RangedWeapon.psycannon || game.rangedWeapon == RangedWeapon.stormStaff || game.rangedWeapon == RangedWeapon.warpBeam) {
+        final pulse = .65 + .35 * sin(game.combatAnimClock * 9).abs();
+        for (int coil = 0; coil < 3; coil++) {
+          canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(21 + coil * 5.0, -19, 3, 8), const Radius.circular(1)), Paint()..color = weaponAccent.withOpacity(pulse));
+        }
+        canvas.drawCircle(const Offset(41, -7), 7 + pulse, Paint()..color = weaponAccent.withOpacity(.16)..style = PaintingStyle.fill);
+        canvas.drawCircle(const Offset(41, -7), 5, Paint()..color = weaponAccent..style = PaintingStyle.stroke..strokeWidth = 1.5);
+      } else if (game.rangedWeapon == RangedWeapon.meltaGun || game.rangedWeapon == RangedWeapon.infernoPistol || game.rangedWeapon == RangedWeapon.flamer || game.rangedWeapon == RangedWeapon.exorcistIncinerator) {
+        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(18, -21, 14, 5), const Radius.circular(2)), Paint()..color = const Color(0xFF513A31));
+        canvas.drawLine(const Offset(20, -19), const Offset(30, -19), Paint()..color = weaponAccent..strokeWidth = 1.5);
+      } else {
+        canvas.drawLine(const Offset(31, -6), const Offset(48, -6), Paint()..color = const Color(0xFF15191D)..strokeWidth = 5);
+        canvas.drawLine(const Offset(33, -7), const Offset(48, -7), Paint()..color = weaponAccent.withOpacity(.8)..strokeWidth = 1.1);
+      }
+    } else {
+      // Powered melee weapons receive a readable emitter, guard bolts and energy edge.
+      final blade = game.meleeWeapon == MeleeWeapon.axe || game.meleeWeapon == MeleeWeapon.hammer || game.meleeWeapon == MeleeWeapon.daemonHammer;
+      canvas.drawCircle(const Offset(7, 0), 3.2, Paint()..color = weaponAccent.withOpacity(.75));
+      canvas.drawCircle(const Offset(7, 0), 5.4, Paint()..color = weaponAccent.withOpacity(.22)..style = PaintingStyle.stroke..strokeWidth = 1.2);
+      if (!blade) {
+        for (int rune = 0; rune < 4; rune++) {
+          canvas.drawLine(Offset(16 + rune * 5.0, -4), Offset(18 + rune * 5.0, -2), Paint()..color = weaponAccent.withOpacity(.85)..strokeWidth = 1.2);
+        }
+      }
+    }
     // Equipment weapon relic overlays the currently selected weapon, without replacing its geometry.
     if (wornWeapon != null) {
       final relicWeaponColor = wornWeapon.uniquePower == 'executioner_oath' ? const Color(0xFF80DEEA) : setTrim;
@@ -10792,6 +10882,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
       case EnemyType.shooter:
       case EnemyType.shieldedShooter:
         if (dist < 420) {
+          game.playEnemyWeapon(type);
           if (isChampion) {
             // Combat 2.0 stage 6: elite shooters use a readable three-round fan.
             // Each round is slightly weaker than a normal shot to keep the burst fair.
@@ -10818,6 +10909,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         break;
       case EnemyType.necronImmortal:
         if (dist < 460) {
+          game.playEnemyWeapon(type);
           // Three-shot gauss fan: dangerous, but spread gives the player a dodge lane.
           final baseAngle = atan2(toP.y, toP.x);
           for (final offset in [-0.16, 0.0, 0.16]) {
@@ -10832,6 +10924,7 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         break;
       case EnemyType.sniper:
         if (dist < 520) {
+          game.playEnemyWeapon(type);
           game.world.add(EnemyBullet(
             position: position.clone(),
             direction: toP,
@@ -10843,12 +10936,14 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         break;
       case EnemyType.flamer:
         if (dist < 160) {
+          game.playEnemyWeapon(type);
           game.world.add(FlamerCloud(position: position + toP * 40)..priority = 11);
           if (dist < 90) game.player.takeDamage(dmg);
         }
         break;
       case EnemyType.cultPsyker:
         if (dist < 300) {
+          game.playEnemyWeapon(type);
           // Warp pulse — slow + damage in cone
           for (final o in [-0.3, 0.0, 0.3]) {
             final a = atan2(toP.y, toP.x) + o;
@@ -11002,6 +11097,86 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         canvas.drawLine(Offset(cx - 16, cy - 7), Offset(cx + 16, cy - 7), gauss);
         canvas.drawLine(Offset(cx - 8, cy - 17), Offset(cx + 8, cy - 17), gauss..strokeWidth = 2);
         break;
+    }
+    // Procedural carried weapon pass. Silhouettes are lore-inspired (lasgun, long-las,
+    // flamer, gauss tube, crude ork gun, warp focus) and drawn entirely with Canvas.
+    final hasEnemyGun = type == EnemyType.shooter || type == EnemyType.shieldedShooter ||
+        type == EnemyType.flamer || type == EnemyType.sniper || type == EnemyType.cultPsyker ||
+        type == EnemyType.necronWarrior || type == EnemyType.necronImmortal || type == EnemyType.orkBoy;
+    if (hasEnemyGun) {
+      final targetAngle = atan2(game.player.position.y - position.y, game.player.position.x - position.x);
+      canvas.save();
+      canvas.translate(cx + 7, cy + 5);
+      canvas.rotate(targetAngle);
+      final darkMetal = Paint()..color = type == EnemyType.orkBoy ? const Color(0xFF37452B) : const Color(0xFF252B30);
+      final metalEdge = Paint()..color = const Color(0xFF9AA1A6)..strokeWidth = 1.1..style = PaintingStyle.stroke;
+      final energy = switch (type) {
+        EnemyType.necronWarrior || EnemyType.necronImmortal => const Color(0xFF00E5FF),
+        EnemyType.cultPsyker => const Color(0xFFCE93D8),
+        EnemyType.flamer => const Color(0xFFFF8A32),
+        EnemyType.orkBoy => const Color(0xFF8BC34A),
+        _ => const Color(0xFFFFC857),
+      };
+      final gunLength = type == EnemyType.sniper ? 32.0 : type == EnemyType.necronImmortal ? 27.0 : type == EnemyType.flamer ? 22.0 : 19.0;
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(0, -4, gunLength, 8), const Radius.circular(1.5)), darkMetal);
+      canvas.drawLine(Offset(1, -4), Offset(gunLength - 1, -4), metalEdge);
+      canvas.drawRect(Rect.fromLTWH(5, 3, 7, 5), Paint()..color = const Color(0xFF4A5156));
+      for (int rivet = 0; rivet < 3; rivet++) {
+        canvas.drawCircle(Offset(4 + rivet * 5.0, -1), .9, Paint()..color = const Color(0xFFD0C6B3));
+      }
+      if (type == EnemyType.sniper) {
+        canvas.drawRect(const Rect.fromLTWH(8, -8, 15, 3), Paint()..color = const Color(0xFF41484D));
+        canvas.drawCircle(const Offset(19, -6.5), 2.2, Paint()..color = energy);
+      } else if (type == EnemyType.flamer) {
+        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(4, -9, 10, 4), const Radius.circular(2)), Paint()..color = const Color(0xFF7C4A2D));
+        canvas.drawCircle(Offset(gunLength, 0), 3.0 + sin(animationClock * 11).abs(), Paint()..color = energy.withOpacity(.8));
+      } else if (type == EnemyType.necronWarrior || type == EnemyType.necronImmortal || type == EnemyType.cultPsyker) {
+        for (int coil = 0; coil < 3; coil++) {
+          canvas.drawLine(Offset(8 + coil * 4.0, -5), Offset(8 + coil * 4.0, 5), Paint()..color = energy.withOpacity(.9)..strokeWidth = 1.5);
+        }
+        canvas.drawCircle(Offset(gunLength, 0), 3.2, Paint()..color = energy.withOpacity(.9));
+      } else {
+        canvas.drawLine(Offset(gunLength - 7, 0), Offset(gunLength + 2, 0), Paint()..color = energy..strokeWidth = 2.4);
+      }
+      canvas.restore();
+    }
+    final hasEnemyMelee = type == EnemyType.melee || type == EnemyType.shielded ||
+        type == EnemyType.brute || type == EnemyType.plagueBearer || type == EnemyType.bloodletter ||
+        type == EnemyType.genestealer || type == EnemyType.chaosSpawn;
+    if (hasEnemyMelee) {
+      final targetAngle = atan2(game.player.position.y - position.y, game.player.position.x - position.x);
+      canvas.save();
+      canvas.translate(cx + 6, cy + 7);
+      canvas.rotate(targetAngle);
+      final bladeColor = type == EnemyType.bloodletter || type == EnemyType.chaosSpawn
+          ? const Color(0xFFCE93D8)
+          : type == EnemyType.genestealer
+              ? const Color(0xFFB39DDB)
+              : type == EnemyType.plagueBearer
+                  ? const Color(0xFF9AAE42)
+                  : const Color(0xFFB7C0C8);
+      final grip = Paint()..color = const Color(0xFF46352C)..strokeWidth = 3.0..strokeCap = StrokeCap.round;
+      final bladeWidth = type == EnemyType.brute ? 6.0 : 3.2;
+      final blade = Paint()..color = bladeColor..strokeWidth = bladeWidth..strokeCap = StrokeCap.round;
+      canvas.drawLine(const Offset(-4, 5), const Offset(5, -3), grip);
+      if (type == EnemyType.genestealer) {
+        canvas.drawLine(const Offset(5, -3), const Offset(17, -15), blade);
+        canvas.drawLine(const Offset(5, -3), const Offset(18, -5), blade..strokeWidth = 2.2);
+      } else if (type == EnemyType.brute || type == EnemyType.chaosSpawn) {
+        canvas.drawLine(const Offset(5, -3), const Offset(20, -15), blade);
+        canvas.drawLine(const Offset(10, -8), const Offset(20, -7), Paint()..color = const Color(0xFF4A3430)..strokeWidth = 4.0);
+      } else if (type == EnemyType.bloodletter) {
+        final daemonBlade = Path()..moveTo(4, -4)..lineTo(13, -18)..lineTo(22, -22)..lineTo(17, -11)..close();
+        canvas.drawPath(daemonBlade, Paint()..color = bladeColor);
+        canvas.drawLine(const Offset(8, -9), const Offset(17, -18), Paint()..color = const Color(0xFFFF5252)..strokeWidth = 1.2);
+      } else {
+        canvas.drawLine(const Offset(5, -3), const Offset(18, -18), blade);
+        canvas.drawLine(const Offset(2, -1), const Offset(11, 7), Paint()..color = const Color(0xFF7E858B)..strokeWidth = 2.0);
+      }
+      for (int rune = 0; rune < 3; rune++) {
+        canvas.drawCircle(Offset(8 + rune * 3.0, -7 - rune * 2.0), .8, Paint()..color = bladeColor.withOpacity(.85));
+      }
+      canvas.restore();
     }
     EnemyTextureRenderer.draw(
       canvas,
