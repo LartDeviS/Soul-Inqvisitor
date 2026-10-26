@@ -18,6 +18,7 @@ import 'ui/codex/world_codex_panel.dart';
 import 'progression/inventory_state.dart' as gear_catalog;
 import 'progression/progression_system.dart' as progression_catalog;
 import 'game/missions/mission_events.dart' as mission_catalog;
+import 'game/enemies/enemy_type.dart' as enemy_catalog;
 
 void main() {
   runApp(
@@ -7955,10 +7956,32 @@ class CodexMenu extends StatelessWidget {
               ] else ...[
                 const WeaponCatalogPanel(), const WorldCodexPanel(),
               ],
-              const Padding(padding: EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                child: Text('ДОПОЛНИТЕЛЬНЫЕ ДОСЬЕ УГРОЗ', style: TextStyle(color: Color(0xFFBCAAA4), fontSize: 11, letterSpacing: 1.4))),
-              const Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text('Орочьи бойцы: штурмовые налёты и грубая броня.\nТиранидские гаунты: быстрые прыжки, когти и хитиновый панцирь.\nНекронские воины: металлические пластины и дисциплинированный дальний огонь.\nПсайкеры культа: варп-атаки и давление на дистанции.\nНосители чумы: тяжёлый шаг, заражение и высокая живучесть.', style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.35))),
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                child: Text('ДОСЬЕ ПРОТИВНИКОВ • ${EnemyType.values.length} ТИПОВ', style: const TextStyle(color: Color(0xFFBCAAA4), fontSize: 11, letterSpacing: 1.4))),
+              ...EnemyType.values.map((type) => Card(
+                color: const Color(0xFF151719),
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                child: ExpansionTile(
+                  dense: true,
+                  leading: Icon(_enemyIcon(type), color: _enemyColor(type), size: 19),
+                  title: Text(_enemyName(type), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  subtitle: Text('${type.name} • ${_enemyFaction(type)}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                  children: [Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: Text(_enemyDossier(type), style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.35)))],
+                ),
+              )),
+              Padding(padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                child: Text('РАСШИРЕННЫЙ РЕЕСТР УГРОЗ • ${enemy_catalog.EnemyTypeData.all.length} ПРОФИЛЕЙ', style: const TextStyle(color: Color(0xFF80CBC4), fontSize: 11, letterSpacing: 1.2))),
+              ...enemy_catalog.EnemyTypeData.all.map((entry) => Card(
+                color: const Color(0xFF111719),
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                child: ExpansionTile(
+                  dense: true,
+                  leading: Icon(Icons.biotech, color: _catalogEnemyColor(entry.faction), size: 18),
+                  title: Text(entry.name, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  subtitle: Text('${entry.id} • ${_catalogFaction(entry.faction)} • ${_catalogArchetype(entry.archetype)}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                  children: [Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: Text(_catalogEnemyDossier(entry), style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.35)))],
+                ),
+              )),
               ...CodexId.values.map((id) {
                 final open = game.codexUnlocked.contains(id);
                 final rank = game.loreRankOf(id);
@@ -7980,6 +8003,122 @@ class CodexMenu extends StatelessWidget {
       ),
     );
   }
+
+  String _enemyName(EnemyType type) => switch (type) {
+    EnemyType.shooter => 'Культист-стрелок',
+    EnemyType.melee => 'Культист ближнего боя',
+    EnemyType.shielded => 'Тяжёлый бронированный боец',
+    EnemyType.dog => 'Боевой гончий Хаоса',
+    EnemyType.shieldedShooter => 'Бронированный стрелок',
+    EnemyType.flamer => 'Культист-огнемётчик',
+    EnemyType.sniper => 'Снайпер-культист',
+    EnemyType.brute => 'Тяжёлый громила',
+    EnemyType.cultPsyker => 'Псайкер культа',
+    EnemyType.plagueBearer => 'Носитель чумы',
+    EnemyType.bloodletter => 'Кровопускатель Кхорна',
+    EnemyType.orkBoy => 'Орк-бой',
+    EnemyType.tyranidGaunt => 'Тиранид-гаунт',
+    EnemyType.necronWarrior => 'Некронский воин',
+    EnemyType.genestealer => 'Генокрад',
+    EnemyType.chaosSpawn => 'Отродье Хаоса',
+    EnemyType.necronImmortal => 'Некрон-бессмертный',
+  };
+
+  String _enemyFaction(EnemyType type) => switch (type) {
+    EnemyType.orkBoy => 'Орки',
+    EnemyType.tyranidGaunt || EnemyType.genestealer => 'Тираниды / генокульт',
+    EnemyType.necronWarrior || EnemyType.necronImmortal => 'Некроны',
+    EnemyType.plagueBearer || EnemyType.bloodletter || EnemyType.chaosSpawn || EnemyType.dog => 'Демоны и Хаос',
+    _ => 'Культы и еретики',
+  };
+
+  Color _enemyColor(EnemyType type) => switch (type) {
+    EnemyType.orkBoy => const Color(0xFF8BC34A),
+    EnemyType.tyranidGaunt || EnemyType.genestealer => const Color(0xFF9CCC65),
+    EnemyType.necronWarrior || EnemyType.necronImmortal => const Color(0xFF80DEEA),
+    EnemyType.plagueBearer => const Color(0xFFAED581),
+    EnemyType.bloodletter || EnemyType.chaosSpawn || EnemyType.dog => const Color(0xFFEF5350),
+    EnemyType.cultPsyker => const Color(0xFFCE93D8),
+    _ => const Color(0xFFFFD54F),
+  };
+
+  IconData _enemyIcon(EnemyType type) => switch (type) {
+    EnemyType.orkBoy => Icons.fitness_center,
+    EnemyType.tyranidGaunt || EnemyType.genestealer || EnemyType.dog => Icons.pets,
+    EnemyType.necronWarrior || EnemyType.necronImmortal => Icons.memory,
+    EnemyType.cultPsyker => Icons.auto_awesome,
+    EnemyType.flamer => Icons.local_fire_department,
+    EnemyType.plagueBearer => Icons.coronavirus,
+    EnemyType.bloodletter || EnemyType.chaosSpawn => Icons.warning_amber,
+    EnemyType.sniper => Icons.gps_fixed,
+    EnemyType.shielded || EnemyType.shieldedShooter || EnemyType.brute => Icons.shield,
+    _ => Icons.person,
+  };
+
+  String _enemyDossier(EnemyType type) => switch (type) {
+    EnemyType.shooter => 'Культовый стрелок в лоскутной одежде и самодельной броне. Опасен числом и огнём с дистанции; визуальные признаки — капюшон, грубые ремни и красная метка ереси.',
+    EnemyType.melee => 'Фанатик, идущий на сближение. Носит облегчённую защиту и рваные одежды; держать дистанцию и не позволять окружить себя.',
+    EnemyType.shielded => 'Тяжёлая цель с широкими наплечниками и многослойной бронёй. Медленнее обычных культистов, зато лучше выдерживает прямые попадания.',
+    EnemyType.dog => 'Искажённая боевая гончая с низким силуэтом, выступающими шипами и светящимися глазами. Быстро сокращает дистанцию и опасна вблизи.',
+    EnemyType.shieldedShooter => 'Бронированный стрелок с крупными наплечниками, нагрудной пластиной и оружием. Сочетает стойкость тяжёлой цели с давлением дальнего боя.',
+    EnemyType.flamer => 'Культист с топливным устройством и ярким соплом огнемёта. Выдаёт атаку по характерному оранжевому свечению и опасен в тесных проходах.',
+    EnemyType.sniper => 'Культист с длинноствольным оружием и оптическим узлом. Перед выстрелом занимает позицию и требует быстрого уклонения или подавления.',
+    EnemyType.brute => 'Крупный громила с грубыми металлическими накладками, заклёпками и следами ударов. Его силуэт шире обычного противника; избегайте затяжного ближнего боя.',
+    EnemyType.cultPsyker => 'Еретический псайкер, окружённый фиолетовыми варп-дугами и светящимися метками. Опасен дистанционными атаками и аномальными эффектами.',
+    EnemyType.plagueBearer => 'Демон чумы с оливково-зелёной кожей, наростами и язвами. Его атаки могут накладывать заражение; не задерживайтесь рядом.',
+    EnemyType.bloodletter => 'Демон Кхорна с рогами, красной плотью, латунным ошейником и клинком. Быстрый агрессор ближнего боя, способный вызвать кровотечение.',
+    EnemyType.orkBoy => 'Орк с массивной челюстью, клыками, зелёной кожей и грубо собранной бронёй с клетчатой раскраской. Силен в прямом штурме и может оттолкнуть бойца.',
+    EnemyType.tyranidGaunt => 'Малый тиранид с сегментированным хитиновым панцирем, ребристым брюшком и серповидными когтями. Быстро атакует группами и вызывает кровотечение.',
+    EnemyType.necronWarrior => 'Некронский воин из живого металла: узкая черепоподобная голова, металлические рёбра и зелёно-циановые энергетические линии. Предпочитает дисциплинированный дальний огонь.',
+    EnemyType.genestealer => 'Генокрад с вытянутым черепом, гладким панцирем и четырьмя длинными когтями. Очень опасен на близкой дистанции; его атаки вызывают кровотечение.',
+    EnemyType.chaosSpawn => 'Нестабильная масса плоти с асимметричными отростками и пульсирующими мутациями. Непредсказуем в ближнем бою и может заражать варпом.',
+    EnemyType.necronImmortal => 'Усиленный некронский стрелок с более массивным металлическим силуэтом и яркими гаусс-линиями. Выдерживает больше урона и представляет приоритетную цель на дистанции.',
+  };
+
+
+  String _catalogFaction(enemy_catalog.EnemyFaction faction) => switch (faction) {
+    enemy_catalog.EnemyFaction.cult => 'Культ',
+    enemy_catalog.EnemyFaction.chaos => 'Хаос',
+    enemy_catalog.EnemyFaction.ork => 'Орки',
+    enemy_catalog.EnemyFaction.tyranid => 'Тираниды',
+    enemy_catalog.EnemyFaction.necron => 'Некроны',
+    enemy_catalog.EnemyFaction.daemon => 'Демоны',
+  };
+
+  Color _catalogEnemyColor(enemy_catalog.EnemyFaction faction) => switch (faction) {
+    enemy_catalog.EnemyFaction.cult => const Color(0xFFFFD54F),
+    enemy_catalog.EnemyFaction.chaos => const Color(0xFFCE93D8),
+    enemy_catalog.EnemyFaction.ork => const Color(0xFF8BC34A),
+    enemy_catalog.EnemyFaction.tyranid => const Color(0xFFAED581),
+    enemy_catalog.EnemyFaction.necron => const Color(0xFF80DEEA),
+    enemy_catalog.EnemyFaction.daemon => const Color(0xFFEF5350),
+  };
+
+  String _catalogArchetype(enemy_catalog.EnemyArchetype archetype) => switch (archetype) {
+    enemy_catalog.EnemyArchetype.shooter => 'стрелок',
+    enemy_catalog.EnemyArchetype.melee => 'ближний бой',
+    enemy_catalog.EnemyArchetype.shield => 'щит',
+    enemy_catalog.EnemyArchetype.flanker => 'фланкер',
+    enemy_catalog.EnemyArchetype.sniper => 'снайпер',
+    enemy_catalog.EnemyArchetype.heavy => 'тяжёлый',
+    enemy_catalog.EnemyArchetype.psyker => 'псайкер',
+    enemy_catalog.EnemyArchetype.summoner => 'призыватель',
+  };
+
+  String _catalogEnemyDossier(enemy_catalog.EnemyTypeData e) => switch (e.id) {
+    'cult_shooter' => 'Еретик с самодельным оружием и разномастной бронёй. Массовая пехота культа; ищите укрытие и подавляйте огнём.',
+    'ork_boy' => 'Орк с грубой бронёй, зелёной кожей и тяжёлым оружием. Отличается широким силуэтом и напором в ближнем бою.',
+    'tyranid_gaunt' => 'Быстрый биологический организм с хитиновым панцирем и серповидными конечностями. Опасен группами и обходами с фланга.',
+    'necron_immortal' => 'Усиленный некрон из живого металла с прочными пластинами и гаусс-оружием. Приоритетная цель на средней дистанции.',
+    'chaos_psyker' => 'Псайкер Хаоса, использующий варп-энергию. Его силуэт отмечен фиолетовым свечением и энергетическими дугами.',
+    'bloodletter' => 'Демон Кхорна с рогами, красной плотью и адским клинком. Быстро сближается и наносит опасные удары.',
+    'cult_sniper' => 'Культовый снайпер с длинноствольным оружием и оптическим узлом. Не стойте на линии прицеливания.',
+    'chaos_bulwark' => 'Тяжёлый еретик с массивными пластинами и усиленными наплечниками. Медленный, но исключительно стойкий.',
+    'tyranid_stalker' => 'Хищный тиранид-фланкер: вытянутый хитиновый силуэт, длинные когти и высокая скорость атаки.',
+    'warp_summoner' => 'Призыватель демонических сущностей, окружённый нестабильным свечением разлома. Не позволяйте ему долго поддерживать призыв.',
+    _ => 'Профиль расширенного реестра угроз. Его базовые характеристики и роль задаются данными EnemyTypeData; баланс может изменяться настройками сложности и этажа.',
+  };
+
 }
 
 class NameInputMenu extends StatefulWidget {
@@ -9315,60 +9454,181 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   }
 
   void _drawProceduralArmor(Canvas canvas, double cx, double cy, ArmorPattern pattern, Color base, Color trim) {
-    final dark = Color.lerp(base, Colors.black, .42)!;
-    final light = Color.lerp(base, Colors.white, .22)!;
-    final plate = Paint()..style = PaintingStyle.fill;
-    // Breastplate lamination, rivets and heraldic markings. Pattern changes geometry, not only tint.
-    final chest = Path()..moveTo(cx - 16, cy - 9)..lineTo(cx - 20, cy + 7)..lineTo(cx - 12, cy + 20)..lineTo(cx + 12, cy + 20)..lineTo(cx + 20, cy + 7)..lineTo(cx + 16, cy - 9)..lineTo(cx, cy - 15)..close();
-    plate.color = pattern == ArmorPattern.terminator ? dark : base;
-    canvas.drawPath(chest, plate);
-    canvas.drawPath(chest, Paint()..color = trim.withOpacity(.85)..style = PaintingStyle.stroke..strokeWidth = pattern == ArmorPattern.artificer ? 2.4 : 1.2);
+    // The selected armor is a true visual profile: material palette, helmet silhouette,
+    // shoulder width, chest construction, heraldry and lower plating all change in code.
+    final patternBase = switch (pattern) {
+      ArmorPattern.flak => const Color(0xFF5D5145),
+      ArmorPattern.carapace => const Color(0xFF35434B),
+      ArmorPattern.mk3Iron => const Color(0xFF59636A),
+      ArmorPattern.mk6Corvus => const Color(0xFF40535B),
+      ArmorPattern.mk7Aquila => const Color(0xFF394A54),
+      ArmorPattern.artificer => const Color(0xFF293D4A),
+      ArmorPattern.terminator => const Color(0xFF4B4D50),
+      ArmorPattern.voidSealed => const Color(0xFF263C43),
+      ArmorPattern.inquisitorial => const Color(0xFF272A31),
+    };
+    final armor = Color.lerp(patternBase, base, .18)!;
+    final dark = Color.lerp(armor, Colors.black, .48)!;
+    final light = Color.lerp(armor, Colors.white, .30)!;
+    final edge = Paint()..style = PaintingStyle.stroke..strokeWidth = 1.15..color = trim.withOpacity(.9);
+    final fill = Paint()..style = PaintingStyle.fill;
+
+    // Pattern-specific shoulder mass: Terminator is deliberately broad; flak is compact.
+    final shoulderHalf = pattern == ArmorPattern.terminator ? 32.0 : pattern == ArmorPattern.flak ? 22.0 : 27.0;
     for (final side in [-1.0, 1.0]) {
-      final shoulder = Path()..moveTo(cx + side * 13, cy - 11)..quadraticBezierTo(cx + side * 27, cy - 18, cx + side * 28, cy - 2)..lineTo(cx + side * 20, cy + 5)..lineTo(cx + side * 13, cy + 1)..close();
-      canvas.drawPath(shoulder, Paint()..color = pattern == ArmorPattern.terminator ? light : dark);
-      canvas.drawPath(shoulder, Paint()..color = trim.withOpacity(.8)..style = PaintingStyle.stroke..strokeWidth = 1.0);
-      for (int rivet = 0; rivet < (pattern == ArmorPattern.artificer ? 4 : 2); rivet++) {
-        canvas.drawCircle(Offset(cx + side * (18 + rivet * 2.0), cy - 6 + rivet * 2.0), 0.9, Paint()..color = trim);
+      final shoulder = Path()
+        ..moveTo(cx + side * 12, cy - 12)
+        ..quadraticBezierTo(cx + side * (shoulderHalf - 1), cy - 22, cx + side * shoulderHalf, cy - 4)
+        ..lineTo(cx + side * (shoulderHalf - 5), cy + 7)
+        ..lineTo(cx + side * 15, cy + 3)
+        ..close();
+      fill.color = pattern == ArmorPattern.terminator ? light : dark;
+      canvas.drawPath(shoulder, fill);
+      canvas.drawPath(shoulder, edge);
+      canvas.drawLine(Offset(cx + side * 17, cy - 7), Offset(cx + side * (shoulderHalf - 5), cy - 5), Paint()..color = light.withOpacity(.45)..strokeWidth = 1.1);
+      final rivets = pattern == ArmorPattern.artificer ? 4 : pattern == ArmorPattern.flak ? 1 : 3;
+      for (int i = 0; i < rivets; i++) {
+        canvas.drawCircle(Offset(cx + side * (17 + i * ((shoulderHalf - 19) / max(1, rivets - 1))), cy - 4 + (i.isOdd ? 2 : 0)), 1.0, Paint()..color = trim);
       }
     }
-    // Distinct silhouette cues for selected armor patterns.
-    if (pattern == ArmorPattern.mk3Iron || pattern == ArmorPattern.terminator) {
-      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2), width: 15, height: 8), const Radius.circular(2)), Paint()..color = light);
-      canvas.drawLine(Offset(cx - 7, cy + 2), Offset(cx + 7, cy + 2), Paint()..color = trim..strokeWidth = 1.4);
+
+    // Breastplate construction differs by pattern rather than being a simple color overlay.
+    final chest = Path();
+    if (pattern == ArmorPattern.flak) {
+      chest..moveTo(cx - 12, cy - 8)..lineTo(cx + 12, cy - 8)..lineTo(cx + 15, cy + 13)..lineTo(cx + 9, cy + 18)..lineTo(cx - 9, cy + 18)..lineTo(cx - 15, cy + 13)..close();
+    } else if (pattern == ArmorPattern.terminator) {
+      chest..moveTo(cx - 18, cy - 12)..lineTo(cx + 18, cy - 12)..lineTo(cx + 22, cy + 8)..lineTo(cx + 15, cy + 22)..lineTo(cx - 15, cy + 22)..lineTo(cx - 22, cy + 8)..close();
+    } else if (pattern == ArmorPattern.mk3Iron) {
+      chest..moveTo(cx - 17, cy - 10)..lineTo(cx + 17, cy - 10)..lineTo(cx + 17, cy + 8)..lineTo(cx + 11, cy + 20)..lineTo(cx - 11, cy + 20)..lineTo(cx - 17, cy + 8)..close();
+    } else {
+      chest..moveTo(cx - 16, cy - 10)..lineTo(cx - 20, cy + 7)..lineTo(cx - 12, cy + 20)..lineTo(cx + 12, cy + 20)..lineTo(cx + 20, cy + 7)..lineTo(cx + 16, cy - 10)..lineTo(cx, cy - 16)..close();
     }
+    fill.color = armor;
+    canvas.drawPath(chest, fill);
+    canvas.drawPath(chest, edge..strokeWidth = pattern == ArmorPattern.artificer ? 2.2 : 1.2);
+    // Laminate seams, scratches and impact chips.
+    for (int i = 0; i < (pattern == ArmorPattern.artificer ? 5 : 3); i++) {
+      final x = cx - 10 + i * 5.0;
+      canvas.drawLine(Offset(x, cy - 3), Offset(x + 2, cy + 2 + (i.isOdd ? 2 : 0)), Paint()..color = light.withOpacity(.42)..strokeWidth = .8);
+    }
+    canvas.drawLine(Offset(cx - 10, cy + 8), Offset(cx + 10, cy + 8), Paint()..color = dark.withOpacity(.9)..strokeWidth = 1.4);
+    canvas.drawLine(Offset(cx - 8, cy + 11), Offset(cx + 8, cy + 11), Paint()..color = light.withOpacity(.5)..strokeWidth = .7);
+
+    // Helmet silhouette changes with armor mark: beak, box visor, crest, seal hood or heavy gorget.
+    final helmet = Path();
+    switch (pattern) {
+      case ArmorPattern.flak:
+        helmet..moveTo(cx - 7, cy - 22)..lineTo(cx - 6, cy - 29)..lineTo(cx + 6, cy - 29)..lineTo(cx + 7, cy - 22)..lineTo(cx + 5, cy - 17)..lineTo(cx - 5, cy - 17)..close();
+        break;
+      case ArmorPattern.carapace:
+        helmet..moveTo(cx - 8, cy - 21)..lineTo(cx - 7, cy - 29)..quadraticBezierTo(cx, cy - 34, cx + 7, cy - 29)..lineTo(cx + 8, cy - 21)..lineTo(cx + 5, cy - 17)..lineTo(cx - 5, cy - 17)..close();
+        break;
+      case ArmorPattern.mk3Iron:
+      case ArmorPattern.terminator:
+        helmet..moveTo(cx - 9, cy - 21)..lineTo(cx - 9, cy - 30)..lineTo(cx + 9, cy - 30)..lineTo(cx + 9, cy - 21)..lineTo(cx + 6, cy - 17)..lineTo(cx - 6, cy - 17)..close();
+        break;
+      case ArmorPattern.mk6Corvus:
+        helmet..moveTo(cx - 7, cy - 22)..lineTo(cx - 6, cy - 30)..lineTo(cx + 6, cy - 30)..lineTo(cx + 7, cy - 22)..lineTo(cx + 3, cy - 17)..lineTo(cx - 3, cy - 17)..close();
+        break;
+      case ArmorPattern.mk7Aquila:
+      case ArmorPattern.artificer:
+      case ArmorPattern.inquisitorial:
+        helmet..moveTo(cx - 8, cy - 21)..lineTo(cx - 7, cy - 29)..quadraticBezierTo(cx, cy - 35, cx + 7, cy - 29)..lineTo(cx + 8, cy - 21)..lineTo(cx + 5, cy - 17)..lineTo(cx - 5, cy - 17)..close();
+        break;
+      case ArmorPattern.voidSealed:
+        helmet..addRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 24), width: 17, height: 13), const Radius.circular(5)));
+        break;
+    }
+    fill.color = pattern == ArmorPattern.artificer ? const Color(0xFF3F5360) : dark;
+    canvas.drawPath(helmet, fill);
+    canvas.drawPath(helmet, edge);
+    final visorColor = pattern == ArmorPattern.voidSealed ? const Color(0xFF80DEEA) : pattern == ArmorPattern.artificer ? const Color(0xFFFFD54F) : const Color(0xFFFF3D3D);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 23), width: pattern == ArmorPattern.terminator ? 13 : 10, height: pattern == ArmorPattern.terminator ? 3.8 : 2.8), const Radius.circular(1.2)), Paint()..color = visorColor.withOpacity(.9));
+
     if (pattern == ArmorPattern.mk6Corvus) {
-      final beak = Path()..moveTo(cx - 5, cy - 18)..lineTo(cx + 5, cy - 18)..lineTo(cx + 2, cy - 25)..lineTo(cx - 2, cy - 25)..close();
+      final beak = Path()..moveTo(cx - 4, cy - 20)..lineTo(cx + 4, cy - 20)..lineTo(cx + 2, cy - 14)..lineTo(cx, cy - 12)..lineTo(cx - 2, cy - 14)..close();
       canvas.drawPath(beak, Paint()..color = light);
     }
-    if (pattern == ArmorPattern.artificer || pattern == ArmorPattern.inquisitorial) {
-      canvas.drawCircle(Offset(cx, cy + 3), 5.0, Paint()..color = trim);
-      canvas.drawCircle(Offset(cx, cy + 3), 2.2, Paint()..color = dark);
-      canvas.drawLine(Offset(cx - 4, cy + 3), Offset(cx + 4, cy + 3), Paint()..color = trim..strokeWidth = 1.0);
+    if (pattern == ArmorPattern.mk7Aquila || pattern == ArmorPattern.artificer) {
+      final crest = Path()..moveTo(cx - 6, cy - 31)..lineTo(cx, cy - 39)..lineTo(cx + 6, cy - 31)..lineTo(cx + 2, cy - 29)..lineTo(cx, cy - 33)..lineTo(cx - 2, cy - 29)..close();
+      canvas.drawPath(crest, Paint()..color = trim);
     }
-    if (pattern == ArmorPattern.voidSealed) {
-      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 18), width: 22, height: 6), const Radius.circular(3)), Paint()..color = const Color(0xFF80DEEA).withOpacity(.8));
+    if (pattern == ArmorPattern.mk3Iron || pattern == ArmorPattern.terminator) {
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 2), width: pattern == ArmorPattern.terminator ? 19 : 15, height: 8), const Radius.circular(2)), Paint()..color = light);
+      canvas.drawLine(Offset(cx - 7, cy + 2), Offset(cx + 7, cy + 2), Paint()..color = trim..strokeWidth = 1.4);
     }
     if (pattern == ArmorPattern.terminator) {
-      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 24), width: 33, height: 8), const Radius.circular(2)), Paint()..color = dark);
-      canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy + 24), width: 21, height: 2), Paint()..color = trim);
+      // Heavy abdominal segments and oversized power pack silhouette.
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 25), width: 34, height: 10), const Radius.circular(2)), Paint()..color = dark);
+      for (int i = 0; i < 4; i++) canvas.drawLine(Offset(cx - 12 + i * 8, cy + 21), Offset(cx - 12 + i * 8, cy + 29), Paint()..color = trim.withOpacity(.8)..strokeWidth = 1.2);
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 26, cy - 3), width: 9, height: 16), const Radius.circular(2)), Paint()..color = light);
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 26, cy - 3), width: 9, height: 16), const Radius.circular(2)), Paint()..color = light);
     }
-    // Scratches and ceramic edge highlights vary with active pattern for material depth.
-    final scratchCount = pattern == ArmorPattern.artificer ? 5 : pattern == ArmorPattern.flak ? 1 : 3;
-    for (int i = 0; i < scratchCount; i++) {
-      final x = cx - 10 + i * (20 / max(1, scratchCount - 1));
-      canvas.drawLine(Offset(x, cy + 8 + (i.isEven ? 0 : 2)), Offset(x + 2, cy + 11 + (i.isEven ? 2 : 0)), Paint()..color = light.withOpacity(.35)..strokeWidth = .8);
+    if (pattern == ArmorPattern.voidSealed) {
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 16), width: 25, height: 5), const Radius.circular(3)), Paint()..color = const Color(0xFF80DEEA).withOpacity(.9));
+      for (final side in [-1.0, 1.0]) {
+        final hose = Path()..moveTo(cx + side * 7, cy - 15)..cubicTo(cx + side * 13, cy - 12, cx + side * 12, cy - 7, cx + side * 9, cy - 5);
+        canvas.drawPath(hose, Paint()..color = const Color(0xFF607D8B)..style = PaintingStyle.stroke..strokeWidth = 2.2);
+      }
+    }
+    if (pattern == ArmorPattern.artificer || pattern == ArmorPattern.inquisitorial) {
+      canvas.drawCircle(Offset(cx, cy + 3), pattern == ArmorPattern.artificer ? 5.5 : 5.0, Paint()..color = trim);
+      canvas.drawCircle(Offset(cx, cy + 3), 2.3, Paint()..color = dark);
+      canvas.drawLine(Offset(cx - 4, cy + 3), Offset(cx + 4, cy + 3), Paint()..color = trim..strokeWidth = 1.0);
+      if (pattern == ArmorPattern.inquisitorial) {
+        // Rosette rays and a small purity-seal ribbon.
+        for (int i = 0; i < 8; i++) {
+          final a = i * pi / 4;
+          canvas.drawLine(Offset(cx + cos(a) * 6, cy + 3 + sin(a) * 6), Offset(cx + cos(a) * 9, cy + 3 + sin(a) * 9), Paint()..color = trim..strokeWidth = 1.1);
+        }
+        final ribbon = Path()..moveTo(cx + 8, cy + 8)..lineTo(cx + 12, cy + 13)..lineTo(cx + 7, cy + 12)..close();
+        canvas.drawPath(ribbon, Paint()..color = const Color(0xFFB71C1C));
+      }
+    }
+    if (pattern == ArmorPattern.carapace) {
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 23), width: 23, height: 6), const Radius.circular(2)), Paint()..color = dark);
+    }
+    if (pattern == ArmorPattern.flak) {
+      // Webbing straps and utility pouches distinguish lighter infantry armor.
+      canvas.drawLine(Offset(cx - 12, cy - 7), Offset(cx + 11, cy + 14), Paint()..color = const Color(0xFFBCAAA4)..strokeWidth = 2.0);
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 10, cy + 12), width: 6, height: 7), const Radius.circular(1)), Paint()..color = const Color(0xFF3E342C));
+    }
+    if (pattern == ArmorPattern.artificer) {
+      canvas.drawCircle(Offset(cx + 12, cy - 1), 2.2 + sin(game.combatAnimClock * 4).abs() * .5, Paint()..color = const Color(0xFF80DEEA));
+      canvas.drawLine(Offset(cx - 13, cy + 15), Offset(cx - 7, cy + 19), Paint()..color = trim..strokeWidth = 1.5);
+    }
+    // All armor gets restrained ceramic edge highlights and damage wear.
+    final scratches = pattern == ArmorPattern.artificer ? 5 : pattern == ArmorPattern.flak ? 1 : 3;
+    for (int i = 0; i < scratches; i++) {
+      final x = cx - 10 + i * (20 / max(1, scratches - 1));
+      canvas.drawLine(Offset(x, cy + 8 + (i.isEven ? 0 : 2)), Offset(x + 2, cy + 11 + (i.isEven ? 2 : 0)), Paint()..color = light.withOpacity(.4)..strokeWidth = .8);
     }
   }
 
+
+  ArmorPattern _armorPatternForGear(gear_catalog.GearItem item) {
+    if (item.setId == 'deathwatch') return ArmorPattern.mk7Aquila;
+    if (item.setId == 'ordo_malleus') return ArmorPattern.artificer;
+    if (item.setId == 'inquisitorial') return ArmorPattern.inquisitorial;
+    final id = item.id.toLowerCase();
+    if (id.contains('void') || id.contains('sealed')) return ArmorPattern.voidSealed;
+    if (id.contains('terminator') || item.rarity >= 4) return ArmorPattern.terminator;
+    if (id.contains('corvus')) return ArmorPattern.mk6Corvus;
+    if (id.contains('iron') || item.rarity >= 3) return ArmorPattern.mk3Iron;
+    if (item.rarity >= 2) return ArmorPattern.carapace;
+    return ArmorPattern.flak;
+  }
 
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     final ang = atan2(aimDir.y, aimDir.x);
     WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.28, flash: hurtFlash / 0.15, custom: game.custom, cls: game.playerClass, healthRatio: maxHealth <= 0 ? 1 : health / maxHealth);
-    _drawProceduralArmor(canvas, cx, cy, game.activeArmor, game.custom.armorColor(0.45), game.custom.trimColor(0.65));
-    // Stage 13: equipped items are visibly layered onto the live character, using Canvas only.
+    // Equipped armor overrides the forge cosmetic: changing gear changes the actual drawn silhouette/material profile.
     final wornArmor = game.equipmentInventory.state.equipped['armor'];
+    final visibleArmor = wornArmor == null ? game.activeArmor : _armorPatternForGear(wornArmor);
+    _drawProceduralArmor(canvas, cx, cy, visibleArmor, game.custom.armorColor(0.45), game.custom.trimColor(0.65));
+    // Equipped items are layered onto the live character, using Canvas only.
     final wornBoots = game.equipmentInventory.state.equipped['boots'];
     final wornRelic = game.equipmentInventory.state.equipped['relic'];
     final wornWeapon = game.equipmentInventory.state.equipped['weapon'];
