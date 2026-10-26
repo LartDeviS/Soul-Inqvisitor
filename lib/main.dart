@@ -6151,6 +6151,10 @@ class EventMerchantProp extends PositionComponent with HasGameReference<Inquisit
 class HudLabel extends PositionComponent with HasGameReference<InquisitorGame> {
   final String text;
   EdgeInsets margin;
+  late final TextPainter _cachedPainter = TextPainter(
+    text: TextSpan(text: text, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 4)])),
+    textDirection: TextDirection.ltr,
+  )..layout();
   HudLabel({required this.text, required this.margin}) : super(priority: 200);
 
   void updateMargin(EdgeInsets value) {
@@ -6169,16 +6173,7 @@ class HudLabel extends PositionComponent with HasGameReference<InquisitorGame> {
     updateMargin(margin);
   }
   @override
-  void render(Canvas canvas) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 4)]),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, Offset.zero);
-  }
+  void render(Canvas canvas) => _cachedPainter.paint(canvas, Offset.zero);
 }
 
 mixin SmartMover on PositionComponent, HasGameReference<InquisitorGame> {
@@ -9023,7 +9018,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
   Vector2 aimDir = Vector2(0, -1);
   final List<StatusEffect> statuses = [];
 
-  Player(this.moveJoystick) : super(size: Vector2(76, 86), anchor: Anchor.center, priority: 20);
+  Player(this.moveJoystick) : super(size: Vector2(112, 96), anchor: Anchor.center, priority: 20);
 
   @override
   Future<void> onLoad() async {
@@ -9648,16 +9643,59 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
 
 
   ArmorPattern _armorPatternForGear(gear_catalog.GearItem item) {
-    if (item.setId == 'deathwatch') return ArmorPattern.mk7Aquila;
-    if (item.setId == 'ordo_malleus') return ArmorPattern.artificer;
-    if (item.setId == 'inquisitorial') return ArmorPattern.inquisitorial;
     final id = item.id.toLowerCase();
-    if (id.contains('void') || id.contains('sealed')) return ArmorPattern.voidSealed;
-    if (id.contains('terminator') || item.rarity >= 4) return ArmorPattern.terminator;
-    if (id.contains('corvus')) return ArmorPattern.mk6Corvus;
-    if (id.contains('iron') || item.rarity >= 3) return ArmorPattern.mk3Iron;
-    if (item.rarity >= 2) return ArmorPattern.carapace;
-    return ArmorPattern.flak;
+    final name = item.name.toLowerCase();
+    final key = '$id $name';
+    // Check concrete item identity first: many unrelated items share the same setId.
+    if (key.contains('flak') || key.contains('караул') || key.contains('vest')) return ArmorPattern.flak;
+    if (key.contains('carapace') || key.contains('карапас') || key.contains('riot')) return ArmorPattern.carapace;
+    if (key.contains('terminator') || key.contains('терминатор') || key.contains('dreadnought')) return ArmorPattern.terminator;
+    if (key.contains('corvus') || key.contains('mk6') || key.contains('mk-vi')) return ArmorPattern.mk6Corvus;
+    if (key.contains('iron') || key.contains('mk3') || key.contains('mk-iii')) return ArmorPattern.mk3Iron;
+    if (key.contains('void') || key.contains('sealed') || key.contains('гермет')) return ArmorPattern.voidSealed;
+    if (key.contains('artificer') || key.contains('артефактор')) return ArmorPattern.artificer;
+    if (key.contains('aquila') || key.contains('mk7') || key.contains('mk-vii') || item.setId == 'deathwatch') return ArmorPattern.mk7Aquila;
+    if (item.setId == 'ordo_malleus') return ArmorPattern.artificer;
+    if (item.setId == 'inquisitorial' && (key.contains('inquisitor') || key.contains('rosette'))) return ArmorPattern.inquisitorial;
+    if (item.rarity >= 4) return ArmorPattern.artificer;
+    if (item.rarity >= 3) return ArmorPattern.mk3Iron;
+    // Stable ID-based fallback ensures newly generated items don't all share one silhouette.
+    return ArmorPattern.values[item.id.codeUnits.fold<int>(0, (v, c) => v + c) % ArmorPattern.values.length];
+  }
+
+  Color _gearArmorColor(gear_catalog.GearItem item) {
+    final id = item.id.toLowerCase();
+    Color base;
+    if (id.contains('flak') || id.contains('guard') || id.contains('vest')) {
+      base = const Color(0xFF65513A);
+    } else if (id.contains('deathwatch')) {
+      base = const Color(0xFF263D4A);
+    } else if (id.contains('malleus')) {
+      base = const Color(0xFF3D3150);
+    } else if (id.contains('void')) {
+      base = const Color(0xFF23484B);
+    } else if (item.setId == 'deathwatch') {
+      base = const Color(0xFF263D4A);
+    } else if (item.setId == 'ordo_malleus') {
+      base = const Color(0xFF3D3150);
+    } else if (item.setId == 'inquisitorial') {
+      base = const Color(0xFF38343A);
+    } else {
+      base = const Color(0xFF343B42);
+    }
+    // A stable item-specific hue tint keeps two pieces from the same set visibly distinct.
+    final hash = item.id.codeUnits.fold<int>(17, (v, c) => (v * 31 + c) & 0x7fffffff);
+    final tint = HSLColor.fromAHSL(1, (hash % 360).toDouble(), .28, .48).toColor();
+    return Color.lerp(base, tint, (.16 + (item.rarity.clamp(0, 4) * .025)).toDouble())!;
+  }
+
+  Color _gearTrimColor(gear_catalog.GearItem item) {
+    if (item.setId == 'deathwatch') return const Color(0xFF80DEEA);
+    if (item.setId == 'ordo_malleus') return const Color(0xFFCE93D8);
+    if (item.setId == 'inquisitorial') return const Color(0xFFFFD54F);
+    if (item.rarity >= 4) return const Color(0xFFFFD180);
+    if (item.rarity >= 2) return const Color(0xFFB0BEC5);
+    return const Color(0xFF8D8175);
   }
 
   @override
@@ -9668,7 +9706,9 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     // Equipped armor overrides the forge cosmetic: changing gear changes the actual drawn silhouette/material profile.
     final wornArmor = game.equipmentInventory.state.equipped['armor'];
     final visibleArmor = wornArmor == null ? game.activeArmor : _armorPatternForGear(wornArmor);
-    _drawProceduralArmor(canvas, cx, cy, visibleArmor, game.custom.armorColor(0.45), game.custom.trimColor(0.65));
+    final armorBase = wornArmor == null ? game.custom.armorColor(0.45) : _gearArmorColor(wornArmor);
+    final armorTrim = wornArmor == null ? game.custom.trimColor(0.65) : _gearTrimColor(wornArmor);
+    _drawProceduralArmor(canvas, cx, cy, visibleArmor, armorBase, armorTrim);
     // Equipped items are layered onto the live character, using Canvas only.
     final wornBoots = game.equipmentInventory.state.equipped['boots'];
     final wornRelic = game.equipmentInventory.state.equipped['relic'];
@@ -9683,8 +9723,8 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
                 : game.custom.trimColor(0.65);
     if (wornArmor != null) {
       // Extra shoulder plates and central item badge make equipped armor distinct from the base pattern.
-      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 22, cy - 6), width: 15, height: 17), const Radius.circular(4)), Paint()..color = Color.lerp(game.custom.armorColor(0.45), setTrim, .38)!);
-      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 22, cy - 6), width: 15, height: 17), const Radius.circular(4)), Paint()..color = Color.lerp(game.custom.armorColor(0.45), setTrim, .38)!);
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx - 22, cy - 6), width: 15, height: 17), const Radius.circular(4)), Paint()..color = Color.lerp(armorBase, setTrim, .48)!);
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx + 22, cy - 6), width: 15, height: 17), const Radius.circular(4)), Paint()..color = Color.lerp(armorBase, setTrim, .48)!);
       canvas.drawCircle(Offset(cx, cy + 4), wornArmor.rarity >= 4 ? 6.0 : 4.0, Paint()..color = setTrim);
       canvas.drawCircle(Offset(cx, cy + 4), 2.0, Paint()..color = const Color(0xFF211D20));
       if (wornArmor.rarity >= 4) {
@@ -9694,7 +9734,7 @@ class Player extends PositionComponent with HasGameReference<InquisitorGame>, Co
     if (wornBoots != null) {
       for (final side in [-1.0, 1.0]) {
         final greave = Rect.fromCenter(center: Offset(cx + side * 10, cy + 28), width: 8, height: 10);
-        canvas.drawRRect(RRect.fromRectAndRadius(greave, const Radius.circular(2)), Paint()..color = Color.lerp(game.custom.armorColor(0.35), setTrim, .32)!);
+        canvas.drawRRect(RRect.fromRectAndRadius(greave, const Radius.circular(2)), Paint()..color = Color.lerp(armorBase, setTrim, .32)!);
         canvas.drawLine(Offset(greave.left + 1, greave.center.dy), Offset(greave.right - 1, greave.center.dy), Paint()..color = setTrim..strokeWidth = 1.2);
       }
     }
@@ -10053,6 +10093,7 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
   int bounces = 0;
   final Set<int> hitIds = {};
   Vector2 _prev = Vector2.zero();
+  double _trailAccumulator = 0;
 
   Bullet({
     required Vector2 position,
@@ -10082,8 +10123,11 @@ class Bullet extends PositionComponent with HasGameReference<InquisitorGame>, Co
     life -= dt;
     final old = position.clone();
     position += velocity * dt;
-    // Trail
-    if (old.distanceTo(position) > 4) {
+    // Trail segments are rate-limited: creating one every render tick caused
+    // component churn during automatic fire and could make HUD controls appear to flicker.
+    _trailAccumulator += dt;
+    if (_trailAccumulator >= 0.045 && old.distanceTo(position) > 4) {
+      _trailAccumulator = 0;
       game.world.add(BulletTrail(from: old, to: position.clone(), color: color)..priority = 12);
     }
     _prev = position.clone();
@@ -10363,6 +10407,7 @@ class EnemyBullet extends PositionComponent with HasGameReference<InquisitorGame
   double life = 3.5;
   int bounces = 0;
   bool didSplit = false;
+  double _trailAccumulator = 0;
 
   EnemyBullet({
     required Vector2 position,
@@ -10384,7 +10429,9 @@ class EnemyBullet extends PositionComponent with HasGameReference<InquisitorGame
     life -= dt;
     final old = position.clone();
     position += velocity * dt;
-    if (old.distanceTo(position) > 6) {
+    _trailAccumulator += dt;
+    if (_trailAccumulator >= 0.055 && old.distanceTo(position) > 6) {
+      _trailAccumulator = 0;
       Color trailCol = const Color(0xFF76FF03);
       if (mod == BulletMod.slow) trailCol = const Color(0xFF4FC3F7);
       if (mod == BulletMod.ricochet) trailCol = const Color(0xFFFFEB3B);
