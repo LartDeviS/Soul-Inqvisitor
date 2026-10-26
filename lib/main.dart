@@ -2091,6 +2091,236 @@ class WHDraw {
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy + 10), width: 30, height: 8), const Radius.circular(2)), Paint()..color = const Color(0xFF5D4037));
   }
 }
+/// Procedural enemy material pass: faction-specific plates, chitin, scars, runes and glow.
+/// All shapes are generated at runtime with Canvas; no textures or external art are used.
+class EnemyTextureRenderer {
+  static void draw(
+    Canvas c, {
+    required double cx,
+    required double cy,
+    required EnemyType type,
+    double scale = 1.0,
+    double clock = 0,
+    int variant = 0,
+    double healthRatio = 1,
+    bool champion = false,
+  }) {
+    final s = scale;
+    final pulse = 0.55 + 0.45 * sin(clock * 4.2 + variant * 0.7);
+    final hp = healthRatio.clamp(0.0, 1.0).toDouble();
+    final pale = const Color(0xFFC9C4B7);
+    final dark = const Color(0xFF17191B);
+
+    // Common painted surface: edge highlights, rivets, seams and wear scratches.
+    if (type != EnemyType.dog && type != EnemyType.tyranidGaunt && type != EnemyType.genestealer && type != EnemyType.chaosSpawn && type != EnemyType.bloodletter) {
+      final base = switch (type) {
+        EnemyType.necronWarrior || EnemyType.necronImmortal => const Color(0xFF9AA7A0),
+        EnemyType.orkBoy => const Color(0xFF4B5142),
+        EnemyType.plagueBearer => const Color(0xFF66753A),
+        EnemyType.brute => const Color(0xFF5A463B),
+        EnemyType.shielded || EnemyType.shieldedShooter => const Color(0xFF81919B),
+        _ => const Color(0xFF7A5A50),
+      };
+      final torso = Rect.fromCenter(center: Offset(cx, cy + 6 * s), width: 23 * s, height: 26 * s);
+      c.drawRRect(RRect.fromRectAndRadius(torso, Radius.circular(3 * s)), Paint()..color = base.withOpacity(0.32));
+      c.drawLine(Offset(torso.left + 3*s, torso.top + 4*s), Offset(torso.left + 3*s, torso.bottom - 4*s), Paint()..color = pale.withOpacity(0.26)..strokeWidth = 1.0*s);
+      for (int i=0; i<3; i++) {
+        final y = cy - 1*s + i*6*s;
+        c.drawLine(Offset(cx - 7*s, y), Offset(cx + 7*s, y), Paint()..color = dark.withOpacity(0.35)..strokeWidth = 1.0*s);
+      }
+      for (final side in [-1.0, 1.0]) {
+        c.drawCircle(Offset(cx + side*10*s, cy + 1*s), 1.25*s, Paint()..color = pale.withOpacity(0.8));
+      }
+      if (variant % 2 == 0 || hp < 0.72) {
+        final wear = Paint()..color = const Color(0xFF171412).withOpacity(0.45 + (1-hp)*0.3)..strokeWidth = 1.2*s..strokeCap = StrokeCap.round;
+        c.drawLine(Offset(cx - 8*s, cy - 5*s), Offset(cx - 3*s, cy - 1*s), wear);
+        c.drawLine(Offset(cx + 5*s, cy + 8*s), Offset(cx + 9*s, cy + 12*s), wear);
+        if (hp < 0.45) c.drawLine(Offset(cx - 3*s, cy + 13*s), Offset(cx + 1*s, cy + 18*s), wear);
+      }
+    }
+
+    switch (type) {
+      case EnemyType.shooter:
+      case EnemyType.melee:
+      case EnemyType.flamer:
+      case EnemyType.sniper:
+      case EnemyType.cultPsyker:
+        // Ragged cult robes, stitched hems, forbidden icon and improvised armor.
+        final robe = type == EnemyType.cultPsyker ? const Color(0xFFB388FF) : const Color(0xFFBCAAA4);
+        for (int i=0; i<4; i++) {
+          final x = cx - 10*s + i*6.5*s;
+          c.drawLine(Offset(x, cy + 18*s), Offset(x + (i.isEven ? 1.5 : -1.5)*s, cy + 31*s), Paint()..color = robe.withOpacity(0.42)..strokeWidth = 1.1*s);
+        }
+        final sigil = Path()..moveTo(cx, cy - 1*s)..lineTo(cx + 4*s, cy + 5*s)..lineTo(cx, cy + 11*s)..lineTo(cx - 4*s, cy + 5*s)..close();
+        c.drawPath(sigil, Paint()..color = type == EnemyType.cultPsyker ? const Color(0xFFEA80FC) : const Color(0xFFB71C1C));
+        c.drawCircle(Offset(cx, cy + 5*s), 5.5*s, Paint()..color = const Color(0xFF211817)..style = PaintingStyle.stroke..strokeWidth = 1.0*s);
+        c.drawLine(Offset(cx - 13*s, cy + 1*s), Offset(cx - 17*s, cy + 12*s), Paint()..color = const Color(0xFFB0BEC5)..strokeWidth = 2*s);
+        if (type == EnemyType.flamer) {
+          c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(cx + 8*s, cy - 1*s, 9*s, 14*s), Radius.circular(2*s)), Paint()..color = const Color(0xFF263238));
+          c.drawCircle(Offset(cx + 16*s, cy + 2*s), 3.5*s, Paint()..color = Color.lerp(const Color(0xFFFF6D00), const Color(0xFFFFF59D), pulse)!);
+        }
+        if (type == EnemyType.sniper) {
+          c.drawLine(Offset(cx + 3*s, cy - 9*s), Offset(cx + 15*s, cy - 9*s), Paint()..color = const Color(0xFFCFD8DC)..strokeWidth = 1.3*s);
+          c.drawCircle(Offset(cx + 7*s, cy - 11*s), 2*s, Paint()..color = const Color(0xFFFFB74D));
+        }
+        if (type == EnemyType.cultPsyker) {
+          WHDraw.energyArc(c, Offset(cx, cy + 3*s), 24*s, const Color(0xFFB388FF), clock*0.8, 0.42*s);
+          c.drawCircle(Offset(cx - 17*s, cy + 8*s), 3*s, Paint()..color = const Color(0xFFEA80FC).withOpacity(pulse));
+          c.drawCircle(Offset(cx + 17*s, cy + 8*s), 3*s, Paint()..color = const Color(0xFFEA80FC).withOpacity(pulse));
+        }
+        break;
+      case EnemyType.shielded:
+      case EnemyType.shieldedShooter:
+        // Heavy ceramite-like segmented armor, riveted pauldrons and heraldic stripe.
+        for (final side in [-1.0, 1.0]) {
+          final r = Rect.fromCenter(center: Offset(cx + side*15*s, cy - 1*s), width: 13*s, height: 15*s);
+          c.drawRRect(RRect.fromRectAndRadius(r, Radius.circular(3*s)), Paint()..color = const Color(0xFF455A64));
+          c.drawRRect(RRect.fromRectAndRadius(r.deflate(2*s), Radius.circular(2*s)), Paint()..color = const Color(0xFF90A4AE).withOpacity(0.38)..style = PaintingStyle.stroke..strokeWidth = 1*s);
+          c.drawCircle(Offset(cx + side*15*s, cy - 1*s), 1.4*s, Paint()..color = const Color(0xFFFFD54F));
+        }
+        c.drawRect(Rect.fromCenter(center: Offset(cx, cy + 6*s), width: 4*s, height: 19*s), Paint()..color = const Color(0xFFC62828));
+        c.drawCircle(Offset(cx, cy + 4*s), 4*s, Paint()..color = const Color(0xFFFFD54F));
+        c.drawLine(Offset(cx - 4*s, cy + 4*s), Offset(cx + 4*s, cy + 4*s), Paint()..color = dark..strokeWidth = 1.2*s);
+        break;
+      case EnemyType.dog:
+        // Hound musculature, spines, segmented jaw and warp-brand.
+        for (int i=0; i<4; i++) {
+          final x = cx - 8*s + i*5*s;
+          final spike = Path()..moveTo(x, cy - 7*s)..lineTo(x + 2*s, cy - (17 + (i%2)*4)*s)..lineTo(x + 5*s, cy - 5*s)..close();
+          c.drawPath(spike, Paint()..color = const Color(0xFF5D4037));
+        }
+        c.drawLine(Offset(cx + 17*s, cy - 2*s), Offset(cx + 27*s, cy + 1*s), Paint()..color = const Color(0xFFBCAAA4)..strokeWidth = 2*s);
+        c.drawCircle(Offset(cx + 24*s, cy - 10*s), 3.2*s, Paint()..color = const Color(0xFFFF1744).withOpacity(pulse));
+        c.drawLine(Offset(cx - 10*s, cy + 5*s), Offset(cx + 5*s, cy + 10*s), Paint()..color = const Color(0xFF8D6E63)..strokeWidth = 2*s);
+        break;
+      case EnemyType.brute:
+        // Massive scavenged plates, studs, crude chain links and old impact dents.
+        for (final side in [-1.0, 1.0]) {
+          final r = Rect.fromCenter(center: Offset(cx + side*14*s, cy - 1*s), width: 15*s, height: 18*s);
+          c.drawRRect(RRect.fromRectAndRadius(r, Radius.circular(4*s)), Paint()..color = const Color(0xFF5D4037));
+          c.drawRRect(RRect.fromRectAndRadius(r.deflate(2*s), Radius.circular(3*s)), Paint()..color = const Color(0xFFBCAAA4).withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 1.2*s);
+          c.drawCircle(Offset(cx + side*14*s, cy - 1*s), 1.8*s, Paint()..color = const Color(0xFFB0BEC5));
+        }
+        for (int i=0; i<5; i++) c.drawCircle(Offset(cx - 10*s + i*5*s, cy + 14*s), 1.3*s, Paint()..color = const Color(0xFFB0BEC5));
+        c.drawLine(Offset(cx - 8*s, cy - 10*s), Offset(cx + 8*s, cy - 10*s), Paint()..color = const Color(0xFFFF6D00).withOpacity(pulse)..strokeWidth = 2*s);
+        break;
+      case EnemyType.plagueBearer:
+        // Diseased hide, pustules, hanging boils and corroded blade scars.
+        for (final o in [Offset(-13,0), Offset(12,4), Offset(-5,15), Offset(8,20), Offset(0,-4)]) {
+          c.drawCircle(Offset(cx + o.dx*s, cy + o.dy*s), 3.2*s, Paint()..color = const Color(0xFF9CCC65));
+          c.drawCircle(Offset(cx + o.dx*s - .7*s, cy + o.dy*s - .8*s), 1.0*s, Paint()..color = const Color(0xFFE6EE9C).withOpacity(0.8));
+        }
+        c.drawArc(Rect.fromCenter(center: Offset(cx, cy + 6*s), width: 26*s, height: 18*s), 0.1, 2.8, false, Paint()..color = const Color(0xFF26351A)..style = PaintingStyle.stroke..strokeWidth = 2*s);
+        for (int i=0; i<3; i++) c.drawLine(Offset(cx + (i-1)*6*s, cy + 20*s), Offset(cx + (i-1)*6*s, cy + (24 + i%2*3)*s), Paint()..color = const Color(0xFF8D9B45)..strokeWidth = 1.4*s);
+        break;
+      case EnemyType.bloodletter:
+        // Daemonic horns, sinew grooves, brass collar and hellblade edge.
+        for (final side in [-1.0, 1.0]) {
+          final horn = Path()..moveTo(cx + side*7*s, cy - 23*s)..quadraticBezierTo(cx + side*17*s, cy - 34*s, cx + side*13*s, cy - 39*s)..lineTo(cx + side*4*s, cy - 25*s)..close();
+          c.drawPath(horn, Paint()..color = const Color(0xFF3E2723));
+          c.drawLine(Offset(cx + side*5*s, cy - 8*s), Offset(cx + side*11*s, cy + 12*s), Paint()..color = const Color(0xFF8E2424)..strokeWidth = 2*s);
+        }
+        c.drawArc(Rect.fromCenter(center: Offset(cx, cy + 2*s), width: 29*s, height: 14*s), 0, pi, false, Paint()..color = const Color(0xFFFFD54F)..style = PaintingStyle.stroke..strokeWidth = 2*s);
+        c.drawLine(Offset(cx + 17*s, cy + 3*s), Offset(cx + 27*s, cy - 13*s), Paint()..color = const Color(0xFFECEFF1)..strokeWidth = 2.5*s);
+        c.drawCircle(Offset(cx - 4*s, cy - 17*s), 2*s, Paint()..color = const Color(0xFFFFD54F));
+        c.drawCircle(Offset(cx + 4*s, cy - 17*s), 2*s, Paint()..color = const Color(0xFFFFD54F));
+        break;
+      case EnemyType.orkBoy:
+        // Green skin, brutal jaw, tusks, mismatched plates and crude checker paint.
+        c.drawOval(Rect.fromCenter(center: Offset(cx, cy - 14*s), width: 19*s, height: 17*s), Paint()..color = const Color(0xFF558B2F));
+        c.drawOval(Rect.fromCenter(center: Offset(cx - 13*s, cy + 2*s), width: 8*s, height: 19*s), Paint()..color = const Color(0xFF558B2F));
+        c.drawOval(Rect.fromCenter(center: Offset(cx + 13*s, cy + 2*s), width: 8*s, height: 19*s), Paint()..color = const Color(0xFF558B2F));
+        c.drawArc(Rect.fromCenter(center: Offset(cx, cy - 11*s), width: 17*s, height: 10*s), 0, pi, false, Paint()..color = const Color(0xFF1B2414)..style = PaintingStyle.stroke..strokeWidth = 2*s);
+        for (final side in [-1.0, 1.0]) {
+          final tusk = Path()..moveTo(cx + side*4*s, cy - 10*s)..lineTo(cx + side*6*s, cy - 3*s)..lineTo(cx + side*1*s, cy - 7*s)..close();
+          c.drawPath(tusk, Paint()..color = const Color(0xFFFFF3E0));
+        }
+        final plateR = Rect.fromCenter(center: Offset(cx - 10*s, cy + 1*s), width: 12*s, height: 14*s);
+        c.drawRRect(RRect.fromRectAndRadius(plateR, Radius.circular(2*s)), Paint()..color = const Color(0xFF8D6E63));
+        for (int i=0; i<3; i++) for (int j=0; j<2; j++) {
+          c.drawRect(Rect.fromLTWH(plateR.left + i*4*s, plateR.top + j*6*s, 3*s, 3*s), Paint()..color = (i+j).isEven ? const Color(0xFF212121) : const Color(0xFFFFD54F));
+        }
+        c.drawLine(Offset(cx - 3*s, cy + 9*s), Offset(cx + 7*s, cy + 12*s), Paint()..color = const Color(0xFF263238)..strokeWidth = 2*s);
+        break;
+      case EnemyType.tyranidGaunt:
+        // Chitin carapace plates, ribbed abdomen, hooked scythes and bio-luminescence.
+        final shell = Path()..moveTo(cx - 13*s, cy - 9*s)..quadraticBezierTo(cx, cy - 31*s, cx + 13*s, cy - 9*s)..lineTo(cx + 10*s, cy + 4*s)..lineTo(cx - 10*s, cy + 4*s)..close();
+        c.drawPath(shell, Paint()..color = const Color(0xFF4E342E));
+        c.drawPath(shell, Paint()..color = const Color(0xFF9CCC65).withOpacity(0.65)..style = PaintingStyle.stroke..strokeWidth = 1.4*s);
+        for (int i=0; i<4; i++) {
+          final y = cy - 3*s + i*5*s;
+          c.drawArc(Rect.fromCenter(center: Offset(cx, y), width: 18*s, height: 7*s), 0, pi, false, Paint()..color = const Color(0xFFB0C76A)..style = PaintingStyle.stroke..strokeWidth = 1.3*s);
+        }
+        for (final side in [-1.0, 1.0]) {
+          final claw = Path()..moveTo(cx + side*10*s, cy + 2*s)..quadraticBezierTo(cx + side*23*s, cy + 8*s, cx + side*20*s, cy + 20*s)..lineTo(cx + side*14*s, cy + 12*s)..close();
+          c.drawPath(claw, Paint()..color = const Color(0xFFCFD8DC));
+          c.drawLine(Offset(cx + side*8*s, cy - 6*s), Offset(cx + side*15*s, cy - 13*s), Paint()..color = const Color(0xFFB0C76A)..strokeWidth = 2*s);
+        }
+        c.drawCircle(Offset(cx + 4*s, cy - 15*s), 2.2*s, Paint()..color = Color.lerp(const Color(0xFF76FF03), const Color(0xFFE6EE9C), pulse)!);
+        break;
+      case EnemyType.genestealer:
+        // Sleek alien carapace, four-limb silhouette, ridged forehead and talons.
+        final head = Path()..moveTo(cx - 10*s, cy - 11*s)..lineTo(cx - 5*s, cy - 25*s)..lineTo(cx + 3*s, cy - 29*s)..lineTo(cx + 11*s, cy - 14*s)..lineTo(cx + 7*s, cy - 7*s)..close();
+        c.drawPath(head, Paint()..color = const Color(0xFF3949AB));
+        for (int i=0; i<4; i++) c.drawLine(Offset(cx - 7*s + i*4*s, cy - 22*s), Offset(cx - 5*s + i*4*s, cy - 13*s), Paint()..color = const Color(0xFF9FA8DA)..strokeWidth = 1*s);
+        for (final side in [-1.0, 1.0]) {
+          c.drawLine(Offset(cx + side*9*s, cy - 1*s), Offset(cx + side*21*s, cy + 12*s), Paint()..color = const Color(0xFF5C6BC0)..strokeWidth = 3*s..strokeCap = StrokeCap.round);
+          c.drawLine(Offset(cx + side*12*s, cy + 5*s), Offset(cx + side*24*s, cy + 21*s), Paint()..color = const Color(0xFFCFD8DC)..strokeWidth = 2.4*s..strokeCap = StrokeCap.round);
+          c.drawLine(Offset(cx + side*24*s, cy + 21*s), Offset(cx + side*27*s, cy + 24*s), Paint()..color = const Color(0xFFECEFF1)..strokeWidth = 1.4*s);
+        }
+        c.drawCircle(Offset(cx - 4*s, cy - 17*s), 2.3*s, Paint()..color = const Color(0xFFFF1744).withOpacity(pulse));
+        c.drawCircle(Offset(cx + 4*s, cy - 17*s), 2.3*s, Paint()..color = const Color(0xFFFF1744).withOpacity(pulse));
+        break;
+      case EnemyType.necronWarrior:
+      case EnemyType.necronImmortal:
+        // Skeletal living-metal ribs, angular crown, green gauss conduits and phase seams.
+        final green = Color.lerp(const Color(0xFF00E5FF), const Color(0xFF76FF03), pulse)!;
+        final head = Path()..moveTo(cx - 8*s, cy - 25*s)..lineTo(cx, cy - 31*s)..lineTo(cx + 8*s, cy - 25*s)..lineTo(cx + 6*s, cy - 13*s)..lineTo(cx - 6*s, cy - 13*s)..close();
+        c.drawPath(head, Paint()..color = const Color(0xFF9EAAA3));
+        c.drawRect(Rect.fromCenter(center: Offset(cx, cy - 19*s), width: 10*s, height: 2.5*s), Paint()..color = green);
+        for (int i=0; i<4; i++) {
+          final y = cy - 3*s + i*5*s;
+          c.drawArc(Rect.fromCenter(center: Offset(cx, y), width: 17*s, height: 6*s), 0.1, pi-0.2, false, Paint()..color = const Color(0xFFB0BDB5)..style = PaintingStyle.stroke..strokeWidth = 1.6*s);
+        }
+        c.drawLine(Offset(cx - 9*s, cy - 5*s), Offset(cx - 13*s, cy + 15*s), Paint()..color = const Color(0xFF9EAAA3)..strokeWidth = 3*s);
+        c.drawLine(Offset(cx + 9*s, cy - 5*s), Offset(cx + 13*s, cy + 15*s), Paint()..color = const Color(0xFF9EAAA3)..strokeWidth = 3*s);
+        c.drawLine(Offset(cx + 12*s, cy - 6*s), Offset(cx + 23*s, cy - 6*s), Paint()..color = green.withOpacity(0.45)..strokeWidth = 7*s..maskFilter = MaskFilter.blur(BlurStyle.normal, 3*s));
+        c.drawLine(Offset(cx + 12*s, cy - 6*s), Offset(cx + 23*s, cy - 6*s), Paint()..color = green..strokeWidth = 2.4*s);
+        if (type == EnemyType.necronImmortal) {
+          for (int i=0; i<3; i++) c.drawLine(Offset(cx - 8*s, cy + 7*s + i*4*s), Offset(cx + 8*s, cy + 7*s + i*4*s), Paint()..color = green.withOpacity(0.7)..strokeWidth = 1.3*s);
+        }
+        break;
+      case EnemyType.chaosSpawn:
+        // Mutated flesh, asymmetrical horns, warp blisters and curling tendrils.
+        for (int i=0; i<3; i++) {
+          final side = i.isEven ? -1.0 : 1.0;
+          final start = Offset(cx + side*(9 + i*2)*s, cy + (i-1)*4*s);
+          final path = Path()..moveTo(start.dx, start.dy)..cubicTo(start.dx + side*10*s, start.dy - 7*s, start.dx + side*13*s, start.dy + 7*s, start.dx + side*(17+i*2)*s, start.dy + 1*s);
+          final tendrilPaint = Paint()
+            ..color = i.isEven ? const Color(0xFF8E24AA) : const Color(0xFF6D4C41)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (2.2 - i * 0.25) * s
+            ..strokeCap = StrokeCap.round;
+          c.drawPath(path, tendrilPaint);
+        }
+        for (final o in [Offset(-7,-8), Offset(5,-14), Offset(12,6), Offset(-9,13)]) {
+          c.drawCircle(Offset(cx + o.dx*s, cy + o.dy*s), (2.6 + pulse)*s, Paint()..color = const Color(0xFFCE93D8).withOpacity(0.65));
+        }
+        for (final side in [-1.0, 1.0]) {
+          final horn = Path()..moveTo(cx + side*8*s, cy - 15*s)..quadraticBezierTo(cx + side*17*s, cy - 27*s, cx + side*13*s, cy - 32*s);
+          c.drawPath(horn, Paint()..color = const Color(0xFFBCAAA4)..style = PaintingStyle.stroke..strokeWidth = 3*s..strokeCap = StrokeCap.round);
+        }
+        break;
+    }
+
+    if (champion) {
+      final glow = const Color(0xFFFFC857).withOpacity(0.25 + pulse*0.25);
+      c.drawCircle(Offset(cx, cy), 30*s, Paint()..color = glow..style = PaintingStyle.stroke..strokeWidth = 1.6*s);
+      WHDraw.engravedRunes(c, Offset(cx, cy + 5*s), 24*s, const Color(0xFFFFD54F), 0.45*s, count: 8);
+    }
+  }
+}
+
 class InquisitorGame extends FlameGame with HasCollisionDetection {
   final expansion.InquisitorExpansionSystems expansionSystems = expansion.InquisitorExpansionSystems();
   final arena_catalog.WorldDirector worldDirector = arena_catalog.WorldDirector();
@@ -10513,6 +10743,17 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
         canvas.drawLine(Offset(cx - 8, cy - 17), Offset(cx + 8, cy - 17), gauss..strokeWidth = 2);
         break;
     }
+    EnemyTextureRenderer.draw(
+      canvas,
+      cx: cx,
+      cy: cy,
+      type: type,
+      scale: 1.0,
+      clock: animationClock,
+      variant: visualVariant,
+      healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp,
+      champion: isChampion,
+    );
     // Procedural detail pass: chipped plates, rivets, bio-chitin ridges and energy seams.
     // Everything is drawn with Canvas; no external sprites or texture assets are required.
     final pulse = 0.5 + 0.5 * sin(animationClock * (type == EnemyType.tyranidGaunt || type == EnemyType.dog ? 8 : 3));
@@ -10756,6 +10997,7 @@ class MiniBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     canvas.drawCircle(Offset(cx, cy - 22), 16, Paint()..color = const Color(0xFF3E2723));
     canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy - 22), width: 14, height: 4), Paint()..color = const Color(0xFFFF9800));
     WHDraw.shotgun(canvas, cx + 4, cy + 2, 1.1, accent: const Color(0xFF8D6E63));
+    EnemyTextureRenderer.draw(canvas, cx: cx, cy: cy, type: EnemyType.melee, scale: 1.22, clock: attackTimer + telegraphTimer, variant: floor % 5, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp);
     if (hurtFlash > 0) {
       canvas.drawCircle(Offset(cx, cy), 48, Paint()..color = Color.fromRGBO(255, 0, 0, 0.35 * (hurtFlash / 0.12)));
     }
@@ -10812,6 +11054,7 @@ class RivalInquisitor extends MiniBoss {
     final cx = size.x / 2, cy = size.y / 2;
     canvas.drawCircle(Offset(cx, cy), 49, Paint()..color = const Color(0xFFB71C1C).withOpacity(0.12));
     WHDraw.inquisitor(canvas, cx: cx, cy: cy, s: 1.12, flash: hurtFlash / 0.12, cls: PlayerClass.hereticus, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp);
+    EnemyTextureRenderer.draw(canvas, cx: cx, cy: cy, type: EnemyType.shielded, scale: 1.25, clock: attackTimer + telegraphTimer, variant: floor % 5, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp, champion: true);
     // Distinct red rosette identifies the rival without importing a sprite.
     canvas.drawCircle(Offset(cx, cy - 28), 8, Paint()..color = const Color(0xFFB71C1C));
     canvas.drawCircle(Offset(cx, cy - 28), 8, Paint()..color = const Color(0xFFFFD54F)..style = PaintingStyle.stroke..strokeWidth = 1.4);
@@ -11070,6 +11313,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.hereticBoss(canvas, cx, cy, 1.35, flash: hurtFlash / 0.12);
+    EnemyTextureRenderer.draw(canvas, cx: cx, cy: cy, type: EnemyType.cultPsyker, scale: 1.35, clock: game.missionAlarmClock, variant: game.currentFloor % 5, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp, champion: true);
     if (weakSpotExposed) {
       final pulse = 0.65 + sin(game.missionAlarmClock * 9).abs() * 0.35;
       canvas.drawCircle(Offset(cx, cy - 20), 13, Paint()..color = const Color(0xFFFF1744).withOpacity(0.18 + pulse * 0.22));
@@ -11307,6 +11551,7 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.knightBoss(canvas, cx, cy, 1.35, flash: hurtFlash / 0.12);
+    EnemyTextureRenderer.draw(canvas, cx: cx, cy: cy, type: EnemyType.shielded, scale: 1.35, clock: attackTimer + telegraphTimer, variant: game.currentFloor % 5, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp, champion: true);
     if (isEcho) {
       canvas.drawCircle(
         Offset(cx, cy),
@@ -11554,6 +11799,7 @@ class KingBoss extends PositionComponent with HasGameReference<InquisitorGame>, 
     final cx = size.x / 2, cy = size.y / 2;
     final inv = !isEcho && game.areOtherBossesAlive;
     WHDraw.kingBossDraw(canvas, cx, cy, 1.6, flash: hurtFlash / 0.12);
+    EnemyTextureRenderer.draw(canvas, cx: cx, cy: cy, type: EnemyType.chaosSpawn, scale: 1.55, clock: phase2Timer, variant: game.currentFloor % 5, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp, champion: true);
     if (inv) {
       final pulse = 0.25 + 0.2 * sin(invPulse);
       canvas.drawCircle(
@@ -11808,6 +12054,7 @@ class PlagueLordBoss extends PositionComponent with HasGameReference<InquisitorG
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.plagueLord(canvas, cx, cy, 1.25, flash: hurtFlash / 0.12);
+    EnemyTextureRenderer.draw(canvas, cx: cx, cy: cy, type: EnemyType.plagueBearer, scale: 1.35, clock: attackTimer, variant: game.currentFloor % 5, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp, champion: true);
     if (isEcho) {
       canvas.drawCircle(
         Offset(cx, cy),
@@ -12035,6 +12282,7 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.bloodChampion(canvas, cx, cy, 1.3, flash: hurtFlash / 0.12, rage: rage);
+    EnemyTextureRenderer.draw(canvas, cx: cx, cy: cy, type: EnemyType.bloodletter, scale: 1.4, clock: attackTimer, variant: game.currentFloor % 5, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp, champion: true);
     if (isEcho) {
       canvas.drawCircle(
         Offset(cx, cy),
@@ -12219,6 +12467,7 @@ class TentacleBoss extends PositionComponent with HasGameReference<InquisitorGam
     canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy), width: 80, height: 72), Paint()..color = const Color(0xFF12001F));
     canvas.drawCircle(Offset(cx, cy - 6), 16, Paint()..color = const Color(0xFF0D0D0D));
     canvas.drawCircle(Offset(cx, cy - 6), 11, Paint()..color = const Color(0xFFFF1744));
+    EnemyTextureRenderer.draw(canvas, cx: cx, cy: cy, type: EnemyType.chaosSpawn, scale: 1.45, clock: t, variant: game.currentFloor % 5, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp, champion: true);
     // Shadow
     canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy + 55), width: 70, height: 16), Paint()..color = Colors.black.withOpacity(0.25));
     if (hurtFlash > 0) {
@@ -12432,6 +12681,7 @@ class CyclopsBoss extends PositionComponent with HasGameReference<InquisitorGame
   void render(Canvas canvas) {
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.cyclops(canvas, cx, cy, 1.45, flash: hurtFlash / 0.12, charge: charge);
+    EnemyTextureRenderer.draw(canvas, cx: cx, cy: cy, type: EnemyType.brute, scale: 1.45, clock: phaseTimer, variant: game.currentFloor % 5, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp, champion: true);
     if (chargingLaser) {
       canvas.drawCircle(
         Offset(cx, cy - 30),
