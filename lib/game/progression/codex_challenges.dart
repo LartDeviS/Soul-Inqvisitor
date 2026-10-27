@@ -1,0 +1,9 @@
+class CodexChallenge { final String id,title,description,eventKey; final int target,reward; const CodexChallenge({required this.id,required this.title,required this.description,required this.eventKey,required this.target,required this.reward}); }
+class CodexChallengeSystem {
+ static const catalog=<CodexChallenge>[
+  CodexChallenge(id:'bolter_marksman',title:'Болтерная точность',description:'Уничтожить 50 врагов болтером.',eventKey:'bolter_kill',target:50,reward:100),
+  CodexChallenge(id:'no_medic',title:'Без медики',description:'Завершить миссию без аптечек.',eventKey:'mission_no_medkit',target:1,reward:150),
+  CodexChallenge(id:'weakspot_hunter',title:'Охотник за слабостями',description:'Попасть в уязвимые зоны 20 раз.',eventKey:'weakspot_hit',target:20,reward:120),
+ ]; final Map<String,int> progress=<String,int>{}; final Set<String> claimed=<String>{}; void record(String eventKey,[int amount=1]){for(final c in catalog){if(c.eventKey==eventKey&&!claimed.contains(c.id))progress[c.id]=((progress[c.id]??0)+amount).clamp(0,c.target).toInt();}} bool getCompleted(String id){final c=catalog.where((e)=>e.id==id).firstOrNull;return c!=null&&(progress[id]??0)>=c.target;} int claim(String id){final c=catalog.where((e)=>e.id==id).firstOrNull;if(c==null||!getCompleted(id)||!claimed.add(id))return 0;return c.reward;} Map<String,dynamic> toJson()=>{'progress':progress,'claimed':claimed.toList()}; void loadJson(dynamic raw){if(raw is! Map)return;progress.clear();if(raw['progress'] is Map){(raw['progress'] as Map).forEach((k,v){if(k is String&&v is num)progress[k]=v.toInt().clamp(0,1000000).toInt();});}claimed..clear()..addAll((raw['claimed'] is List?raw['claimed'] as List:const []).whereType<String>());}
+}
+extension _CodexFirstOrNull<T> on Iterable<T>{T? get firstOrNull=>isEmpty?null:first;}
