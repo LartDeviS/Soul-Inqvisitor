@@ -1,6 +1,6 @@
 enum CombatEventType { criticalHit, enemyKilled, targetBurningKilled, playerDamaged, abilityUsed }
 class CombatEvent { final CombatEventType type; final String? targetId; final double value; const CombatEvent(this.type, {this.targetId, this.value = 0}); }
-class RelicSynergyEffect { final String id, description; final CombatEventType trigger; final String requiredRelic; final String? requiredStatus; final double magnitude; const RelicSynergyEffect({required this.id, required this.description, required this.trigger, required this.requiredRelic, this.requiredStatus, required this.magnitude = 1}); }
+class RelicSynergyEffect { final String id, description; final CombatEventType trigger; final String requiredRelic; final String? requiredStatus; final double magnitude; const RelicSynergyEffect({required this.id, required this.description, required this.trigger, required this.requiredRelic, this.requiredStatus, this.magnitude = 1}); }
 class RelicSynergySystem {
   static const catalog = <RelicSynergyEffect>[
     RelicSynergyEffect(id:'executioner_cycle', description:'Критический удар ускоряет восстановление способности.', trigger:CombatEventType.criticalHit, requiredRelic:'warp_lens', magnitude:0.8),
