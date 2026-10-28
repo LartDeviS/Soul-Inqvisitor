@@ -7279,6 +7279,18 @@ class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
     if (mounted) setState(() => _busy = false);
   }
 
+  Future<void> _continueCampaign() async {
+    if (_busy) return;
+    final system = widget.game.expansionSystems.storyCampaign;
+    if (!system.continueAfterEnding()) return;
+    setState(() => _busy = true);
+    widget.game.campaignChronicle.insert(0, 'Начато новое дело: Эхо за печатью. Предыдущий исход: ${system.flags.where((flag) => flag.startsWith('prior_ending_')).join(', ')}.');
+    if (widget.game.campaignChronicle.length > 80) widget.game.campaignChronicle.removeRange(80, widget.game.campaignChronicle.length);
+    await widget.game.persistExpansion();
+    await widget.game.persistCustomization();
+    if (mounted) setState(() => _busy = false);
+  }
+
   Future<void> _restart() async {
     final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       backgroundColor: const Color(0xFF17141A),
@@ -7480,6 +7492,14 @@ class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
             if (node.ending) ...[
               Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFF1B1710), border: Border.all(color: const Color(0xFFFFD700)), borderRadius: BorderRadius.circular(8)), child: const Text('РАССЛЕДОВАНИЕ ЗАВЕРШЕНО\n\nВыбор Инквизитора записан в хронику. Можно начать новое прохождение и открыть другой исход.', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), height: 1.5, fontWeight: FontWeight.bold))),
               const SizedBox(height: 8),
+              if (system.endingId != 'ending_case4_expedition')
+                SizedBox(width: double.infinity, child: ElevatedButton.icon(
+                  onPressed: _busy ? null : _continueCampaign,
+                  icon: const Icon(Icons.travel_explore),
+                  label: const Text('ПРОДОЛЖИТЬ РАССЛЕДОВАНИЕ — ДЕЛО IV'),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF28413D), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 13)),
+                )),
+              const SizedBox(height: 8),
               ElevatedButton.icon(onPressed: _busy ? null : _restart, icon: const Icon(Icons.replay), label: const Text('НОВОЕ ПРОХОЖДЕНИЕ')),
             ] else ...node.choices.map((choice) {
               final unlocked = available.contains(choice.id);
@@ -7553,7 +7573,7 @@ class _InquisitionHubMenuState extends State<InquisitionHubMenu> {
               title: const Text('Сюжетная кампания: Дело Серой свечи', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
               subtitle: Text(g.expansionSystems.storyCampaign.completed
                 ? 'Расследование завершено: ${story_campaign.StoryCampaignSystem.nodeById(g.expansionSystems.storyCampaign.endingId!)?.title ?? "Эпилог"}'
-                : 'Дело ${g.expansionSystems.storyCampaign.chapterNumber}/3 • ${g.expansionSystems.storyCampaign.currentNode.title}',
+                : 'Дело ${g.expansionSystems.storyCampaign.chapterNumber}/4 • ${g.expansionSystems.storyCampaign.currentNode.title}',
                 style: const TextStyle(color: Colors.white70)),
               trailing: const Icon(Icons.chevron_right, color: Colors.white70),
               onTap: () { g.playClick(); g.openStoryCampaign(fromHub: true); },

@@ -285,6 +285,69 @@ class StoryCampaignSystem {
       dialogueSpeaker: 'Сервочереп «Люмен»', dialogue: '«Риск распространения снижен до приемлемого уровня. Человеческие потери не входят в расчёт приемлемости».',
       ending: true,
     ),
+    StoryNode(
+      id: 'case_04_dispatch', chapterId: 'case_04', chapterTitle: 'Дело IV — Эхо за печатью',
+      title: 'Эхо за печатью', location: 'Крейсер «Безмолвный приговор», зал стратегического планирования',
+      briefing: 'Через несколько суток после решения по Геллион-IX на закрытом канале появляется пакет с идентификатором, который должен был исчезнуть вместе с архивом. Источник сигнала связан с прежним делом, но содержание зависит от того, что осталось после вашей операции. Новое расследование начинается не с чистого листа: прошлое определило, кто готов помочь и чему можно верить.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Дело закрыто только на бумаге. Если сигнал настоящий, кто-то пережил зачистку — или кто-то рассчитывал, что мы поверим в её завершённость».',
+      choices: <StoryChoice>[
+        StoryChoice(id: 'follow_reconstruction_signal', label: 'Запросить гражданскую сеть восстановления', consequenceText: 'После восстановления сектора местные связисты помогают проследить источник пакета.', nextNodeId: 'case_04_reconstruction_route', requiredFlags: <String>{'prior_ending_ending_sector_restored'}, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'follow_military_audit', label: 'Потребовать доступ к военным журналам', consequenceText: 'При военном управлении след сигнала ищут через журналы гарнизона и контрольные пункты.', nextNodeId: 'case_04_occupation_route', requiredFlags: <String>{'prior_ending_ending_military_occupation'}, tone: StoryChoiceTone.pragmatic),
+        StoryChoice(id: 'follow_quarantine_beacon', label: 'Проверить сигнал с карантинного периметра', consequenceText: 'При бессрочном карантине пакет мог пройти только через изолированный маяк.', nextNodeId: 'case_04_quarantine_route', requiredFlags: <String>{'prior_ending_ending_sector_quarantine'}, tone: StoryChoiceTone.puritan),
+        StoryChoice(id: 'follow_residual_signal', label: 'Проверить остаточный сигнал без поддержки сектора', consequenceText: 'Ни одна из трёх специальных линий не доступна. Расследование продолжается по ограниченному каналу.', nextNodeId: 'case_04_residual_route', requiredFlags: <String>{'prior_ending_other'}, tone: StoryChoiceTone.investigative),
+      ],
+    ),
+    StoryNode(
+      id: 'case_04_reconstruction_route', chapterId: 'case_04', chapterTitle: 'Дело IV — Эхо за печатью',
+      title: 'Гражданский ретранслятор', location: 'Восстановленный жилой квартал Геллион-IX',
+      briefing: 'Связисты обнаружили повторяющийся импульс в списке аварийных вызовов. Его маскировали под запросы на медицинскую помощь. В обмен на защиту они передают вам фрагмент маршрута, но предупреждают: несколько семей всё ещё числятся пропавшими.',
+      dialogueSpeaker: 'Координатор гражданской сети', dialogue: '«Мы помним, кто не бросил свидетелей. Не просите нас снова молчать, если этот сигнал приведёт к живым людям».',
+      evidence: <StoryEvidence>[StoryEvidence(id: 'case4_civilian_trace', title: 'Маршрут гражданского ретранслятора', description: 'Фрагмент маршрута, связывающий сигнал с заброшенным узлом связи.')],
+      choices: <StoryChoice>[StoryChoice(id: 'submit_civilian_trace', label: 'Приобщить маршрут к новому делу', consequenceText: 'Маршрут принят как подтверждённая улика. Следующий этап расследования открыт.', nextNodeId: 'case_04_signal_review', requiredEvidence: <String>{'case4_civilian_trace'}, flagsToAdd: <String>{'case4_route_civilian'}, requisitionDelta: 8, tone: StoryChoiceTone.investigative)],
+    ),
+    StoryNode(
+      id: 'case_04_occupation_route', chapterId: 'case_04', chapterTitle: 'Дело IV — Эхо за печатью',
+      title: 'Журнал гарнизона', location: 'Военный архив Геллион-IX',
+      briefing: 'Дежурный офицер находит пропуск, выданный после официального закрытия дела. Запись подтверждает, что кто-то пользовался внутренним каналом гарнизона уже после ареста куратора. Доступ к оригиналу журнала оставляет цифровой след, который невозможно полностью стереть.',
+      dialogueSpeaker: 'Офицер внутренней безопасности', dialogue: '«Этот пропуск не должен был существовать. Если вы внесёте его в дело, мне придётся объяснять, почему контрольный журнал молчал».',
+      evidence: <StoryEvidence>[StoryEvidence(id: 'case4_garrison_log', title: 'Запись контрольного журнала', description: 'Служебная запись о пропуске, активированном после закрытия предыдущего дела.')],
+      choices: <StoryChoice>[StoryChoice(id: 'submit_garrison_log', label: 'Приобщить журнал к новому делу', consequenceText: 'Запись принята как подтверждённая улика. Следующий этап расследования открыт.', nextNodeId: 'case_04_signal_review', requiredEvidence: <String>{'case4_garrison_log'}, flagsToAdd: <String>{'case4_route_military'}, requisitionDelta: 8, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'case_04_quarantine_route', chapterId: 'case_04', chapterTitle: 'Дело IV — Эхо за печатью',
+      title: 'Маяк за периметром', location: 'Карантинный периметр Геллион-IX',
+      briefing: 'Сигнал идёт с автоматического маяка, который должен передавать только телеметрию герметичных шлюзов. В пакете обнаруживается человеческий голос, оборванный на координатах внутреннего сектора. Передача записи может нарушить режим секретности, но без неё след будет потерян.',
+      dialogueSpeaker: 'Сервочереп «Люмен»', dialogue: '«Источник не соответствует разрешённому профилю. Вероятность присутствия живого оператора: 41,7 процента. Рекомендация: извлечь исходный пакет».',
+      evidence: <StoryEvidence>[StoryEvidence(id: 'case4_quarantine_packet', title: 'Пакет карантинного маяка', description: 'Исходная передача с координатами внутреннего сектора и фрагментом человеческого голоса.')],
+      choices: <StoryChoice>[StoryChoice(id: 'submit_quarantine_packet', label: 'Приобщить пакет к новому делу', consequenceText: 'Передача изъята до автоматического удаления. Следующий этап расследования открыт.', nextNodeId: 'case_04_signal_review', requiredEvidence: <String>{'case4_quarantine_packet'}, flagsToAdd: <String>{'case4_route_quarantine'}, requisitionDelta: 8, tone: StoryChoiceTone.puritan)],
+    ),
+    StoryNode(
+      id: 'case_04_residual_route', chapterId: 'case_04', chapterTitle: 'Дело IV — Эхо за печатью',
+      title: 'Остаточный импульс', location: 'Служебный отсек крейсера «Безмолвный приговор»',
+      briefing: 'Без помощи местных связистов и доступа к закрытым журналам остаётся лишь короткий импульс в архиве связи крейсера. Он слишком слаб для точной локализации, но содержит повторяющийся номер старого контейнера. Это единственный след, который удалось сохранить.',
+      dialogueSpeaker: 'Сервочереп «Люмен»', dialogue: '«Точность локализации низкая. Однако идентификатор контейнера совпадает с материалами предыдущего дела. Рекомендую продолжить анализ».',
+      evidence: <StoryEvidence>[StoryEvidence(id: 'case4_residual_fragment', title: 'Фрагмент остаточного сигнала', description: 'Повреждённый пакет с идентификатором старого контейнера.')],
+      choices: <StoryChoice>[StoryChoice(id: 'submit_residual_fragment', label: 'Приобщить фрагмент к новому делу', consequenceText: 'Фрагмент принят как подтверждённая улика, несмотря на ограниченную точность.', nextNodeId: 'case_04_signal_review', requiredEvidence: <String>{'case4_residual_fragment'}, flagsToAdd: <String>{'case4_route_residual'}, requisitionDelta: 3, tone: StoryChoiceTone.investigative)],
+    ),
+    StoryNode(
+      id: 'case_04_signal_review', chapterId: 'case_04', chapterTitle: 'Дело IV — Эхо за печатью',
+      title: 'Имя за шумом', location: 'Лаборатория криптоанализа крейсера',
+      briefing: 'Собранный материал подтверждает: сигнал не является автоматическим эхом. Кто-то отправил его после завершения дела Серой свечи и намеренно использовал старый идентификатор. Улика указывает на узел связи за пределами Геллион-IX. Следующий шаг — подготовить отдельную экспедицию и установить, кто пережил зачистку.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Первое дело показало нам, кто лгал. Второе должно показать, кто остался за пределами нашего приговора».',
+      choices: <StoryChoice>[
+        StoryChoice(id: 'authorize_outer_relay_expedition', label: 'Одобрить экспедицию к внешнему ретранслятору', consequenceText: 'Следующее дело получает официальный статус. Собранная улика и выбранный маршрут сохраняются в хронике.', nextNodeId: 'ending_case4_expedition', requiredFlags: <String>{'case4_route_civilian'}, requiredEvidence: <String>{'case4_civilian_trace'}, flagsToAdd: <String>{'case4_expedition_authorized'}, requisitionDelta: 20, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'authorize_garrison_audit', label: 'Начать с проверки военных журналов', consequenceText: 'Экспедиция будет сопровождаться внутренним аудитом гарнизонных каналов.', nextNodeId: 'ending_case4_expedition', requiredFlags: <String>{'case4_route_military'}, requiredEvidence: <String>{'case4_garrison_log'}, flagsToAdd: <String>{'case4_expedition_authorized', 'case4_audit_required'}, requisitionDelta: 16, tone: StoryChoiceTone.pragmatic),
+        StoryChoice(id: 'authorize_quarantine_probe', label: 'Отправить зонд к карантинному маяку', consequenceText: 'Экспедиция начнётся с изоляции источника и проверки сигнала на биологические и варп-аномалии.', nextNodeId: 'ending_case4_expedition', requiredFlags: <String>{'case4_route_quarantine'}, requiredEvidence: <String>{'case4_quarantine_packet'}, flagsToAdd: <String>{'case4_expedition_authorized', 'case4_quarantine_protocol'}, requisitionDelta: 16, tone: StoryChoiceTone.puritan),
+        StoryChoice(id: 'authorize_limited_expedition', label: 'Одобрить ограниченную экспедицию', consequenceText: 'Недостаточно данных для точной локализации, поэтому экспедиция отправится с минимальным снабжением.', nextNodeId: 'ending_case4_expedition', requiredFlags: <String>{'case4_route_residual'}, requiredEvidence: <String>{'case4_residual_fragment'}, flagsToAdd: <String>{'case4_expedition_authorized', 'case4_limited_intelligence'}, requisitionDelta: 5, tone: StoryChoiceTone.investigative),
+      ],
+    ),
+    StoryNode(
+      id: 'ending_case4_expedition', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Курс на внешний ретранслятор',
+      location: 'Навигационный мостик крейсера «Безмолвный приговор»',
+      briefing: 'Экспедиция получила санкцию Инквизиции. Старое дело остаётся закрытым, но его последствия больше не ограничены Геллион-IX. Внешний ретранслятор молчит, пока крейсер прокладывает курс. Впереди новое расследование, а первый пакет уже внесён в архив как доказательство того, что кто-то продолжает действовать за пределами известной сети.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Подготовить корабль. На этот раз мы идём не по следу исчезнувших документов, а по следу того, кто их оставил».',
+      ending: true,
+    ),
   ];
 
   String currentNodeId = 'prologue_briefing';
@@ -536,6 +599,7 @@ class StoryCampaignSystem {
     if (currentNode.chapterId == 'case_01') return 1;
     if (currentNode.chapterId == 'case_02') return 2;
     if (currentNode.chapterId == 'case_03') return 3;
+    if (currentNode.chapterId == 'case_04') return 4;
     return completed ? 4 : 1;
   }
   double get progress => visitedNodes.length / nodes.length;
@@ -578,6 +642,26 @@ class StoryCampaignSystem {
     currentNodeId = 'prologue_briefing';
     visitedNodes.clear(); collectedEvidence.clear(); flags.clear(); decisions.clear();
     endingId = null; activeOperationId = null; operationAttempts.clear(); operationFieldObjectives.clear(); operationKills = 0; operationChampions = 0; operationBosses = 0; corruptionDelta = 0; requisitionDelta = 0;
+  }
+
+  /// Starts the sequel case while preserving the completed first-case record.
+  /// The previous ending is stored as a flag so existing save payloads remain compatible.
+  bool continueAfterEnding() {
+    final previousEnding = endingId;
+    if (previousEnding == null || !completed || operationInProgress) return false;
+    flags.add('prior_ending_$previousEnding');
+    if (!<String>{'ending_sector_restored', 'ending_military_occupation', 'ending_sector_quarantine'}.contains(previousEnding)) {
+      flags.add('prior_ending_other');
+    }
+    visitedNodes.add(currentNodeId);
+    currentNodeId = 'case_04_dispatch';
+    endingId = null;
+    activeOperationId = null;
+    operationKills = 0;
+    operationChampions = 0;
+    operationBosses = 0;
+    operationFieldObjectives.clear();
+    return true;
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
