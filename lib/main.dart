@@ -4349,6 +4349,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void showVictory() {
+    final storyOperation = expansionSystems.storyCampaign.resolveActiveOperation(success: true);
+    if (storyOperation != null) {
+      requisition += 25;
+      campaignChronicle.insert(0, 'Сюжетная операция выполнена: ${storyOperation.title}. Получено 25 реквизиции; открыт дополнительный маршрут дознания.');
+      if (campaignChronicle.length > 80) campaignChronicle.removeRange(80, campaignChronicle.length);
+    }
     // A completed campaign counts as one career operation; individual rooms do not.
     if (highThreatOperation) unlockedAchievementIds.add('career_high_threat_completed');
     recordCareerProgress(operations: 1);
@@ -4394,6 +4400,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void showGameOver() {
+    final storyOperation = expansionSystems.storyCampaign.resolveActiveOperation(success: false);
+    if (storyOperation != null) {
+      campaignChronicle.insert(0, 'Сюжетная операция не завершена: ${storyOperation.title}. Расследование сохранено; операцию можно повторить.');
+      if (campaignChronicle.length > 80) campaignChronicle.removeRange(80, campaignChronicle.length);
+      persistExpansion();
+    }
     isPlaying = false;
     isPaused = true;
     stopMusic();
@@ -4648,6 +4660,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void backToMenu() {
+    final abandonedStoryOperation = expansionSystems.storyCampaign.resolveActiveOperation(success: false);
+    if (abandonedStoryOperation != null) {
+      campaignChronicle.insert(0, 'Сюжетная операция прервана: ${abandonedStoryOperation.title}. Её можно начать повторно.');
+      if (campaignChronicle.length > 80) campaignChronicle.removeRange(80, campaignChronicle.length);
+      persistExpansion();
+    }
     isPlaying = false;
     isPaused = false;
     stopMusic();
@@ -6964,6 +6982,20 @@ class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
     if (mounted) setState(() => _busy = false);
   }
 
+  Future<void> _deployOperation() async {
+    if (_busy) return;
+    final game = widget.game;
+    final system = game.expansionSystems.storyCampaign;
+    if (!system.beginCurrentOperation()) return;
+    setState(() => _busy = true);
+    await game.persistExpansion();
+    game.playClick();
+    game.overlays.remove('storyCampaign');
+    game.storyReturnToHub = false;
+    game.startNewRun();
+    if (mounted) setState(() => _busy = false);
+  }
+
   Future<void> _restart() async {
     final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       backgroundColor: const Color(0xFF17141A),
@@ -7034,6 +7066,52 @@ class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
                 ],
               ]),
             ),
+            if (system.currentOperation != null) ...[
+              const SizedBox(height: 12),
+              Builder(builder: (context) {
+                final operation = system.currentOperation!;
+                final done = system.isOperationCompleted(operation);
+                final attempts = system.attemptsFor(operation);
+                return Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF11191A),
+                    border: Border.all(color: done ? const Color(0xFF66BB6A) : const Color(0xFF607D8B)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Icon(done ? Icons.verified : Icons.military_tech, color: done ? Colors.greenAccent : const Color(0xFF80CBC4)),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(operation.title.toUpperCase(), style: const TextStyle(color: Color(0xFF80CBC4), fontWeight: FontWeight.w900, letterSpacing: 0.7))),
+                      if (done) const Text('ВЫПОЛНЕНО', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ]),
+                    const SizedBox(height: 8),
+                    Text(operation.objective, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 5),
+                    Text(operation.briefing, style: const TextStyle(color: Colors.white60, height: 1.4, fontSize: 12)),
+                    if (attempts > 0) ...[
+                      const SizedBox(height: 5),
+                      Text('Попыток: $attempts', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                    ],
+                    const SizedBox(height: 10),
+                    SizedBox(width: double.infinity, child: ElevatedButton.icon(
+                      onPressed: _busy || done || system.operationInProgress ? null : _deployOperation,
+                      icon: Icon(done ? Icons.check_circle_outline : Icons.play_arrow),
+                      label: Text(done ? 'ПОЛЕВАЯ ОПЕРАЦИЯ ЗАВЕРШЕНА' : 'НАЧАТЬ ПОЛЕВУЮ ОПЕРАЦИЮ'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF28413D), foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                    )),
+                    if (!done) const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text('Успешное завершение боевого забега откроет специальный сюжетный выбор. Поражение не сбросит расследование.', style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.35)),
+                    ),
+                  ]),
+                );
+              }),
+            ],
             const SizedBox(height: 14),
             Row(children: [
               const Icon(Icons.fact_check_outlined, color: Color(0xFFFFD700)), const SizedBox(width: 8),
@@ -7068,6 +7146,9 @@ class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
               final missingFlags = choice.requiredFlags.where((id) => !system.flags.contains(id)).map((id) => switch (id) {
                 'witness_protected' => 'защищённый свидетель',
                 'cargo_route_found' => 'найденный грузовой маршрут',
+                'operation_station_secured' => 'успешная операция на вокс-станции',
+                'operation_cargo_intercepted' => 'успешный перехват конвоя',
+                'operation_archive_breached' => 'успешный штурм архива',
                 _ => id,
               });
               final missing = <String>[...missingEvidence, ...missingFlags];

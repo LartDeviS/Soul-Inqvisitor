@@ -10,6 +10,25 @@ class StoryEvidence {
   const StoryEvidence({required this.id, required this.title, required this.description});
 }
 
+/// A field operation attached to an investigation scene. Completing the existing
+/// action run records a persistent flag that can unlock a special narrative route.
+class StoryOperation {
+  final String id;
+  final String nodeId;
+  final String title;
+  final String objective;
+  final String briefing;
+  final String successFlag;
+  const StoryOperation({
+    required this.id,
+    required this.nodeId,
+    required this.title,
+    required this.objective,
+    required this.briefing,
+    required this.successFlag,
+  });
+}
+
 class StoryChoice {
   final String id;
   final String label;
@@ -63,7 +82,30 @@ class StoryNode {
 }
 
 class StoryCampaignSystem {
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 2;
+  static const List<StoryOperation> operations = <StoryOperation>[
+    StoryOperation(
+      id: 'secure_station', nodeId: 'station_investigation',
+      title: 'Операция «Тишина в эфире»',
+      objective: 'Зачистить вокс-станцию и завершить вылазку живым.',
+      briefing: 'Группа подавления обнаружила активность в нижнем техническом ярусе. Уничтожьте сопротивление и вернитесь с подтверждением, что станция больше не используется заговорщиками.',
+      successFlag: 'operation_station_secured',
+    ),
+    StoryOperation(
+      id: 'intercept_cargo', nodeId: 'cargo_depot',
+      title: 'Операция «Груз без печати»',
+      objective: 'Перехватить маршрут снабжения и выжить.',
+      briefing: 'По следу контейнера отправлен ударный отряд. Перехват должен лишить сеть снабжения прикрытия и дать Инквизитору доказательство для входа в архив.',
+      successFlag: 'operation_cargo_intercepted',
+    ),
+    StoryOperation(
+      id: 'breach_archive', nodeId: 'archive_confrontation',
+      title: 'Операция «Архив под пеплом»',
+      objective: 'Прорваться в архивный комплекс и завершить операцию.',
+      briefing: 'Архив закрыт внутренними печатями, а охрана получила приказ уничтожить документы. Захватите комплекс, чтобы открыть путь к тактическому задержанию куратора.',
+      successFlag: 'operation_archive_breached',
+    ),
+  ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
       id: 'prologue_briefing', chapterId: 'case_01', chapterTitle: 'Дело I — Пепел вокс-станции',
@@ -88,6 +130,7 @@ class StoryCampaignSystem {
         StoryEvidence(id: 'warp_residue', title: 'Варп-остаток', description: 'След слишком слаб для призыва, но согласуется с ритуальным подавлением сигнала.'),
       ],
       choices: <StoryChoice>[
+        StoryChoice(id: 'secure_station_route', label: 'Предъявить полевой отчёт и допросить Вейла', consequenceText: 'Успешная полевая операция подтверждает безопасность места и открывает более надёжный допрос.', nextNodeId: 'deacon_interrogation', requiredFlags: <String>{'operation_station_secured'}, requiredEvidence: <String>{'access_log'}, flagsToAdd: <String>{'station_secured', 'deacon_questioned_under_guard'}, requisitionDelta: 8, tone: StoryChoiceTone.pragmatic),
         StoryChoice(id: 'question_deacon', label: 'Допросить диакона Вейла', consequenceText: 'Доступ к допросу зависит от журнала доступа или вокс-фрагмента.', nextNodeId: 'deacon_interrogation', requiredEvidence: <String>{'access_log'}),
         StoryChoice(id: 'trace_cargo', label: 'Проследить маршрут «Серой свечи»', consequenceText: 'Путь ведёт к подпольному складу.', nextNodeId: 'cargo_depot', requiredEvidence: <String>{'vox_fragment'}, flagsToAdd: <String>{'cargo_route_found'}, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'purge_station', label: 'Сжечь станцию и закрыть дело', consequenceText: 'Угроза на месте будет устранена, но важные следы могут быть потеряны.', nextNodeId: 'puritan_verdict', flagsToAdd: <String>{'station_purged'}, corruptionDelta: -3, requisitionDelta: 12, tone: StoryChoiceTone.puritan),
@@ -120,6 +163,7 @@ class StoryCampaignSystem {
         StoryEvidence(id: 'hidden_vox', title: 'Скрытая передача', description: 'Запись подтверждает, что груз направлен в архивный комплекс под старой цитаделью.'),
       ],
       choices: <StoryChoice>[
+        StoryChoice(id: 'ambush_cargo_convoy', label: 'Устроить засаду на грузовой конвой', consequenceText: 'Полевой перехват позволяет войти в архив через охраняемый грузовой шлюз.', nextNodeId: 'archive_confrontation', requiredFlags: <String>{'operation_cargo_intercepted'}, requiredEvidence: <String>{'cargo_manifest'}, flagsToAdd: <String>{'cargo_intercept', 'archive_entry_secure'}, requisitionDelta: 18, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'follow_archive', label: 'Перехватить груз у архивного комплекса', consequenceText: 'Позволит выйти на организатора сети.', nextNodeId: 'archive_confrontation', requiredEvidence: <String>{'cargo_manifest'}, flagsToAdd: <String>{'cargo_intercept'}, requisitionDelta: 10, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'use_witness_mark', label: 'Использовать тайный знак защищённого свидетеля', consequenceText: 'Только защищённый Вейл может открыть запасной вход в архив.', nextNodeId: 'archive_confrontation', requiredFlags: <String>{'witness_protected'}, requiredEvidence: <String>{'cargo_manifest'}, flagsToAdd: <String>{'witness_route'}, requisitionDelta: 15, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'broadcast_accusation', label: 'Обнародовать обвинение через местный вокс', consequenceText: 'Поднимет тревогу и вынудит заговорщиков действовать открыто.', nextNodeId: 'archive_confrontation', flagsToAdd: <String>{'public_accusation'}, corruptionDelta: 3, requisitionDelta: 15, tone: StoryChoiceTone.pragmatic),
@@ -138,6 +182,7 @@ class StoryCampaignSystem {
         StoryEvidence(id: 'warp_blueprint', title: 'Схема подавителя', description: 'Устройство не призывает демона, а скрывает передачу данных от санкционированных сканеров.'),
       ],
       choices: <StoryChoice>[
+        StoryChoice(id: 'tactical_capture_curator', label: 'Задержать куратора после штурма архива', consequenceText: 'Полевой успех позволяет сохранить документы и взять куратора живым. Это открывает отдельный тактический финал.', nextNodeId: 'ending_tactical_justice', requiredFlags: <String>{'operation_archive_breached'}, requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'curator_captured_alive', 'archive_secured'}, requisitionDelta: 65, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'expose_curator', label: 'Предъявить доказательства и арестовать куратора', consequenceText: 'Доступно при наличии приказа и списка исчезнувших.', nextNodeId: 'ending_justice', requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'curator_exposed'}, requisitionDelta: 35, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'testify_with_witness', label: 'Вывести защищённого свидетеля и дать показания', consequenceText: 'Особый путь справедливости: свидетель подтверждает цепочку приказов.', nextNodeId: 'ending_witness_justice', requiredFlags: <String>{'witness_protected'}, requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'witness_testified', 'curator_exposed'}, requisitionDelta: 50, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'purge_archive', label: 'Объявить архив заражённым и уничтожить его', consequenceText: 'Сохранит секретность, но правда останется погребённой.', nextNodeId: 'ending_purge', flagsToAdd: <String>{'archive_purged'}, corruptionDelta: -8, requisitionDelta: 20, tone: StoryChoiceTone.puritan),
@@ -154,6 +199,13 @@ class StoryCampaignSystem {
         StoryChoice(id: 'close_case', label: 'Закрыть дело и вернуться на крейсер', consequenceText: 'Пуританский финал: сектор очищен, заговор не раскрыт.', nextNodeId: 'ending_purge', flagsToAdd: <String>{'case_closed'}, tone: StoryChoiceTone.puritan),
         StoryChoice(id: 'reopen_case', label: 'Нарушить приказ и исследовать контейнер', consequenceText: 'Вернёт расследование на путь поиска истины.', nextNodeId: 'cargo_depot', flagsToAdd: <String>{'case_reopened'}, corruptionDelta: 2, tone: StoryChoiceTone.investigative),
       ],
+    ),
+    StoryNode(
+      id: 'ending_tactical_justice', chapterId: 'epilogue', chapterTitle: 'Эпилог', title: 'Архив сохранён, куратор взят живым',
+      location: 'Зал дознаний крейсера «Безмолвный приговор»',
+      briefing: 'Штурм позволил захватить архив целиком. Куратор предстал перед закрытым трибуналом живым, а цепочка приказов и имена исчезнувших были сохранены без уничтожения доказательств. Победа не очистила сектор мгновенно, но дала Ордо возможность провести настоящее дознание.',
+      dialogueSpeaker: 'Инквизиторский куратор', dialogue: '«Сила открыла дверь. Доказательства не позволили ей захлопнуться снова».',
+      ending: true,
     ),
     StoryNode(
       id: 'ending_justice', chapterId: 'epilogue', chapterTitle: 'Эпилог', title: 'Приговор по печати',
@@ -191,11 +243,50 @@ class StoryCampaignSystem {
   final Set<String> flags = <String>{};
   final Map<String, String> decisions = <String, String>{};
   String? endingId;
+  String? activeOperationId;
+  final Map<String, int> operationAttempts = <String, int>{};
   int corruptionDelta = 0;
   int requisitionDelta = 0;
 
   StoryNode get currentNode => nodeById(currentNodeId) ?? nodes.first;
   bool get completed => endingId != null;
+  StoryOperation? get currentOperation => operationForNode(currentNodeId);
+  bool get operationInProgress => activeOperationId != null;
+  bool isOperationCompleted(StoryOperation operation) => flags.contains(operation.successFlag);
+  int attemptsFor(StoryOperation operation) => operationAttempts[operation.id] ?? 0;
+
+  static StoryOperation? operationForNode(String nodeId) {
+    for (final operation in operations) {
+      if (operation.nodeId == nodeId) return operation;
+    }
+    return null;
+  }
+
+  bool beginCurrentOperation() {
+    final operation = currentOperation;
+    if (completed || operation == null || operationInProgress || isOperationCompleted(operation)) return false;
+    activeOperationId = operation.id;
+    operationAttempts[operation.id] = (operationAttempts[operation.id] ?? 0) + 1;
+    return true;
+  }
+
+  /// Resolves the active field operation. Returns null when no story operation was active.
+  StoryOperation? resolveActiveOperation({required bool success}) {
+    final id = activeOperationId;
+    if (id == null) return null;
+    StoryOperation? operation;
+    for (final candidate in operations) {
+      if (candidate.id == id) { operation = candidate; break; }
+    }
+    activeOperationId = null;
+    if (operation != null && success) {
+      flags.add(operation.successFlag);
+      flags.remove('operation_failed_${operation.id}');
+    }
+    if (operation != null && !success && !flags.contains(operation.successFlag)) flags.add('operation_failed_${operation.id}');
+    return operation;
+  }
+
   int get chapterNumber {
     if (currentNode.chapterId == 'case_01') return 1;
     if (currentNode.chapterId == 'case_02') return 2;
@@ -218,7 +309,7 @@ class StoryCampaignSystem {
     flags.containsAll(choice.requiredFlags) && collectedEvidence.containsAll(choice.requiredEvidence)).toList(growable: false);
 
   bool choose(String choiceId) {
-    if (completed) return false;
+    if (completed || operationInProgress) return false;
     StoryChoice? selected;
     for (final choice in availableChoices) { if (choice.id == choiceId) { selected = choice; break; } }
     if (selected == null) return false;
@@ -239,14 +330,16 @@ class StoryCampaignSystem {
   void restart() {
     currentNodeId = 'prologue_briefing';
     visitedNodes.clear(); collectedEvidence.clear(); flags.clear(); decisions.clear();
-    endingId = null; corruptionDelta = 0; requisitionDelta = 0;
+    endingId = null; activeOperationId = null; operationAttempts.clear(); corruptionDelta = 0; requisitionDelta = 0;
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'schemaVersion': schemaVersion, 'currentNodeId': currentNodeId,
     'visitedNodes': visitedNodes.toList(), 'collectedEvidence': collectedEvidence.toList(),
     'flags': flags.toList(), 'decisions': decisions,
-    'endingId': endingId, 'corruptionDelta': corruptionDelta, 'requisitionDelta': requisitionDelta,
+    'endingId': endingId, 'activeOperationId': activeOperationId,
+    'operationAttempts': operationAttempts,
+    'corruptionDelta': corruptionDelta, 'requisitionDelta': requisitionDelta,
   };
 
   void loadJson(dynamic raw) {
@@ -265,6 +358,18 @@ class StoryCampaignSystem {
     }
     final ending = raw['endingId'];
     endingId = ending is String && nodeById(ending)?.ending == true ? ending : null;
+    final active = raw['activeOperationId'];
+    activeOperationId = active is String && operations.any((operation) => operation.id == active) ? active : null;
+    operationAttempts.clear();
+    if (raw['operationAttempts'] is Map) {
+      (raw['operationAttempts'] as Map).forEach((key, value) {
+        if (key is String && operations.any((operation) => operation.id == key) && value is num) {
+          operationAttempts[key] = value.toInt().clamp(0, 10000).toInt();
+        }
+      });
+    }
+    // Never retain an operation whose scene no longer matches the saved scene.
+    if (activeOperationId != null && operationForNode(currentNodeId)?.id != activeOperationId) activeOperationId = null;
     corruptionDelta = ((raw['corruptionDelta'] as num?)?.toInt() ?? 0).clamp(-100, 100).toInt();
     requisitionDelta = ((raw['requisitionDelta'] as num?)?.toInt() ?? 0).clamp(-500, 500).toInt();
     if (currentNode.ending) endingId ??= currentNodeId;
