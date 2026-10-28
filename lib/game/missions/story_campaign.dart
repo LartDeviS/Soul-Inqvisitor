@@ -201,6 +201,7 @@ class StoryCampaignSystem {
         StoryChoice(id: 'expose_curator', label: 'Предъявить доказательства и арестовать куратора', consequenceText: 'Доступно при наличии приказа и списка исчезнувших.', nextNodeId: 'ending_justice', requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'curator_exposed'}, requisitionDelta: 35, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'testify_with_witness', label: 'Вывести защищённого свидетеля и дать показания', consequenceText: 'Особый путь справедливости: свидетель подтверждает цепочку приказов.', nextNodeId: 'ending_witness_justice', requiredFlags: <String>{'witness_protected'}, requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'witness_testified', 'curator_exposed'}, requisitionDelta: 50, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'testify_with_archivist', label: 'Вывести спасённого архивариуса к трибуналу', consequenceText: 'Архивариус пережил штурм и подтверждает, что документы не были подменены после захвата.', nextNodeId: 'ending_justice', requiredFlags: <String>{'archive_archivist_rescued'}, requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'archivist_testified', 'curator_exposed'}, requisitionDelta: 42, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'submit_complete_dossier', label: 'Предъявить полное досье трёх спасённых линий', consequenceText: 'Особый финал доступен, если свидетель защищён, накладная сохранена, архивариус спасён, а приказ и список исчезнувших изъяты. Все три линии подтверждают друг друга.', nextNodeId: 'ending_complete_dossier', requiredFlags: <String>{'witness_protected', 'cargo_evidence_preserved', 'archive_archivist_rescued'}, requiredEvidence: <String>{'sealed_order', 'missing_names', 'cargo_manifest'}, flagsToAdd: <String>{'complete_dossier_submitted', 'curator_exposed', 'all_witnesses_protected'}, requisitionDelta: 75, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'purge_archive', label: 'Объявить архив заражённым и уничтожить его', consequenceText: 'Сохранит секретность, но правда останется погребённой.', nextNodeId: 'ending_purge', flagsToAdd: <String>{'archive_purged'}, corruptionDelta: -8, requisitionDelta: 20, tone: StoryChoiceTone.puritan),
         StoryChoice(id: 'use_blueprint', label: 'Присвоить схему и использовать её против врагов', consequenceText: 'Откроет радикальный исход при наличии схемы подавителя.', nextNodeId: 'ending_radical', requiredEvidence: <String>{'warp_blueprint'}, flagsToAdd: <String>{'blueprint_taken'}, corruptionDelta: 12, requisitionDelta: 45, tone: StoryChoiceTone.radical),
       ],
@@ -215,6 +216,13 @@ class StoryCampaignSystem {
         StoryChoice(id: 'close_case', label: 'Закрыть дело и вернуться на крейсер', consequenceText: 'Пуританский финал: сектор очищен, заговор не раскрыт.', nextNodeId: 'ending_purge', flagsToAdd: <String>{'case_closed'}, tone: StoryChoiceTone.puritan),
         StoryChoice(id: 'reopen_case', label: 'Нарушить приказ и исследовать контейнер', consequenceText: 'Вернёт расследование на путь поиска истины.', nextNodeId: 'cargo_depot', flagsToAdd: <String>{'case_reopened'}, corruptionDelta: 2, tone: StoryChoiceTone.investigative),
       ],
+    ),
+    StoryNode(
+      id: 'ending_complete_dossier', chapterId: 'epilogue', chapterTitle: 'Эпилог', title: 'Три свидетельства, одна печать',
+      location: 'Зал дознаний крейсера «Безмолвный приговор»',
+      briefing: 'Вейл подтвердил маршрут и происхождение знака, сохранённая накладная связала поставки с архивом, а архивариус Кастор доказал подлинность изъятых документов. Три независимые линии выдержали перекрёстную проверку. Куратор арестован, свидетели взяты под защиту, а список исчезнувших передан семьям и Ордо. Это редкая победа, в которой ни один ключевой голос не был принесён в жертву ради удобства отчёта.',
+      dialogueSpeaker: 'Инквизиторский куратор', dialogue: '«Теперь это не версия. Это цепь доказательств, в которой каждое звено подтверждает следующее».',
+      ending: true,
     ),
     StoryNode(
       id: 'ending_tactical_justice', chapterId: 'epilogue', chapterTitle: 'Эпилог', title: 'Архив сохранён, куратор взят живым',
@@ -270,6 +278,36 @@ class StoryCampaignSystem {
 
   StoryNode get currentNode => nodeById(currentNodeId) ?? nodes.first;
   bool get completed => endingId != null;
+
+  /// Human-readable consequences that persist across later investigation scenes.
+  /// The UI uses this to make earlier choices visible rather than silently hidden in flags.
+  List<String> get consequenceSummary {
+    final result = <String>[];
+    if (flags.contains('witness_protected')) {
+      result.add('Диакон Вейл жив и защищён: доступен его маршрут и свидетельские показания.');
+    } else if (flags.contains('witness_coerced')) {
+      result.add('Вейл сотрудничал под давлением: показания получены, но доверие свидетелей подорвано.');
+    } else if (flags.contains('deacon_executed')) {
+      result.add('Вейл казнён: личные свидетельские показания больше недоступны.');
+    } else if (flags.contains('crisis_failed_station_witness')) {
+      result.add('Сигнал подавлен: Вейла не удалось защитить во время полевой операции.');
+    }
+    if (flags.contains('cargo_evidence_preserved')) {
+      result.add('Накладная сохранена: можно подтвердить цепочку снабжения перед штурмом архива.');
+    } else if (flags.contains('crisis_failed_cargo_evidence') || flags.contains('evidence_suppressed')) {
+      result.add('Цепочка снабжения неполна: особый путь полного досье закрыт.');
+    }
+    if (flags.contains('archive_archivist_rescued')) {
+      result.add('Архивариус Кастор спасён: он может подтвердить подлинность документов в трибунале.');
+    } else if (flags.contains('crisis_failed_archive_archivist')) {
+      result.add('Архивариус не был эвакуирован: его свидетельство недоступно.');
+    }
+    if (flags.contains('complete_dossier_submitted')) {
+      result.add('Полное досье принято Ордо: все три линии доказательств объединены.');
+    }
+    return result;
+  }
+
   StoryOperation? get currentOperation => operationForNode(currentNodeId);
   bool get operationInProgress => activeOperationId != null;
   bool isOperationCompleted(StoryOperation operation) => flags.contains(operation.successFlag);

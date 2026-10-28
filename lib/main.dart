@@ -7333,6 +7333,29 @@ class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
                 Row(children: [const Icon(Icons.location_on_outlined, color: Colors.redAccent, size: 16), const SizedBox(width: 5), Expanded(child: Text(node.location, style: const TextStyle(color: Colors.white60, fontSize: 12)))]),
                 const SizedBox(height: 12),
                 Text(node.briefing, style: const TextStyle(color: Colors.white, height: 1.5, fontSize: 14)),
+                if (system.consequenceSummary.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10201D),
+                      border: Border.all(color: const Color(0xFF4DB6AC).withOpacity(0.65)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('ПОСЛЕДСТВИЯ ПРИНЯТЫХ РЕШЕНИЙ', style: TextStyle(color: Color(0xFF80CBC4), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                      const SizedBox(height: 6),
+                      ...system.consequenceSummary.map((line) => Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('• ', style: TextStyle(color: Color(0xFF80CBC4), fontWeight: FontWeight.bold)),
+                          Expanded(child: Text(line, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.35))),
+                        ]),
+                      )),
+                    ]),
+                  ),
+                ],
                 if (node.dialogue.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: const BoxDecoration(color: Color(0xFF0C0B0E), border: Border(left: BorderSide(color: Color(0xFFFFD700), width: 3))),
@@ -7428,6 +7451,8 @@ class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
                 'operation_station_secured' => 'успешная операция на вокс-станции',
                 'operation_cargo_intercepted' => 'успешный перехват конвоя',
                 'operation_archive_breached' => 'успешный штурм архива',
+                'cargo_evidence_preserved' => 'сохранённая накладная',
+                'archive_archivist_rescued' => 'спасённый архивариус',
                 _ => id,
               });
               final missing = <String>[...missingEvidence, ...missingFlags];
