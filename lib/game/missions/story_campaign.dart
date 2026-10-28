@@ -393,6 +393,75 @@ class StoryCampaignSystem {
       dialogueSpeaker: 'Инквизитор', dialogue: '«Мы закрыли канал. Теперь придётся выяснить, кто был на другом конце, не имея возможности спросить его напрямую».',
       ending: true,
     ),
+    StoryNode(
+      id: 'case_05_dispatch', chapterId: 'case_05', chapterTitle: 'Дело V — Тот, кто отвечает',
+      title: 'Три следа, один заказчик', location: 'Крейсер «Безмолвный приговор»',
+      briefing: 'Внешний ретранслятор больше не определяет ход расследования — теперь всё зависит от того, что удалось унести с Немезиды-9. Пленный оператор может назвать владельца командного ключа. Извлечённые журналы позволяют вычислить следующий передатчик. Если узел был уничтожен, остаётся только неполный фрагмент маршрута и риск отправить отряд в ловушку.',
+      dialogueSpeaker: 'Инквизитор',
+      dialogue: '«Мы не будем притворяться, будто все три пути равны. Один даёт нам голос, второй — координаты, третий — лишь направление. Но даже обрывок может привести к правде, если не спутать догадку с доказательством».',
+      choices: <StoryChoice>[
+        StoryChoice(id: 'case5_follow_interrogation', label: 'Начать с допроса пленного оператора', consequenceText: 'Доступно, если оператор был захвачен живым. Его показания нужно сопоставить с командным реестром.', nextNodeId: 'case_05_interrogation_route', requiredFlags: <String>{'case4_next_case_interrogation'}, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'case5_follow_signal_trace', label: 'Охотиться по координатам из журналов передачи', consequenceText: 'Технический след указывает на передвижной узел связи, который скоро сменит позицию.', nextNodeId: 'case_05_signal_route', requiredFlags: <String>{'case4_next_case_signal_trace'}, tone: StoryChoiceTone.pragmatic),
+        StoryChoice(id: 'case5_follow_fragment', label: 'Восстановить маршрут по обломку накопителя', consequenceText: 'Точная цель неизвестна. Придётся проверить несколько вероятных точек и учитывать возможность засады.', nextNodeId: 'case_05_fragment_route', requiredFlags: <String>{'case4_next_case_fragmentary_trace'}, tone: StoryChoiceTone.puritan),
+      ],
+    ),
+    StoryNode(
+      id: 'case_05_interrogation_route', chapterId: 'case_05', chapterTitle: 'Дело V — Тот, кто отвечает',
+      title: 'Показания под изоляцией', location: 'Изолятор крейсера',
+      briefing: 'Оператор утверждает, что командный ключ выдавался через посредника с позывным «Арбитр-Ноль». Он готов подтвердить личность посредника, но только после сверки импланта с реестром. В показаниях есть пробел: последнее подтверждение ключа было сделано уже после официальной смерти его владельца.',
+      dialogueSpeaker: 'Пленный оператор',
+      dialogue: '«Я никогда не видел заказчика. Я видел только подпись, которую нельзя подделать без доступа к закрытому реестру. Если вы покажете мне запись, я укажу, где её изменили».',
+      evidence: <StoryEvidence>[StoryEvidence(id: 'case5_operator_testimony', title: 'Показания оператора', description: 'Оператор называет посредника «Арбитр-Ноль» и указывает на подтверждение ключа после смерти владельца.')],
+      choices: <StoryChoice>[StoryChoice(id: 'case5_submit_testimony', label: 'Сверить показания с командным реестром', consequenceText: 'Показания приняты как рабочая зацепка, но требуют проверки независимым источником.', nextNodeId: 'case_05_evidence_review', requiredEvidence: <String>{'case5_operator_testimony'}, flagsToAdd: <String>{'case5_testimony_verified'}, requisitionDelta: 8, tone: StoryChoiceTone.investigative)],
+    ),
+    StoryNode(
+      id: 'case_05_signal_route', chapterId: 'case_05', chapterTitle: 'Дело V — Тот, кто отвечает',
+      title: 'Охота по временным меткам', location: 'Лаборатория криптоанализа',
+      briefing: 'Журналы передачи указывают не на постоянную станцию, а на мобильный узел, который использует короткие окна связи. Три временные метки совпадают с маршрутами снабжения, но одна из них была добавлена задним числом. Если вычислить исходный пакет, можно перехватить следующий сеанс.',
+      dialogueSpeaker: 'Сервочереп «Люмен»',
+      dialogue: '«Корреляция маршрута — 81 процент. Одна временная метка имеет признаки ручной вставки. Рекомендация: считать координаты достоверными, но не окончательными».',
+      evidence: <StoryEvidence>[StoryEvidence(id: 'case5_signal_coordinates', title: 'Координатная подпись мобильного узла', description: 'Координаты следующего передатчика и временное окно следующего сеанса связи.')],
+      choices: <StoryChoice>[StoryChoice(id: 'case5_submit_coordinates', label: 'Подготовить перехват мобильного узла', consequenceText: 'Координаты подтверждены для планирования операции; возможна ложная временная метка.', nextNodeId: 'case_05_evidence_review', requiredEvidence: <String>{'case5_signal_coordinates'}, flagsToAdd: <String>{'case5_coordinates_verified'}, requisitionDelta: 10, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'case_05_fragment_route', chapterId: 'case_05', chapterTitle: 'Дело V — Тот, кто отвечает',
+      title: 'Маршрут из пепла', location: 'Мастерская восстановления данных',
+      briefing: 'Обугленный накопитель сохранил лишь несколько байтов адреса и часть печати маршрутизации. Аналитики восстановили три возможных района, но только один связан с поставками компонентов для ретранслятора. Ошибка приведёт отряд к пустому объекту или подготовленной засаде.',
+      dialogueSpeaker: 'Техножрец-аналитик',
+      dialogue: '«Данных недостаточно для уверенного наведения. Мы можем выбрать наиболее вероятный сектор, но это будет оперативная гипотеза, а не установленный факт».',
+      evidence: <StoryEvidence>[StoryEvidence(id: 'case5_fragmentary_route', title: 'Неполный маршрутный фрагмент', description: 'Три вероятных района поиска и один совпадающий код поставщика компонентов.')],
+      choices: <StoryChoice>[StoryChoice(id: 'case5_submit_fragment', label: 'Утвердить ограниченную поисковую операцию', consequenceText: 'Ордо санкционирует разведку по неполному маршруту с уменьшенным запасом ресурсов.', nextNodeId: 'case_05_evidence_review', requiredEvidence: <String>{'case5_fragmentary_route'}, flagsToAdd: <String>{'case5_fragmentary_search'}, requisitionDelta: 3, tone: StoryChoiceTone.puritan)],
+    ),
+    StoryNode(
+      id: 'case_05_evidence_review', chapterId: 'case_05', chapterTitle: 'Дело V — Тот, кто отвечает',
+      title: 'Проверка перед высадкой', location: 'Комната тактического планирования',
+      briefing: 'Зацепка внесена в дело. Перед высадкой Инквизитор должен определить, какой уровень риска допустим: использовать подтверждённые показания, перехватить узел по техническим координатам или провести ограниченную разведку по неполному маршруту. Решение фиксируется в хронике и определит подготовку следующей операции.',
+      dialogueSpeaker: 'Инквизитор',
+      dialogue: '«Сомнение — не слабость. Слабость — забыть, где заканчивается доказательство и начинается предположение. Отметьте степень уверенности, и пусть отряд знает, чем рискует».',
+      choices: <StoryChoice>[
+        StoryChoice(id: 'case5_authorize_interrogation_lead', label: 'Санкционировать операцию по показаниям оператора', consequenceText: 'Приоритет — поиск «Арбитра-Ноль» и проверка командного реестра.', nextNodeId: 'ending_case5_interrogation', requiredFlags: <String>{'case5_testimony_verified'}, requiredEvidence: <String>{'case5_operator_testimony'}, flagsToAdd: <String>{'case5_operation_interrogation'}, requisitionDelta: 12, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'case5_authorize_signal_hunt', label: 'Санкционировать перехват мобильного узла', consequenceText: 'Приоритет — быстрое развёртывание на координатах следующего сеанса связи.', nextNodeId: 'ending_case5_signal_hunt', requiredFlags: <String>{'case5_coordinates_verified'}, requiredEvidence: <String>{'case5_signal_coordinates'}, flagsToAdd: <String>{'case5_operation_signal_hunt'}, requisitionDelta: 12, tone: StoryChoiceTone.pragmatic),
+        StoryChoice(id: 'case5_authorize_limited_search', label: 'Санкционировать ограниченную поисковую операцию', consequenceText: 'Приоритет — осторожная разведка с запасным маршрутом и ограниченным снабжением.', nextNodeId: 'ending_case5_limited_search', requiredFlags: <String>{'case5_fragmentary_search'}, requiredEvidence: <String>{'case5_fragmentary_route'}, flagsToAdd: <String>{'case5_operation_limited_search'}, requisitionDelta: 5, tone: StoryChoiceTone.puritan),
+      ],
+    ),
+    StoryNode(
+      id: 'ending_case5_interrogation', chapterId: 'epilogue', chapterTitle: 'Подготовка к делу VI', title: 'Имя за командным ключом',
+      location: 'Тактический мостик крейсера',
+      briefing: 'Операция начинается с проверки реестра и поиска «Арбитра-Ноль». Пленный оператор остаётся под охраной, а его показания становятся отправной точкой следующего дела. Команда знает, что ключ подтверждали после смерти владельца: значит, кто-то продолжает использовать имя мертвеца.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Сначала найдём руку, которая подписывает приказы. Потом решим, сколько голов должно упасть».', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case5_signal_hunt', chapterId: 'epilogue', chapterTitle: 'Подготовка к делу VI', title: 'Перехват до смены канала',
+      location: 'Навигационный мостик крейсера',
+      briefing: 'Крейсер берёт курс на мобильный узел. Временное окно коротко, поэтому операция начнётся с перехвата и отключения резервного канала. Технические данные точны настолько, чтобы рискнуть высадкой, но команда готовится к возможной ложной метке.',
+      dialogueSpeaker: 'Сервочереп «Люмен»', dialogue: '«Окно связи рассчитано. Если цель сменит позицию, следующее совпадение будет значительно слабее».', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case5_limited_search', chapterId: 'epilogue', chapterTitle: 'Подготовка к делу VI', title: 'Три точки на пустой карте',
+      location: 'Комната тактического планирования',
+      briefing: 'Операция санкционирована с ограниченным снабжением. Три района остаются возможными целями, а совпадение кода поставщика даёт лишь слабое преимущество. Отряд отправится по наиболее вероятному маршруту, сохраняя резерв на случай засады.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Мы идём не потому, что уверены. Мы идём потому, что промедление оставит врагу время стереть остатки следа».', ending: true,
+    ),
     // Retained as a valid legacy destination for saves created by Update 12.
     StoryNode(
       id: 'ending_case4_expedition', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Курс на внешний ретранслятор',
@@ -666,7 +735,8 @@ class StoryCampaignSystem {
     if (currentNode.chapterId == 'case_02') return 2;
     if (currentNode.chapterId == 'case_03') return 3;
     if (currentNode.chapterId == 'case_04') return 4;
-    return completed ? 4 : 1;
+    if (currentNode.chapterId == 'case_05') return 5;
+    return completed ? 5 : 1;
   }
   double get progress => visitedNodes.length / nodes.length;
   static StoryNode? nodeById(String id) {
@@ -716,11 +786,40 @@ class StoryCampaignSystem {
     final previousEnding = endingId;
     if (previousEnding == null || !completed || operationInProgress) return false;
     flags.add('prior_ending_$previousEnding');
-    if (!<String>{'ending_sector_restored', 'ending_military_occupation', 'ending_sector_quarantine'}.contains(previousEnding)) {
-      flags.add('prior_ending_other');
+    final caseFourEndings = <String>{
+      'ending_case4_operator_captured',
+      'ending_case4_data_extracted',
+      'ending_case4_relay_destroyed',
+      'ending_case4_expedition',
+    };
+    if (caseFourEndings.contains(previousEnding)) {
+      // Reconstruct the expected route from the ending itself as a safety net
+      // for older or partially migrated saves that lack the corresponding flag.
+      switch (previousEnding) {
+        case 'ending_case4_operator_captured':
+          flags.add('case4_next_case_interrogation');
+          break;
+        case 'ending_case4_data_extracted':
+          flags.add('case4_next_case_signal_trace');
+          break;
+        case 'ending_case4_relay_destroyed':
+        case 'ending_case4_expedition':
+          if (!flags.contains('case4_next_case_interrogation') &&
+              !flags.contains('case4_next_case_signal_trace') &&
+              !flags.contains('case4_next_case_fragmentary_trace')) {
+            flags.add('case4_next_case_fragmentary_trace');
+          }
+          break;
+      }
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_05_dispatch';
+    } else {
+      if (!<String>{'ending_sector_restored', 'ending_military_occupation', 'ending_sector_quarantine'}.contains(previousEnding)) {
+        flags.add('prior_ending_other');
+      }
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_04_dispatch';
     }
-    visitedNodes.add(currentNodeId);
-    currentNodeId = 'case_04_dispatch';
     endingId = null;
     activeOperationId = null;
     operationKills = 0;

@@ -7588,7 +7588,7 @@ class _InquisitionHubMenuState extends State<InquisitionHubMenu> {
               title: const Text('Сюжетная кампания: Дело Серой свечи', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
               subtitle: Text(g.expansionSystems.storyCampaign.completed
                 ? 'Расследование завершено: ${story_campaign.StoryCampaignSystem.nodeById(g.expansionSystems.storyCampaign.endingId!)?.title ?? "Эпилог"}'
-                : 'Дело ${g.expansionSystems.storyCampaign.chapterNumber}/4 • ${g.expansionSystems.storyCampaign.currentNode.title}',
+                : 'Дело ${g.expansionSystems.storyCampaign.chapterNumber}/5 • ${g.expansionSystems.storyCampaign.currentNode.title}',
                 style: const TextStyle(color: Colors.white70)),
               trailing: const Icon(Icons.chevron_right, color: Colors.white70),
               onTap: () { g.playClick(); g.openStoryCampaign(fromHub: true); },
