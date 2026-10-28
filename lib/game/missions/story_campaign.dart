@@ -48,6 +48,7 @@ class StoryChoice {
   final int corruptionDelta;
   final int requisitionDelta;
   final StoryChoiceTone tone;
+  final int requiredMinSectorStability;
   const StoryChoice({
     required this.id,
     required this.label,
@@ -59,6 +60,7 @@ class StoryChoice {
     this.corruptionDelta = 0,
     this.requisitionDelta = 0,
     this.tone = StoryChoiceTone.investigative,
+    this.requiredMinSectorStability = 0,
   });
 }
 
@@ -204,6 +206,9 @@ class StoryCampaignSystem {
         StoryChoice(id: 'submit_complete_dossier', label: 'Предъявить полное досье трёх спасённых линий', consequenceText: 'Особый финал доступен, если свидетель защищён, накладная сохранена, архивариус спасён, а приказ и список исчезнувших изъяты. Все три линии подтверждают друг друга.', nextNodeId: 'ending_complete_dossier', requiredFlags: <String>{'witness_protected', 'cargo_evidence_preserved', 'archive_archivist_rescued'}, requiredEvidence: <String>{'sealed_order', 'missing_names', 'cargo_manifest'}, flagsToAdd: <String>{'complete_dossier_submitted', 'curator_exposed', 'all_witnesses_protected'}, requisitionDelta: 75, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'purge_archive', label: 'Объявить архив заражённым и уничтожить его', consequenceText: 'Сохранит секретность, но правда останется погребённой.', nextNodeId: 'ending_purge', flagsToAdd: <String>{'archive_purged'}, corruptionDelta: -8, requisitionDelta: 20, tone: StoryChoiceTone.puritan),
         StoryChoice(id: 'use_blueprint', label: 'Присвоить схему и использовать её против врагов', consequenceText: 'Откроет радикальный исход при наличии схемы подавителя.', nextNodeId: 'ending_radical', requiredEvidence: <String>{'warp_blueprint'}, flagsToAdd: <String>{'blueprint_taken'}, corruptionDelta: 12, requisitionDelta: 45, tone: StoryChoiceTone.radical),
+        StoryChoice(id: 'restore_helion', label: 'Восстановить порядок и передать сектор гражданской администрации', consequenceText: 'Доступно при высокой стабильности, защите Вейла, сохранённой накладной и спасённом архивариусе. Сектор получает шанс на восстановление без сокрытия преступлений.', nextNodeId: 'ending_sector_restored', requiredFlags: <String>{'witness_protected', 'cargo_evidence_preserved', 'archive_archivist_rescued'}, requiredEvidence: <String>{'sealed_order', 'missing_names', 'cargo_manifest'}, requiredMinSectorStability: 8, flagsToAdd: <String>{'sector_restored', 'curator_exposed', 'all_witnesses_protected'}, requisitionDelta: 45, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'impose_martial_law', label: 'Передать Геллион-IX под военное управление Ордо', consequenceText: 'При успешном штурме архив закрывается под охраной, а сектор переходит под чрезвычайное управление. Безопасность обеспечена ценой гражданских свобод.', nextNodeId: 'ending_military_occupation', requiredFlags: <String>{'operation_archive_breached'}, requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'sector_martial_law', 'curator_captured_alive'}, requisitionDelta: 30, corruptionDelta: 1, tone: StoryChoiceTone.pragmatic),
+        StoryChoice(id: 'seal_helion_quarantine', label: 'Запечатать сектор на постоянный карантин', consequenceText: 'Доступно при успешном штурме и обнаружении схемы подавителя. Распространение угрозы ограничивается, но жители остаются под изоляцией.', nextNodeId: 'ending_sector_quarantine', requiredFlags: <String>{'operation_archive_breached'}, requiredEvidence: <String>{'sealed_order', 'warp_blueprint'}, flagsToAdd: <String>{'sector_quarantined', 'archive_purged'}, corruptionDelta: -3, requisitionDelta: 25, tone: StoryChoiceTone.puritan),
       ],
     ),
     StoryNode(
@@ -259,6 +264,27 @@ class StoryCampaignSystem {
       dialogueSpeaker: 'Сервочереп «Люмен»', dialogue: '«Предупреждение: принятое решение повышает риск дальнейшей порчи. Рекомендация куратора — удалить этот файл. Вы не обязаны следовать рекомендации».',
       ending: true,
     ),
+    StoryNode(
+      id: 'ending_sector_restored', chapterId: 'epilogue', chapterTitle: 'Эпилог', title: 'Геллион-IX: возвращение к жизни',
+      location: 'Административный центр Геллион-IX',
+      briefing: 'Свидетельские показания, грузовая накладная и подлинные архивные документы выдержали перекрёстную проверку. После ареста куратора Ордо передало гражданской администрации полномочия под надзором независимых представителей. Восстановление будет долгим, но семьи исчезнувших получили ответы, а сектор — шанс выйти из чрезвычайного положения.',
+      dialogueSpeaker: 'Диакон Вейл', dialogue: '«Мы не вернули тех, кого потеряли. Но впервые нам не приказали забыть их имена».',
+      ending: true,
+    ),
+    StoryNode(
+      id: 'ending_military_occupation', chapterId: 'epilogue', chapterTitle: 'Эпилог', title: 'Геллион-IX: железный порядок',
+      location: 'Командный бастион Ордо',
+      briefing: 'Куратор задержан, архив взят под вооружённую охрану, а Геллион-IX передан под военное управление. Патрули подавили открытые беспорядки, но комендантский час и проверки стали частью повседневной жизни. Сектор безопаснее, чем прежде, однако жители знают: чрезвычайные полномочия редко исчезают сами собой.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Порядок восстановлен. Не путайте это с доверием».',
+      ending: true,
+    ),
+    StoryNode(
+      id: 'ending_sector_quarantine', chapterId: 'epilogue', chapterTitle: 'Эпилог', title: 'Геллион-IX: вечный карантин',
+      location: 'Карантинный периметр Геллион-IX',
+      briefing: 'Архив и опасные технологии запечатаны, а сектор отрезан от обычного сообщения. Распространение запретного сигнала остановлено, но эвакуация не смогла охватить всех жителей. Ордо объявило карантин бессрочным: угроза изолирована, цена решения останется предметом закрытых споров.',
+      dialogueSpeaker: 'Сервочереп «Люмен»', dialogue: '«Риск распространения снижен до приемлемого уровня. Человеческие потери не входят в расчёт приемлемости».',
+      ending: true,
+    ),
   ];
 
   String currentNodeId = 'prologue_briefing';
@@ -304,6 +330,17 @@ class StoryCampaignSystem {
     }
     if (flags.contains('complete_dossier_submitted')) {
       result.add('Полное досье принято Ордо: все три линии доказательств объединены.');
+    }
+    switch (endingId) {
+      case 'ending_sector_restored':
+        result.add('Судьба сектора: восстановление гражданского управления и защита свидетелей.');
+        break;
+      case 'ending_military_occupation':
+        result.add('Судьба сектора: чрезвычайное военное управление Ордо.');
+        break;
+      case 'ending_sector_quarantine':
+        result.add('Судьба сектора: бессрочная изоляция под карантинными печатями.');
+        break;
     }
     return result;
   }
@@ -514,7 +551,9 @@ class StoryCampaignSystem {
   }
 
   List<StoryChoice> get availableChoices => currentNode.choices.where((choice) =>
-    flags.containsAll(choice.requiredFlags) && collectedEvidence.containsAll(choice.requiredEvidence)).toList(growable: false);
+    flags.containsAll(choice.requiredFlags) &&
+    collectedEvidence.containsAll(choice.requiredEvidence) &&
+    sectorStabilityScore >= choice.requiredMinSectorStability).toList(growable: false);
 
   bool choose(String choiceId) {
     if (completed || operationInProgress) return false;
