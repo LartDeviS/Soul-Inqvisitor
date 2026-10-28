@@ -1680,9 +1680,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     world.add(CorruptionZone(position: pos.clone())..priority = 4);
   }
 
+  // Screen-space controls must remain visually stable during combat. Camera shake
+  // was repeatedly competing with camera.follow(player), making the arena jump
+  // between frames on some Android devices. Keep the API for existing callers,
+  // but deliberately disable positional camera shake. Hit/explosion visuals remain.
   void triggerShake({double power = 6, double time = 0.18}) {
-    shakePower = max(shakePower, power);
-    shakeTime = max(shakeTime, time);
+    shakePower = 0;
+    shakeTime = 0;
   }
 
   void triggerCinemaZoom() {
@@ -3608,8 +3612,8 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       margin: EdgeInsets.only(left: moveJoystickLeft, bottom: moveJoystickBottom),
     );
     attackJoystick = JoystickComponent(
-      knob: CircleComponent(radius: joystickSize * 0.35, paint: Paint()..color = const Color(0xFFFF5252).withOpacity(0.8)),
-      background: CircleComponent(radius: joystickSize * 0.55, paint: Paint()..color = const Color(0xFFFF5252).withOpacity(0.25)),
+      knob: CircleComponent(radius: joystickSize * 0.35, paint: Paint()..color = const Color(0xFFFF5252)),
+      background: CircleComponent(radius: joystickSize * 0.55, paint: Paint()..color = const Color(0x66FF5252)),
       margin: EdgeInsets.only(right: attackJoystickRight, bottom: attackJoystickBottom),
     );
     switchWeaponButton = HudButtonComponent(
@@ -4387,14 +4391,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       if (cinemaZoomTimer <= 0) camera.viewfinder.zoom = currentZoom;
     }
 
-    if (shakeTime > 0) {
-      shakeTime -= dt;
-      final ox = (Random().nextDouble() - 0.5) * shakePower * 2;
-      final oy = (Random().nextDouble() - 0.5) * shakePower * 2;
-      camera.viewfinder.position = player.position + Vector2(ox, oy);
-    } else {
-      camera.follow(player);
-    }
+    // Keep the camera follow strategy stable; do not move the viewport by random
+    // offsets while the mobile joystick controls are being held.
+    shakeTime = 0;
+    shakePower = 0;
+    camera.follow(player);
 
     if (!isBossLevel && enemiesSpawned < enemiesToSpawn) {
       spawnTimer -= dt;
