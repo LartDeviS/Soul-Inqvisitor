@@ -229,6 +229,33 @@ class StoryCampaignSystem {
       requiredKills: 11, requiredBosses: 1,
       requiredFieldObjectives: <String>{'case9_identity_ledger_secured'},
     ),
+    StoryOperation(
+      id: 'case10_trial_evidence_operation', nodeId: 'case_10_trial_evidence',
+      title: 'Операция «Свидетели под печатью»',
+      objective: 'Изъять архив показаний и сохранить цепочку доказательств для трибунала.',
+      briefing: 'Восс захвачен живым. До начала закрытого дознания нужно забрать свидетельские матрицы из судебного хранилища и не позволить бывшим покровителям уничтожить показания.',
+      successFlag: 'operation_case10_trial_evidence_secured',
+      requiredKills: 8, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case10_testimony_archive_seized'},
+    ),
+    StoryOperation(
+      id: 'case10_cell_cleanup_operation', nodeId: 'case_10_cell_cleanup',
+      title: 'Операция «Последние ячейки»',
+      objective: 'Обнаружить убежище посредников и уничтожить резервный передатчик.',
+      briefing: 'После уничтожения сети отдельные посредники пытаются восстановить каналы на локальных ключах. Найдите убежище, извлеките список беглецов и отключите передатчик.',
+      successFlag: 'operation_case10_cell_cleanup_secured',
+      requiredKills: 10, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case10_fugitive_registry_recovered'},
+    ),
+    StoryOperation(
+      id: 'case10_shadow_network_operation', nodeId: 'case_10_shadow_network',
+      title: 'Операция «Чёрный инструмент»',
+      objective: 'Проверить захваченный узел и подавить автономный защитный протокол.',
+      briefing: 'Инквизиция сохранила инфраструктуру Восса и направила её против новой угрозы. Но узел запустил автономную проверку полномочий. Извлеките контрольный ключ и докажите, что сеть подчиняется новому владельцу.',
+      successFlag: 'operation_case10_shadow_network_secured',
+      requiredKills: 9, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case10_control_key_extracted'},
+    ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
@@ -698,6 +725,39 @@ class StoryCampaignSystem {
       location: 'Закрытая палуба криптоанализа',
       briefing: 'Инквизиция захватила сеть и переписала корневые полномочия. Теперь она может выявлять угрозы раньше, чем те проявятся, но каждый новый приказ напоминает, насколько тонка граница между охотой на заговорщиков и созданием нового заговора.', ending: true,
     ),
+    StoryNode(
+      id: 'case_10_trial_evidence', chapterId: 'case_10', chapterTitle: 'Дело X — Цена свидетельства',
+      title: 'Свидетели под печатью', location: 'Закрытое судебное хранилище Ордо',
+      briefing: 'Восс захвачен живым, и его показания могут вывести дознание на покровителей внутри Империума. Но свидетельские матрицы хранятся в отдельном хранилище, а люди, чьи имена в них записаны, уже начали зачистку. Изымите архив показаний и удержите его до прибытия инквизиторского конвоя.',
+      dialogueSpeaker: 'Инквизиторский дознаватель', dialogue: '«Правда не имеет веса, пока её можно сжечь. Сохраните свидетелей — даже если они назовут имена тех, кому мы обязаны служить».',
+      choices: <StoryChoice>[StoryChoice(id: 'case10_secure_testimony', label: 'Изъять матрицы показаний и опечатать хранилище', consequenceText: 'Сохранённая цепочка доказательств открывает путь к закрытому трибуналу.', nextNodeId: 'ending_case10_trial_evidence', requiredFlags: <String>{'operation_case10_trial_evidence_secured'}, flagsToAdd: <String>{'case10_testimony_preserved', 'case10_trial_path_open'}, requisitionDelta: 18, tone: StoryChoiceTone.puritan)],
+    ),
+    StoryNode(
+      id: 'case_10_cell_cleanup', chapterId: 'case_10', chapterTitle: 'Дело X — Последние ячейки',
+      title: 'Убежище без знамени', location: 'Промышленный пояс Геллион-IX',
+      briefing: 'После уничтожения центральной сети оставшиеся посредники перешли на локальные ключи и укрылись в заброшенном распределительном комплексе. Найдите список беглецов, отключите резервный передатчик и не дайте ячейкам превратиться в новую сеть.',
+      dialogueSpeaker: 'Командир ударной группы', dialogue: '«Мы вырвали корень, но корни всегда оставляют семена. Сегодня мы проверим каждый тёмный угол».',
+      choices: <StoryChoice>[StoryChoice(id: 'case10_close_cells', label: 'Изъять список беглецов и уничтожить резервный канал', consequenceText: 'Остатки сети лишаются возможности быстро восстановить связь.', nextNodeId: 'ending_case10_cells_cleared', requiredFlags: <String>{'operation_case10_cell_cleanup_secured'}, flagsToAdd: <String>{'case10_cells_cleared', 'case10_reserve_channel_destroyed'}, requisitionDelta: 12, corruptionDelta: -1, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'case_10_shadow_network', chapterId: 'case_10', chapterTitle: 'Дело X — Чёрный инструмент',
+      title: 'Проверка нового владельца', location: 'Закрытая палуба криптоанализа',
+      briefing: 'Захваченная сеть направлена против угрозы, которую обычные каналы не могут обнаружить. Однако её автономный протокол требует подтверждения полномочий и начинает блокировать команды Инквизиции. Извлеките контрольный ключ, пока система не объявила нового владельца самозванцем.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Инструмент не становится безопасным оттого, что мы держим его за рукоять. Докажите, что мы управляем им, а не наоборот».',
+      choices: <StoryChoice>[StoryChoice(id: 'case10_claim_shadow_node', label: 'Извлечь контрольный ключ и переподписать узел', consequenceText: 'Сеть принимает новую печать, но её использование остаётся опасным компромиссом.', nextNodeId: 'ending_case10_shadow_node_claimed', requiredFlags: <String>{'operation_case10_shadow_network_secured'}, flagsToAdd: <String>{'case10_shadow_node_rekeyed', 'case10_network_risk_active'}, requisitionDelta: 24, corruptionDelta: 2, tone: StoryChoiceTone.radical)],
+    ),
+    StoryNode(
+      id: 'ending_case10_trial_evidence', chapterId: 'epilogue', chapterTitle: 'Дело X — Судебная цепочка', title: 'Правда под семью печатями',
+      location: 'Закрытый трибунал Ордо', briefing: 'Свидетельские матрицы доставлены под охраной. Дознание получило возможность сопоставить показания Восса с приказами и цепочками поставок. Судебный путь открыт, хотя каждый новый свидетель может оказаться как ключом, так и ловушкой.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case10_cells_cleared', chapterId: 'epilogue', chapterTitle: 'Дело X — Последние ячейки', title: 'Пепел посредников',
+      location: 'Промышленный пояс Геллион-IX', briefing: 'Список беглецов изъят, а резервный передатчик уничтожен. Несколько посредников задержаны, остальные лишились возможности быстро восстановить сеть. Но без центральной инфраструктуры часть следов навсегда останется разрозненной.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case10_shadow_node_claimed', chapterId: 'epilogue', chapterTitle: 'Дело X — Чёрный инструмент', title: 'Печать на чужом оружии',
+      location: 'Закрытая палуба криптоанализа', briefing: 'Контрольный ключ принят, и автономный узел признаёт новую печать. Теперь сеть можно применять против угроз за пределами прежнего расследования, но активный риск остаётся: система всё ещё способна скрывать собственные решения под видом законного приказа.', ending: true,
+    ),
     // Retained as a valid legacy destination for saves created by Update 12.
     StoryNode(
       id: 'ending_case4_expedition', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Курс на внешний ретранслятор',
@@ -1024,13 +1084,6 @@ class StoryCampaignSystem {
   bool continueAfterEnding() {
     final previousEnding = endingId;
     if (previousEnding == null || !completed || operationInProgress) return false;
-    // Case IX outcomes are deliberate campaign endpoints in this update.
-    // A later update can add the next case without falling back to the old Case IV dispatch.
-    if (<String>{
-      'ending_case9_capture_voss',
-      'ending_case9_network_destroyed',
-      'ending_case9_network_repurposed',
-    }.contains(previousEnding)) return false;
     flags.add('prior_ending_$previousEnding');
     final caseFourEndings = <String>{
       'ending_case4_operator_captured',
@@ -1050,7 +1103,19 @@ class StoryCampaignSystem {
     final caseSevenEndings = <String>{
       'ending_case7_dead_signatory', 'ending_case7_mobile_node', 'ending_case7_supply_convergence',
     };
-    if (previousEnding == 'ending_case8_origin_convergence') {
+    if (previousEnding == 'ending_case9_capture_voss') {
+      flags.add('case10_route_trial');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_10_trial_evidence';
+    } else if (previousEnding == 'ending_case9_network_destroyed') {
+      flags.add('case10_route_cell_cleanup');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_10_cell_cleanup';
+    } else if (previousEnding == 'ending_case9_network_repurposed') {
+      flags.add('case10_route_shadow_network');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_10_shadow_network';
+    } else if (previousEnding == 'ending_case8_origin_convergence') {
       flags.add('case9_root_order_decoded');
       flags.add('case9_coordinator_identity_revealed');
       visitedNodes.add(currentNodeId);

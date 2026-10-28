@@ -51,13 +51,31 @@ void main() {
       }
     });
 
+
+    test('each Case IX decision opens its matching Case X branch', () {
+      final routes = <({String ending, String node, String flag, String operation})>[
+        (ending: 'ending_case9_capture_voss', node: 'case_10_trial_evidence', flag: 'case10_route_trial', operation: 'case10_trial_evidence_operation'),
+        (ending: 'ending_case9_network_destroyed', node: 'case_10_cell_cleanup', flag: 'case10_route_cell_cleanup', operation: 'case10_cell_cleanup_operation'),
+        (ending: 'ending_case9_network_repurposed', node: 'case_10_shadow_network', flag: 'case10_route_shadow_network', operation: 'case10_shadow_network_operation'),
+      ];
+      for (final route in routes) {
+        final campaign = StoryCampaignSystem()
+          ..currentNodeId = route.ending
+          ..endingId = route.ending;
+        expect(campaign.continueAfterEnding(), isTrue);
+        expect(campaign.currentNodeId, route.node);
+        expect(campaign.flags, contains(route.flag));
+        expect(campaign.currentOperation?.id, route.operation);
+      }
+    });
+
     test('Magister Voss has a unique three-phase boss profile', () {
       final profile = StoryBossProfile.forKind(StoryBossKind.deadSignatoryMagister);
       expect(profile.title, 'Магистр Севериан Восс');
       expect(profile.phaseOneAttacks, isNotEmpty);
       expect(profile.phaseTwoAttacks, isNotEmpty);
       expect(profile.phaseThreeAttacks, isNotEmpty);
-      expect(StoryBossProfile.all.values.map((p) => p.title).toSet(), hasLength(15));
+      expect(StoryBossProfile.all.values.map((p) => p.title).toSet(), hasLength(18));
     });
   });
 }

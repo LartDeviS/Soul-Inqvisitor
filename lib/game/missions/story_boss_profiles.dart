@@ -1,6 +1,6 @@
 /// Data-driven identities for the three campaign operation bosses.
 /// This file deliberately has no Flutter/Flame dependency so its rules are testable.
-enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster, rootOrderCoordinator, deadSignatoryMagister }
+enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster, rootOrderCoordinator, deadSignatoryMagister, tribunalJusticiar, cellPursuer, shadowNetworkWarden }
 
 class StoryBossProfile {
   final StoryBossKind kind;
@@ -184,6 +184,42 @@ class StoryBossProfile {
       phaseOneAttacks: [0, 2, 3, 0],
       phaseTwoAttacks: [3, 4, 1, 2, 3],
       phaseThreeAttacks: [4, 3, 4, 1, 2, 4],
+    ),
+    StoryBossKind.tribunalJusticiar: StoryBossProfile(
+      kind: StoryBossKind.tribunalJusticiar,
+      title: 'Юстициарий закрытого трибунала',
+      subtitle: 'Хранитель показаний и судебных печатей',
+      healthMultiplier: 1.18,
+      movementMultiplier: 0.88,
+      attackIntervalMultiplier: 0.90,
+      damageTakenMultiplier: 0.86,
+      phaseOneAttacks: [0, 3, 1, 0],
+      phaseTwoAttacks: [3, 4, 1, 2],
+      phaseThreeAttacks: [4, 3, 0, 4, 2],
+    ),
+    StoryBossKind.cellPursuer: StoryBossProfile(
+      kind: StoryBossKind.cellPursuer,
+      title: 'Следопыт подпольных ячеек',
+      subtitle: 'Зачистка беглых посредников',
+      healthMultiplier: 1.02,
+      movementMultiplier: 1.24,
+      attackIntervalMultiplier: 0.78,
+      damageTakenMultiplier: 1.00,
+      phaseOneAttacks: [1, 2, 4, 1],
+      phaseTwoAttacks: [4, 2, 3, 1],
+      phaseThreeAttacks: [4, 1, 3, 2, 4],
+    ),
+    StoryBossKind.shadowNetworkWarden: StoryBossProfile(
+      kind: StoryBossKind.shadowNetworkWarden,
+      title: 'Распорядитель теневой сети',
+      subtitle: 'Испытание захваченной инфраструктуры',
+      healthMultiplier: 1.26,
+      movementMultiplier: 1.02,
+      attackIntervalMultiplier: 0.84,
+      damageTakenMultiplier: 0.82,
+      phaseOneAttacks: [2, 0, 3, 1],
+      phaseTwoAttacks: [4, 2, 3, 0, 1],
+      phaseThreeAttacks: [4, 3, 2, 4, 0, 1],
     ),
   };
 
