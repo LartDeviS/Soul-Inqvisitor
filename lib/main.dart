@@ -18,6 +18,7 @@ import 'ui/codex/world_codex_panel.dart';
 import 'progression/inventory_state.dart' as gear_catalog;
 import 'progression/progression_system.dart' as progression_catalog;
 import 'game/missions/mission_events.dart' as mission_catalog;
+import 'game/missions/story_campaign.dart' as story_campaign;
 import 'game/enemies/enemy_type.dart' as enemy_catalog;
 import 'game/combat/enemy_ai_controller.dart' as enemy_ai;
 import 'game/weapons/ballistics.dart' as ballistics;
@@ -57,6 +58,7 @@ void main() {
           'challengeSelect': (c, g) => ChallengeSelectMenu(g as InquisitorGame),
           'rankPerk': (c, g) => RankPerkMenu(g as InquisitorGame),
           'inquisitionHub': (c, g) => InquisitionHubMenu(g as InquisitorGame),
+          'storyCampaign': (c, g) => StoryCampaignMenu(g as InquisitorGame),
         },
         initialActiveOverlays: const ['mainMenu'],
       ),
@@ -917,6 +919,7 @@ class OrdoOath {
 
 class InquisitorGame extends FlameGame with HasCollisionDetection {
   final expansion.InquisitorExpansionSystems expansionSystems = expansion.InquisitorExpansionSystems();
+  bool storyReturnToHub = false;
   final arena_catalog.WorldDirector worldDirector = arena_catalog.WorldDirector();
   final mission_catalog.MissionEventDirector missionEvents = mission_catalog.MissionEventDirector();
   progression_catalog.ProgressionTrack get progressionTrack => expansionSystems.progression;
@@ -4398,6 +4401,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     overlays.add('gameOver');
   }
 
+  void openStoryCampaign({bool fromHub = false}) {
+    storyReturnToHub = fromHub;
+    if (isPlaying) isPaused = true;
+    overlays.remove('mainMenu');
+    overlays.remove('inquisitionHub');
+    overlays.remove('victory');
+    overlays.add('storyCampaign');
+  }
+
   void openInquisitionHub() {
     if (isPlaying) {
       isPaused = true;
@@ -6910,6 +6922,181 @@ class _NameInputMenuState extends State<NameInputMenu> {
 }
 
 
+class StoryCampaignMenu extends StatefulWidget {
+  final InquisitorGame game;
+  const StoryCampaignMenu(this.game, {super.key});
+  @override
+  State<StoryCampaignMenu> createState() => _StoryCampaignMenuState();
+}
+
+class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
+  bool _busy = false;
+
+  Future<void> _collect(story_campaign.StoryEvidence evidence) async {
+    if (_busy) return;
+    final system = widget.game.expansionSystems.storyCampaign;
+    if (!system.collectEvidence(evidence.id)) return;
+    widget.game.campaignChronicle.insert(0, 'Улика: ${evidence.title} — ${system.currentNode.title}');
+    if (widget.game.campaignChronicle.length > 80) widget.game.campaignChronicle.removeRange(80, widget.game.campaignChronicle.length);
+    await widget.game.persistExpansion();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _choose(story_campaign.StoryChoice choice) async {
+    if (_busy) return;
+    final game = widget.game;
+    final system = game.expansionSystems.storyCampaign;
+    setState(() => _busy = true);
+    final beforeNode = system.currentNode;
+    final ok = system.choose(choice.id);
+    if (ok) {
+      game.warpCorruption = (game.warpCorruption + choice.corruptionDelta).clamp(0, 100).toInt();
+      game.requisition = (game.requisition + choice.requisitionDelta).clamp(0, 999999).toInt();
+      final outcome = system.currentNode;
+      game.campaignChronicle.insert(0, 'Решение: ${beforeNode.title} — ${choice.label}. ${choice.consequenceText}');
+      if (game.campaignChronicle.length > 80) game.campaignChronicle.removeRange(80, game.campaignChronicle.length);
+      if (system.completed) {
+        game.campaignChronicle.insert(0, 'Эпилог: ${outcome.title}. Кампания «Дело Серой свечи» завершена.');
+      }
+      await game.persistExpansion();
+      await game.persistCustomization();
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _restart() async {
+    final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      backgroundColor: const Color(0xFF17141A),
+      title: const Text('Начать расследование заново?', style: TextStyle(color: Color(0xFFFFD700))),
+      content: const Text('Текущий маршрут, собранные улики и решения будут сброшены. Уже полученные реквизиция и изменения порчи останутся.', style: TextStyle(color: Colors.white70)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ОТМЕНА')),
+        ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('НАЧАТЬ ЗАНОВО')),
+      ],
+    ));
+    if (confirmed != true) return;
+    widget.game.expansionSystems.storyCampaign.restart();
+    await widget.game.persistExpansion();
+    if (mounted) setState(() {});
+  }
+
+  void _close() {
+    final game = widget.game;
+    game.playClick();
+    game.overlays.remove('storyCampaign');
+    if (game.storyReturnToHub) {
+      game.overlays.add('inquisitionHub');
+    } else if (game.isPlaying) {
+      game.isPaused = false;
+    } else {
+      game.overlays.add('mainMenu');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final game = widget.game;
+    final system = game.expansionSystems.storyCampaign;
+    final node = system.currentNode;
+    final available = system.availableChoices.map((choice) => choice.id).toSet();
+    final wide = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height * 1.15;
+    return Scaffold(
+      backgroundColor: const Color(0xFF080709),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF211710),
+        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: _close),
+        title: const Text('ДОЗНАНИЕ: СЕРАЯ СВЕЧА', style: TextStyle(color: Color(0xFFFFD700), fontSize: 16, fontWeight: FontWeight.w900)),
+        actions: [IconButton(tooltip: 'Начать заново', onPressed: _busy ? null : _restart, icon: const Icon(Icons.restart_alt, color: Color(0xFFFFD700)))],
+      ),
+      body: SafeArea(child: LayoutBuilder(builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.all(14),
+        child: Center(child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: wide ? 920 : 680),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: const Color(0xFF171217), border: Border.all(color: const Color(0xFF8D6E63)), borderRadius: BorderRadius.circular(8)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(node.chapterTitle.toUpperCase(), style: const TextStyle(color: Color(0xFFBCAAA4), fontSize: 11, letterSpacing: 1.5)),
+                const SizedBox(height: 6),
+                Text(node.title, style: const TextStyle(color: Color(0xFFFFD700), fontSize: 25, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 5),
+                Row(children: [const Icon(Icons.location_on_outlined, color: Colors.redAccent, size: 16), const SizedBox(width: 5), Expanded(child: Text(node.location, style: const TextStyle(color: Colors.white60, fontSize: 12)))]),
+                const SizedBox(height: 12),
+                Text(node.briefing, style: const TextStyle(color: Colors.white, height: 1.5, fontSize: 14)),
+                if (node.dialogue.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: const BoxDecoration(color: Color(0xFF0C0B0E), border: Border(left: BorderSide(color: Color(0xFFFFD700), width: 3))),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(node.dialogueSpeaker.toUpperCase(), style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1)),
+                      const SizedBox(height: 5), Text('«${node.dialogue}»', style: const TextStyle(color: Colors.white70, fontStyle: FontStyle.italic, height: 1.4)),
+                    ])),
+                ],
+              ]),
+            ),
+            const SizedBox(height: 14),
+            Row(children: [
+              const Icon(Icons.fact_check_outlined, color: Color(0xFFFFD700)), const SizedBox(width: 8),
+              const Expanded(child: Text('СОБРАННЫЕ ДОКАЗАТЕЛЬСТВА', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, letterSpacing: 1))),
+              Text('${system.collectedEvidence.length}', style: const TextStyle(color: Colors.white54)),
+            ]),
+            if (node.evidence.isEmpty) const Padding(padding: EdgeInsets.all(10), child: Text('В этой сцене нет новых материальных улик. Изучите диалог и выберите дальнейшие действия.', style: TextStyle(color: Colors.white54, fontSize: 12)))
+            else ...node.evidence.map((evidence) {
+              final collected = system.collectedEvidence.contains(evidence.id);
+              return Card(color: const Color(0xFF151318), child: ListTile(
+                leading: Icon(collected ? Icons.verified : Icons.search, color: collected ? Colors.greenAccent : const Color(0xFFBCAAA4)),
+                title: Text(evidence.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: Text(evidence.description, style: const TextStyle(color: Colors.white60, height: 1.35)),
+                trailing: collected ? const Text('ИЗУЧЕНО', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)) : TextButton(onPressed: _busy ? null : () => _collect(evidence), child: const Text('ИЗУЧИТЬ')),
+              ));
+            }),
+            const SizedBox(height: 14),
+            const Row(children: [Icon(Icons.gavel, color: Color(0xFFFFD700)), SizedBox(width: 8), Text('РЕШЕНИЕ ИНКВИЗИТОРА', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, letterSpacing: 1))]),
+            const SizedBox(height: 8),
+            if (node.ending) ...[
+              Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFF1B1710), border: Border.all(color: const Color(0xFFFFD700)), borderRadius: BorderRadius.circular(8)), child: const Text('РАССЛЕДОВАНИЕ ЗАВЕРШЕНО\n\nВыбор Инквизитора записан в хронику. Можно начать новое прохождение и открыть другой исход.', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFFFD700), height: 1.5, fontWeight: FontWeight.bold))),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(onPressed: _busy ? null : _restart, icon: const Icon(Icons.replay), label: const Text('НОВОЕ ПРОХОЖДЕНИЕ')),
+            ] else ...node.choices.map((choice) {
+              final unlocked = available.contains(choice.id);
+              final missingEvidence = choice.requiredEvidence.where((id) => !system.collectedEvidence.contains(id)).map((id) {
+                for (final storyNode in story_campaign.StoryCampaignSystem.nodes) {
+                  for (final evidence in storyNode.evidence) { if (evidence.id == id) return evidence.title; }
+                }
+                return id;
+              });
+              final missingFlags = choice.requiredFlags.where((id) => !system.flags.contains(id)).map((id) => switch (id) {
+                'witness_protected' => 'защищённый свидетель',
+                'cargo_route_found' => 'найденный грузовой маршрут',
+                _ => id,
+              });
+              final missing = <String>[...missingEvidence, ...missingFlags];
+              final toneColor = switch (choice.tone) {
+                story_campaign.StoryChoiceTone.puritan => const Color(0xFF78909C),
+                story_campaign.StoryChoiceTone.radical => const Color(0xFFAB47BC),
+                story_campaign.StoryChoiceTone.investigative => const Color(0xFFFFD700),
+                story_campaign.StoryChoiceTone.pragmatic => const Color(0xFF80CBC4),
+              };
+              return Card(color: unlocked ? const Color(0xFF19171C) : const Color(0xFF101012), child: ListTile(
+                enabled: unlocked && !_busy,
+                leading: Icon(unlocked ? Icons.arrow_forward_ios : Icons.lock_outline, color: toneColor, size: 20),
+                title: Text(choice.label, style: TextStyle(color: unlocked ? Colors.white : Colors.white38, fontWeight: FontWeight.bold)),
+                subtitle: Text(unlocked ? '${choice.consequenceText}\n${choice.corruptionDelta == 0 ? '' : 'Порча ${choice.corruptionDelta > 0 ? '+' : ''}${choice.corruptionDelta}'}${choice.requisitionDelta == 0 ? '' : ' • Реквизиция ${choice.requisitionDelta > 0 ? '+' : ''}${choice.requisitionDelta}'}' : 'Не выполнены условия: ${missing.join(', ')}', style: TextStyle(color: unlocked ? Colors.white54 : Colors.white30, fontSize: 12, height: 1.35)),
+                isThreeLine: true,
+                onTap: unlocked && !_busy ? () => _choose(choice) : null,
+              ));
+            }),
+            const SizedBox(height: 10),
+            Text('СОСТОЯНИЕ КАМПАНИИ • Порча ${game.warpCorruption}% • Реквизиция ${game.requisition} • Решений записано ${system.decisions.length}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(onPressed: _close, icon: const Icon(Icons.arrow_back), label: Text(game.storyReturnToHub ? 'ВЕРНУТЬСЯ НА БАЗУ' : 'В ГЛАВНОЕ МЕНЮ')),
+          ]),
+        )),
+      ))),
+    );
+  }
+}
+
 class InquisitionHubMenu extends StatefulWidget {
   final InquisitorGame game;
   const InquisitionHubMenu(this.game, {super.key});
@@ -6932,6 +7119,17 @@ class _InquisitionHubMenuState extends State<InquisitionHubMenu> {
             const SizedBox(height: 4),
             Text('Реквизиция: ${g.requisition} • Порча Варпа: ${g.warpCorruption}% • ${g.inquisitionAlignment == 'radical' ? 'Радикалы' : 'Пуритане'}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
             const SizedBox(height: 14),
+            Card(color: const Color(0xFF241A12), child: ListTile(
+              leading: const Icon(Icons.menu_book, color: Color(0xFFFFD700), size: 32),
+              title: const Text('Сюжетная кампания: Дело Серой свечи', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+              subtitle: Text(g.expansionSystems.storyCampaign.completed
+                ? 'Расследование завершено: ${story_campaign.StoryCampaignSystem.nodeById(g.expansionSystems.storyCampaign.endingId!)?.title ?? "Эпилог"}'
+                : 'Дело ${g.expansionSystems.storyCampaign.chapterNumber}/3 • ${g.expansionSystems.storyCampaign.currentNode.title}',
+                style: const TextStyle(color: Colors.white70)),
+              trailing: const Icon(Icons.chevron_right, color: Colors.white70),
+              onTap: () { g.playClick(); g.openStoryCampaign(fromHub: true); },
+            )),
+            const SizedBox(height: 10),
             const Text('ОТДЕЛЫ БАЗЫ', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
             _upgradeTile('Арсенал', 'Уровень ${g.arsenalUpgrade}/5 • +5 стартовых обломков за уровень', 'arsenal', g.arsenalUpgrade, inRun),
             _upgradeTile('Святилище', 'Уровень ${g.shrineUpgrade}/5 • лечение в начале забега', 'shrine', g.shrineUpgrade, inRun),
@@ -7207,6 +7405,11 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
                 _btn('БАЗА ИНКВИЗИЦИИ', () {
                   widget.game.playClick();
                   widget.game.openInquisitionHub();
+                }),
+                const SizedBox(height: 8),
+                _btn('СЮЖЕТНАЯ КАМПАНИЯ', () {
+                  widget.game.playClick();
+                  widget.game.openStoryCampaign();
                 }),
                 const SizedBox(height: 8),
                 _btn('КОДЕКС', () {
