@@ -11453,10 +11453,7 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.7;
-    final profile = _storyProfile;
-    attackMode = profile == null
-        ? Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5)
-        : profile.attackModeFor(phase, _storyAttackIndex++);
+    attackMode = Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
@@ -12183,10 +12180,7 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.55 - rage * 0.15;
-    final profile = _storyProfile;
-    attackMode = profile == null
-        ? Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5)
-        : profile.attackModeFor(phase, _storyAttackIndex++);
+    attackMode = Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
