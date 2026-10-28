@@ -1109,6 +1109,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case 'secure_station': return MapLayout.corridors;
         case 'intercept_cargo': return MapLayout.openYard;
         case 'breach_archive': return MapLayout.chambers;
+        case 'case5_interrogation_operation': return MapLayout.chambers;
+        case 'case5_signal_intercept_operation': return MapLayout.openYard;
+        case 'case5_fragment_search_operation': return MapLayout.fractured;
         case 'secure_outer_relay':
           final routeFlags = expansionSystems.storyCampaign.flags;
           if (routeFlags.contains('case4_route_civilian')) return MapLayout.ring;
@@ -2690,6 +2693,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       'intercept_cargo' => story_boss_profiles.StoryBossKind.convoyEnforcer,
       'breach_archive' => story_boss_profiles.StoryBossKind.archiveGuardian,
       'secure_outer_relay' => story_boss_profiles.StoryBossKind.relaySentinel,
+      'case5_interrogation_operation' => story_boss_profiles.StoryBossKind.commandCustodian,
+      'case5_signal_intercept_operation' => story_boss_profiles.StoryBossKind.mobileInterceptor,
+      'case5_fragment_search_operation' => story_boss_profiles.StoryBossKind.ambushMarshal,
       _ => null,
     };
     if (kind == null) return;
@@ -3358,6 +3364,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'archive_core_alpha': Vector2(mapWidth * 0.27, mapHeight * 0.25),
         'archive_core_omega': Vector2(mapWidth * 0.73, mapHeight * 0.73),
         'outer_relay_uplink_secured': Vector2(mapWidth * 0.50, mapHeight * 0.20),
+        'case5_command_registry_secured': Vector2(mapWidth * 0.72, mapHeight * 0.25),
+        'case5_mobile_transmitter_disabled': Vector2(mapWidth * 0.50, mapHeight * 0.18),
+        'case5_route_cache_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.72),
       };
       for (final objectiveId in activeStoryOperation.requiredFieldObjectives) {
         final objectivePosition = objectivePositions[objectiveId];
@@ -3370,6 +3379,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
           'cargo_manifest_secured' => 'Грузовая накладная',
           'archive_core_alpha' => 'Архивный узел Альфа',
           'archive_core_omega' => 'Архивный узел Омега',
+          'case5_command_registry_secured' => 'Командный реестр',
+          'case5_mobile_transmitter_disabled' => 'Мобильный передатчик',
+          'case5_route_cache_recovered' => 'Маршрутный тайник',
           'outer_relay_uplink_secured' => expansionSystems.storyCampaign.flags.contains('case4_route_civilian')
               ? 'Гражданский сервисный шлюз'
               : expansionSystems.storyCampaign.flags.contains('case4_route_military')
@@ -5332,6 +5344,9 @@ class StoryFieldObjective extends PositionComponent with HasGameReference<Inquis
     'station_relay_disabled' => const Color(0xFF4FC3F7),
     'cargo_manifest_secured' => const Color(0xFFFFD54F),
     'archive_core_alpha' || 'archive_core_omega' => const Color(0xFFCE93D8),
+    'case5_command_registry_secured' => const Color(0xFF90CAF9),
+    'case5_mobile_transmitter_disabled' => const Color(0xFFFF8A65),
+    'case5_route_cache_recovered' => const Color(0xFFA5D6A7),
     _ => const Color(0xFF80CBC4),
   };
 
@@ -11192,6 +11207,9 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         story_boss_profiles.StoryBossKind.convoyEnforcer => const Color(0xFFFFA726),
         story_boss_profiles.StoryBossKind.archiveGuardian => const Color(0xFFAB47BC),
         story_boss_profiles.StoryBossKind.relaySentinel => const Color(0xFFEF5350),
+        story_boss_profiles.StoryBossKind.commandCustodian => const Color(0xFF90CAF9),
+        story_boss_profiles.StoryBossKind.mobileInterceptor => const Color(0xFFFF8A65),
+        story_boss_profiles.StoryBossKind.ambushMarshal => const Color(0xFFA5D6A7),
       };
       canvas.drawCircle(Offset(cx, cy), 59, Paint()..color = auraColor.withOpacity(0.10 + pulse * 0.12)..style = PaintingStyle.stroke..strokeWidth = 4);
       final titlePainter = TextPainter(

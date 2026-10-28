@@ -1,6 +1,6 @@
 /// Data-driven identities for the three campaign operation bosses.
 /// This file deliberately has no Flutter/Flame dependency so its rules are testable.
-enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel }
+enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal }
 
 class StoryBossProfile {
   final StoryBossKind kind;
@@ -85,6 +85,33 @@ class StoryBossProfile {
       phaseOneAttacks: [1, 4, 2, 1],
       phaseTwoAttacks: [4, 3, 1, 2],
       phaseThreeAttacks: [4, 2, 3, 4, 1, 2],
+    ),
+    StoryBossKind.commandCustodian: StoryBossProfile(
+      kind: StoryBossKind.commandCustodian,
+      title: 'Хранитель командного ключа',
+      subtitle: 'Защитник закрытого реестра',
+      healthMultiplier: 1.08, movementMultiplier: 0.92,
+      attackIntervalMultiplier: 0.94, damageTakenMultiplier: 0.96,
+      phaseOneAttacks: [0, 1, 3, 0], phaseTwoAttacks: [3, 1, 4, 0],
+      phaseThreeAttacks: [4, 3, 1, 4, 0],
+    ),
+    StoryBossKind.mobileInterceptor: StoryBossProfile(
+      kind: StoryBossKind.mobileInterceptor,
+      title: 'Командир мобильного перехвата',
+      subtitle: 'Охрана резервного канала',
+      healthMultiplier: 0.98, movementMultiplier: 1.22,
+      attackIntervalMultiplier: 0.78, damageTakenMultiplier: 1.02,
+      phaseOneAttacks: [1, 2, 4, 1], phaseTwoAttacks: [4, 2, 3, 1],
+      phaseThreeAttacks: [4, 1, 2, 4, 3],
+    ),
+    StoryBossKind.ambushMarshal: StoryBossProfile(
+      kind: StoryBossKind.ambushMarshal,
+      title: 'Маршал засады',
+      subtitle: 'Командир блокирующего отряда',
+      healthMultiplier: 1.16, movementMultiplier: 0.96,
+      attackIntervalMultiplier: 0.86, damageTakenMultiplier: 0.88,
+      phaseOneAttacks: [3, 0, 2, 3], phaseTwoAttacks: [3, 4, 0, 2],
+      phaseThreeAttacks: [4, 3, 2, 0, 4],
     ),
   };
 

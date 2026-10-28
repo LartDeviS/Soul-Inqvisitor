@@ -130,6 +130,33 @@ class StoryCampaignSystem {
       requiredKills: 8, requiredBosses: 1,
       requiredFieldObjectives: <String>{'outer_relay_uplink_secured'},
     ),
+    StoryOperation(
+      id: 'case5_interrogation_operation', nodeId: 'case_05_field_interrogation',
+      title: 'Операция «Живой ключ»',
+      objective: 'Захватить командный терминал и обезвредить охрану, сохранив следы доступа.',
+      briefing: 'Показания пленного оператора указывают на терминал, где подтверждали приказы от имени уже мёртвого владельца. Захватите терминал и устраните его защитника, не допустив уничтожения журнала.',
+      successFlag: 'operation_case5_interrogation_secured',
+      requiredKills: 8, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case5_command_registry_secured'},
+    ),
+    StoryOperation(
+      id: 'case5_signal_intercept_operation', nodeId: 'case_05_field_signal_intercept',
+      title: 'Операция «Перехват до смены канала»',
+      objective: 'Отключить мобильный передатчик и ликвидировать его охрану.',
+      briefing: 'Координаты ведут к передвижному ретранслятору. Уничтожьте сопротивление, перережьте резервный канал и победите командира перехвата до следующего сеанса связи.',
+      successFlag: 'operation_case5_signal_intercept_secured',
+      requiredKills: 9, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case5_mobile_transmitter_disabled'},
+    ),
+    StoryOperation(
+      id: 'case5_fragment_search_operation', nodeId: 'case_05_field_fragment_search',
+      title: 'Операция «Три точки на пустой карте»',
+      objective: 'Проверить полевой тайник, пережить засаду и извлечь маршрутный фрагмент.',
+      briefing: 'Неполные данные дают три вероятных района. Отряд высаживается у наиболее перспективного тайника, но противник мог подготовить засаду. Подтвердите маршрутный фрагмент и устраните командира засады.',
+      successFlag: 'operation_case5_fragment_search_secured',
+      requiredKills: 7, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case5_route_cache_recovered'},
+    ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
@@ -443,6 +470,39 @@ class StoryCampaignSystem {
         StoryChoice(id: 'case5_authorize_signal_hunt', label: 'Санкционировать перехват мобильного узла', consequenceText: 'Приоритет — быстрое развёртывание на координатах следующего сеанса связи.', nextNodeId: 'ending_case5_signal_hunt', requiredFlags: <String>{'case5_coordinates_verified'}, requiredEvidence: <String>{'case5_signal_coordinates'}, flagsToAdd: <String>{'case5_operation_signal_hunt'}, requisitionDelta: 12, tone: StoryChoiceTone.pragmatic),
         StoryChoice(id: 'case5_authorize_limited_search', label: 'Санкционировать ограниченную поисковую операцию', consequenceText: 'Приоритет — осторожная разведка с запасным маршрутом и ограниченным снабжением.', nextNodeId: 'ending_case5_limited_search', requiredFlags: <String>{'case5_fragmentary_search'}, requiredEvidence: <String>{'case5_fragmentary_route'}, flagsToAdd: <String>{'case5_operation_limited_search'}, requisitionDelta: 5, tone: StoryChoiceTone.puritan),
       ],
+    ),
+    StoryNode(
+      id: 'case_05_field_interrogation', chapterId: 'case_05', chapterTitle: 'Дело V — Тот, кто отвечает',
+      title: 'Живой ключ', location: 'Закрытый командный узел «Крипта-17»',
+      briefing: 'Показания оператора приводят к терминалу, где использовали командный ключ умершего офицера. Сохраните журнал доступа: он может доказать, кто отдавал приказы после смерти владельца.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Нам нужен не ещё один труп. Нам нужен след, который переживёт любой допрос».',
+      choices: <StoryChoice>[StoryChoice(id: 'case5_complete_interrogation_operation', label: 'Передать захваченный командный реестр на экспертизу', consequenceText: 'Операция завершена: журнал сохранён, а цепь командных подтверждений передана криптоаналитикам.', nextNodeId: 'ending_case5_field_interrogation', requiredFlags: <String>{'operation_case5_interrogation_secured'}, flagsToAdd: <String>{'case5_command_registry_verified'}, requisitionDelta: 15, tone: StoryChoiceTone.investigative)],
+    ),
+    StoryNode(
+      id: 'case_05_field_signal_intercept', chapterId: 'case_05', chapterTitle: 'Дело V — Тот, кто отвечает',
+      title: 'Перехват до смены канала', location: 'Мобильный узел связи «Стрела-6»',
+      briefing: 'Передатчик меняет позицию после каждого сеанса. Отключите резервный канал, пока он не передал команду следующему звену сети. Охрана попытается выиграть время для завершения передачи.',
+      dialogueSpeaker: 'Сервочереп «Люмен»', dialogue: '«Окно перехвата нестабильно. После отключения питания извлеките журнал буферизации и немедленно эвакуируйтесь».',
+      choices: <StoryChoice>[StoryChoice(id: 'case5_complete_signal_operation', label: 'Подтвердить перехват и извлечь журнал буферизации', consequenceText: 'Передача остановлена, а журнал даёт направление к следующему мобильному узлу.', nextNodeId: 'ending_case5_field_signal_intercept', requiredFlags: <String>{'operation_case5_signal_intercept_secured'}, flagsToAdd: <String>{'case5_buffer_log_recovered'}, requisitionDelta: 15, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'case_05_field_fragment_search', chapterId: 'case_05', chapterTitle: 'Дело V — Тот, кто отвечает',
+      title: 'Три точки на пустой карте', location: 'Заброшенный узел снабжения «Клин-3»',
+      briefing: 'Маршрутный фрагмент не позволяет точно определить цель. Тайник на «Клине-3» может подтвердить код поставщика, но район удобен для засады. Не покидайте сектор, пока не извлечён носитель и не устранён командир противника.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Не путайте вероятную цель с подтверждённой. Вернитесь с доказательством — или не возвращайтесь вовсе».',
+      choices: <StoryChoice>[StoryChoice(id: 'case5_complete_fragment_operation', label: 'Приобщить найденный маршрутный фрагмент', consequenceText: 'Код поставщика подтверждён независимым носителем. Разведка получила точку, которую можно проверить в следующей операции.', nextNodeId: 'ending_case5_field_fragment_search', requiredFlags: <String>{'operation_case5_fragment_search_secured'}, flagsToAdd: <String>{'case5_supplier_code_confirmed'}, requisitionDelta: 8, tone: StoryChoiceTone.puritan)],
+    ),
+    StoryNode(
+      id: 'ending_case5_field_interrogation', chapterId: 'epilogue', chapterTitle: 'Дело V завершено', title: 'Командный ключ мертвеца',
+      location: 'Лаборатория криптоанализа крейсера', briefing: 'Командный реестр подтверждает использование ключа после смерти его владельца. Следующий этап расследования может установить, кто подменял полномочия и кому подчиняется «Арбитр-Ноль».', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case5_field_signal_intercept', chapterId: 'epilogue', chapterTitle: 'Дело V завершено', title: 'Тишина на резервном канале',
+      location: 'Тактический мостик крейсера', briefing: 'Мобильный передатчик захвачен, резервный канал отключён, а журнал буферизации сохранён. В нём обнаружена подпись следующего узла, активного за пределами сектора.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case5_field_fragment_search', chapterId: 'epilogue', chapterTitle: 'Дело V завершено', title: 'Код, переживший засаду',
+      location: 'Медотсек и архив доказательств', briefing: 'Маршрутный фрагмент пережил засаду и подтверждён кодом поставщика. Данные неполны, но теперь у Инквизиции есть проверяемая цель для следующей высадки.', ending: true,
     ),
     StoryNode(
       id: 'ending_case5_interrogation', chapterId: 'epilogue', chapterTitle: 'Подготовка к делу VI', title: 'Имя за командным ключом',
@@ -792,7 +852,25 @@ class StoryCampaignSystem {
       'ending_case4_relay_destroyed',
       'ending_case4_expedition',
     };
-    if (caseFourEndings.contains(previousEnding)) {
+    final caseFiveFieldEndings = <String>{
+      'ending_case5_interrogation', 'ending_case5_signal_hunt', 'ending_case5_limited_search',
+    };
+    if (caseFiveFieldEndings.contains(previousEnding)) {
+      switch (previousEnding) {
+        case 'ending_case5_interrogation':
+          flags.add('case5_operation_interrogation');
+          currentNodeId = 'case_05_field_interrogation';
+          break;
+        case 'ending_case5_signal_hunt':
+          flags.add('case5_operation_signal_hunt');
+          currentNodeId = 'case_05_field_signal_intercept';
+          break;
+        default:
+          flags.add('case5_operation_limited_search');
+          currentNodeId = 'case_05_field_fragment_search';
+          break;
+      }
+    } else if (caseFourEndings.contains(previousEnding)) {
       // Reconstruct the expected route from the ending itself as a safety net
       // for older or partially migrated saves that lack the corresponding flag.
       switch (previousEnding) {

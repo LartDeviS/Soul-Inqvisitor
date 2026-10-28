@@ -5,9 +5,9 @@ void main() {
   group('Story boss profiles', () {
     test('each operation boss has a distinct identity and combat profile', () {
       final profiles = StoryBossProfile.all.values.toList();
-      expect(profiles.map((p) => p.title).toSet().length, 4);
-      expect(profiles.map((p) => p.healthMultiplier).toSet().length, 4);
-      expect(profiles.map((p) => p.attackIntervalMultiplier).toSet().length, 4);
+      expect(profiles.map((p) => p.title).toSet().length, 7);
+      expect(profiles.map((p) => p.healthMultiplier).toSet().length, 7);
+      expect(profiles.map((p) => p.attackIntervalMultiplier).toSet().length, 7);
     });
 
     test('attack sequences stay within the five supported telegraph patterns', () {
