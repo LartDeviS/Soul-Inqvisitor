@@ -19,6 +19,9 @@ class StoryOperation {
   final String objective;
   final String briefing;
   final String successFlag;
+  final int requiredKills;
+  final int requiredChampions;
+  final int requiredBosses;
   const StoryOperation({
     required this.id,
     required this.nodeId,
@@ -26,6 +29,9 @@ class StoryOperation {
     required this.objective,
     required this.briefing,
     required this.successFlag,
+    this.requiredKills = 0,
+    this.requiredChampions = 0,
+    this.requiredBosses = 0,
   });
 }
 
@@ -82,7 +88,7 @@ class StoryNode {
 }
 
 class StoryCampaignSystem {
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 3;
   static const List<StoryOperation> operations = <StoryOperation>[
     StoryOperation(
       id: 'secure_station', nodeId: 'station_investigation',
@@ -90,6 +96,7 @@ class StoryCampaignSystem {
       objective: 'Зачистить вокс-станцию и завершить вылазку живым.',
       briefing: 'Группа подавления обнаружила активность в нижнем техническом ярусе. Уничтожьте сопротивление и вернитесь с подтверждением, что станция больше не используется заговорщиками.',
       successFlag: 'operation_station_secured',
+      requiredKills: 12,
     ),
     StoryOperation(
       id: 'intercept_cargo', nodeId: 'cargo_depot',
@@ -97,6 +104,7 @@ class StoryCampaignSystem {
       objective: 'Перехватить маршрут снабжения и выжить.',
       briefing: 'По следу контейнера отправлен ударный отряд. Перехват должен лишить сеть снабжения прикрытия и дать Инквизитору доказательство для входа в архив.',
       successFlag: 'operation_cargo_intercepted',
+      requiredKills: 10, requiredChampions: 1,
     ),
     StoryOperation(
       id: 'breach_archive', nodeId: 'archive_confrontation',
@@ -104,6 +112,7 @@ class StoryCampaignSystem {
       objective: 'Прорваться в архивный комплекс и завершить операцию.',
       briefing: 'Архив закрыт внутренними печатями, а охрана получила приказ уничтожить документы. Захватите комплекс, чтобы открыть путь к тактическому задержанию куратора.',
       successFlag: 'operation_archive_breached',
+      requiredKills: 8, requiredBosses: 1,
     ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
@@ -245,6 +254,9 @@ class StoryCampaignSystem {
   String? endingId;
   String? activeOperationId;
   final Map<String, int> operationAttempts = <String, int>{};
+  int operationKills = 0;
+  int operationChampions = 0;
+  int operationBosses = 0;
   int corruptionDelta = 0;
   int requisitionDelta = 0;
 
@@ -254,6 +266,34 @@ class StoryCampaignSystem {
   bool get operationInProgress => activeOperationId != null;
   bool isOperationCompleted(StoryOperation operation) => flags.contains(operation.successFlag);
   int attemptsFor(StoryOperation operation) => operationAttempts[operation.id] ?? 0;
+  bool get activeOperationObjectivesComplete {
+    final operation = activeOperation;
+    if (operation == null) return false;
+    return operationKills >= operation.requiredKills &&
+        operationChampions >= operation.requiredChampions &&
+        operationBosses >= operation.requiredBosses;
+  }
+  StoryOperation? get activeOperation {
+    final id = activeOperationId;
+    if (id == null) return null;
+    for (final operation in operations) { if (operation.id == id) return operation; }
+    return null;
+  }
+  String get activeOperationProgressLabel {
+    final operation = activeOperation;
+    if (operation == null) return '';
+    final parts = <String>[];
+    if (operation.requiredKills > 0) parts.add('Уничтожить врагов: ${operationKills.clamp(0, operation.requiredKills)}/${operation.requiredKills}');
+    if (operation.requiredChampions > 0) parts.add('Элита: ${operationChampions.clamp(0, operation.requiredChampions)}/${operation.requiredChampions}');
+    if (operation.requiredBosses > 0) parts.add('Босс: ${operationBosses.clamp(0, operation.requiredBosses)}/${operation.requiredBosses}');
+    return parts.join(' • ');
+  }
+  void recordActiveOperationKill({bool isChampion = false, bool isBoss = false}) {
+    if (activeOperation == null) return;
+    operationKills = (operationKills + 1).clamp(0, 100000).toInt();
+    if (isChampion || isBoss) operationChampions = (operationChampions + 1).clamp(0, 100000).toInt();
+    if (isBoss) operationBosses = (operationBosses + 1).clamp(0, 100000).toInt();
+  }
 
   static StoryOperation? operationForNode(String nodeId) {
     for (final operation in operations) {
@@ -266,6 +306,7 @@ class StoryCampaignSystem {
     final operation = currentOperation;
     if (completed || operation == null || operationInProgress || isOperationCompleted(operation)) return false;
     activeOperationId = operation.id;
+    operationKills = 0; operationChampions = 0; operationBosses = 0;
     operationAttempts[operation.id] = (operationAttempts[operation.id] ?? 0) + 1;
     return true;
   }
@@ -278,12 +319,13 @@ class StoryCampaignSystem {
     for (final candidate in operations) {
       if (candidate.id == id) { operation = candidate; break; }
     }
+    final objectiveSuccess = success && activeOperationObjectivesComplete;
     activeOperationId = null;
-    if (operation != null && success) {
+    if (operation != null && objectiveSuccess) {
       flags.add(operation.successFlag);
       flags.remove('operation_failed_${operation.id}');
     }
-    if (operation != null && !success && !flags.contains(operation.successFlag)) flags.add('operation_failed_${operation.id}');
+    if (operation != null && !objectiveSuccess && !flags.contains(operation.successFlag)) flags.add('operation_failed_${operation.id}');
     return operation;
   }
 
@@ -339,6 +381,7 @@ class StoryCampaignSystem {
     'flags': flags.toList(), 'decisions': decisions,
     'endingId': endingId, 'activeOperationId': activeOperationId,
     'operationAttempts': operationAttempts,
+    'operationKills': operationKills, 'operationChampions': operationChampions, 'operationBosses': operationBosses,
     'corruptionDelta': corruptionDelta, 'requisitionDelta': requisitionDelta,
   };
 
@@ -361,6 +404,9 @@ class StoryCampaignSystem {
     final active = raw['activeOperationId'];
     activeOperationId = active is String && operations.any((operation) => operation.id == active) ? active : null;
     operationAttempts.clear();
+    operationKills = ((raw['operationKills'] as num?)?.toInt() ?? 0).clamp(0, 100000).toInt();
+    operationChampions = ((raw['operationChampions'] as num?)?.toInt() ?? 0).clamp(0, 100000).toInt();
+    operationBosses = ((raw['operationBosses'] as num?)?.toInt() ?? 0).clamp(0, 100000).toInt();
     if (raw['operationAttempts'] is Map) {
       (raw['operationAttempts'] as Map).forEach((key, value) {
         if (key is String && operations.any((operation) => operation.id == key) && value is num) {
@@ -369,7 +415,7 @@ class StoryCampaignSystem {
       });
     }
     // Never retain an operation whose scene no longer matches the saved scene.
-    if (activeOperationId != null && operationForNode(currentNodeId)?.id != activeOperationId) activeOperationId = null;
+    if (activeOperationId != null && operationForNode(currentNodeId)?.id != activeOperationId) { activeOperationId = null; operationKills = 0; operationChampions = 0; operationBosses = 0; }
     corruptionDelta = ((raw['corruptionDelta'] as num?)?.toInt() ?? 0).clamp(-100, 100).toInt();
     requisitionDelta = ((raw['requisitionDelta'] as num?)?.toInt() ?? 0).clamp(-500, 500).toInt();
     if (currentNode.ending) endingId ??= currentNodeId;

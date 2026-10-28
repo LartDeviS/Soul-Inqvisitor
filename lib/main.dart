@@ -1100,7 +1100,17 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int supplyCachesOpened = 0;
   int randomMissionEvents = 0;
   double _fieldEventClock = 0;
-  MapLayout get activeMapLayout => MapLayout.values[(currentFloor * 3 + currentLevel + pathIndex + (activeBiome.index * 2)) % MapLayout.values.length];
+  MapLayout get activeMapLayout {
+    // The first floor of each story deployment gets a recognizable tactical layout.
+    if (expansionSystems.storyCampaign.operationInProgress && currentFloor == 1) {
+      switch (expansionSystems.storyCampaign.activeOperationId) {
+        case 'secure_station': return MapLayout.corridors;
+        case 'intercept_cargo': return MapLayout.openYard;
+        case 'breach_archive': return MapLayout.chambers;
+      }
+    }
+    return MapLayout.values[(currentFloor * 3 + currentLevel + pathIndex + (activeBiome.index * 2)) % MapLayout.values.length];
+  }
   String get activeOrdoContract => switch (playerClass) {
     PlayerClass.malleus => 'Ордо Маллеус: сорвать варп-ритуал и подавить демоническую угрозу',
     PlayerClass.hereticus => 'Ордо Еретикус: выявить культистов и собрать доказательства',
@@ -3688,6 +3698,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   EnemyType _chooseEnemyType() {
+    // Story deployments use a light, deterministic enemy-composition bias so each
+    // operation has a recognizable threat profile without replacing the full roster.
+    final storyOperationId = expansionSystems.storyCampaign.activeOperationId;
+    if (storyOperationId == 'secure_station' && enemiesSpawned % 4 == 3) return EnemyType.cultPsyker;
+    if (storyOperationId == 'intercept_cargo' && enemiesSpawned % 4 == 2) return EnemyType.brute;
+    if (storyOperationId == 'breach_archive' && enemiesSpawned % 3 == 1) return EnemyType.shieldedShooter;
     // Disjoint cumulative bands: no late condition can silently shadow another enemy.
     final r = Random().nextDouble();
     final f = currentFloor;
@@ -3717,7 +3733,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     if (points.isEmpty) return;
     final pos = points[Random().nextInt(points.length)].clone();
     world.add(EnemySpawnPortal(position: pos)..priority = 3);
-    final forceChamp = isEliteNode && enemiesSpawned < 2;
+    final forceChamp = (isEliteNode && enemiesSpawned < 2) || (expansionSystems.storyCampaign.activeOperationId == 'intercept_cargo' && currentFloor == 1 && enemiesSpawned == 0);
     final directorElite = arenaMode && expansionSystems.waveDirector.phase == wave_director.WavePhase.elite && !_eliteWaveChampionSpawned;
     final isChamp = forceChamp || directorElite || (overallLevel >= 5 && Random().nextDouble() < (0.08 + currentFloor * 0.015 + (highThreatOperation ? 0.08 : 0)));
     if (directorElite) _eliteWaveChampionSpawned = true;
@@ -3767,6 +3783,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     EliteAffix affix = EliteAffix.none,
     Vector2? fromDir,
   }) {
+    expansionSystems.storyCampaign.recordActiveOperationKill(isChampion: isChampion, isBoss: isBoss);
     // Lifetime kill statistics are updated from the actual death callback, not inferred from score.
     final nextCareerKillCount = careerKills + 1;
     recordCareerProgress(kills: 1, save: nextCareerKillCount % 10 == 0 || nextCareerKillCount == 100);
@@ -4210,6 +4227,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final lines = [
       'Этаж $currentFloor/$maxFloors • $activeBiomeLabel • ${activeMapLayout.name} • Ψ${warpStability.round()}% • $nodeLabel  Очки:$score  Обл:$scraps$heatBar$warpBar',
       if (arenaMode) 'АРЕНА W$arenaWave • Убито:$arenaKills • Угроза ${arenaThreatTier + 1} • ${difficulty.labelRu} • ${arenaModifier.labelRu}',
+      if (expansionSystems.storyCampaign.operationInProgress) 'СЮЖЕТНАЯ ЦЕЛЬ: ${expansionSystems.storyCampaign.activeOperationProgressLabel}',
       'Доктрина: ${combatDoctrine.labelRu} • Боеприпасы: ${ammoDoctrine.labelRu}',
       if (oathAcceptedThisRun && !arenaMode) 'КЛЯТВА: ${playerClass.title} • Тревога ${campaign.alarm}% • Улики ${campaign.evidence} • Подозрение ${campaign.suspicion}%',
       if (!arenaMode) 'ПРИКАЗ: ${activeContract.labelRu} • ${contractProgress.clamp(0, contractTarget)}/$contractTarget${contractClaimed ? ' ✓' : ''}',
@@ -4349,10 +4367,16 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   }
 
   void showVictory() {
-    final storyOperation = expansionSystems.storyCampaign.resolveActiveOperation(success: true);
+    final storySystem = expansionSystems.storyCampaign;
+    final objectiveSuccess = storySystem.activeOperationObjectivesComplete;
+    final storyOperation = storySystem.resolveActiveOperation(success: objectiveSuccess);
     if (storyOperation != null) {
-      requisition += 25;
-      campaignChronicle.insert(0, 'Сюжетная операция выполнена: ${storyOperation.title}. Получено 25 реквизиции; открыт дополнительный маршрут дознания.');
+      if (objectiveSuccess) {
+        requisition += 25;
+        campaignChronicle.insert(0, 'Сюжетная операция выполнена: ${storyOperation.title}. Цели подтверждены. Получено 25 реквизиции; открыт дополнительный маршрут дознания.');
+      } else {
+        campaignChronicle.insert(0, 'Вылазка завершена, но цели операции «${storyOperation.title}» не выполнены. Расследование сохранено; операцию можно повторить.');
+      }
       if (campaignChronicle.length > 80) campaignChronicle.removeRange(80, campaignChronicle.length);
     }
     // A completed campaign counts as one career operation; individual rooms do not.
@@ -7088,6 +7112,8 @@ class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
                     ]),
                     const SizedBox(height: 8),
                     Text(operation.objective, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 5),
+                    Text('Условия завершения: ${operation.requiredKills > 0 ? 'враги ${operation.requiredKills}' : ''}${operation.requiredChampions > 0 ? ' • элита ${operation.requiredChampions}' : ''}${operation.requiredBosses > 0 ? ' • боссы ${operation.requiredBosses}' : ''}', style: const TextStyle(color: Color(0xFFFFD180), fontSize: 11, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 5),
                     Text(operation.briefing, style: const TextStyle(color: Colors.white60, height: 1.4, fontSize: 12)),
                     if (attempts > 0) ...[

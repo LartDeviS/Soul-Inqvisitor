@@ -63,6 +63,8 @@ void main() {
       expect(campaign.currentOperation?.id, 'secure_station');
       expect(campaign.beginCurrentOperation(), isTrue);
       expect(campaign.choose('purge_station'), isFalse, reason: 'choices are locked while deployed');
+      for (var i = 0; i < 12; i++) { campaign.recordActiveOperationKill(); }
+      expect(campaign.activeOperationObjectivesComplete, isTrue);
       final resolved = campaign.resolveActiveOperation(success: true);
       expect(resolved?.id, 'secure_station');
       expect(campaign.flags, contains('operation_station_secured'));
@@ -84,8 +86,39 @@ void main() {
       expect(campaign.flags, contains('operation_failed_secure_station'));
       expect(campaign.beginCurrentOperation(), isTrue);
       expect(campaign.attemptsFor(campaign.currentOperation!), 2);
+      for (var i = 0; i < 12; i++) { campaign.recordActiveOperationKill(); }
       campaign.resolveActiveOperation(success: true);
       expect(campaign.isOperationCompleted(campaign.currentOperation!), isTrue);
+    });
+
+    test('cargo operation requires an elite kill and persists objective progress', () {
+      final campaign = StoryCampaignSystem();
+      campaign.choose('seal_sector');
+      campaign.collectEvidence('access_log');
+      campaign.choose('question_deacon');
+      campaign.choose('coerce_witness');
+      campaign.collectEvidence('cargo_manifest');
+      expect(campaign.currentNode.id, 'cargo_depot');
+      expect(campaign.beginCurrentOperation(), isTrue);
+      for (var i = 0; i < 10; i++) { campaign.recordActiveOperationKill(); }
+      expect(campaign.activeOperationObjectivesComplete, isFalse);
+      final restored = StoryCampaignSystem()..loadJson(campaign.toJson());
+      expect(restored.operationKills, 10);
+      expect(restored.activeOperationObjectivesComplete, isFalse);
+      restored.recordActiveOperationKill(isChampion: true);
+      expect(restored.activeOperationObjectivesComplete, isTrue);
+      restored.resolveActiveOperation(success: true);
+      expect(restored.flags, contains('operation_cargo_intercepted'));
+    });
+
+    test('victory without required objectives does not unlock the operation route', () {
+      final campaign = StoryCampaignSystem();
+      campaign.choose('seal_sector');
+      expect(campaign.beginCurrentOperation(), isTrue);
+      campaign.recordActiveOperationKill();
+      campaign.resolveActiveOperation(success: true);
+      expect(campaign.flags, isNot(contains('operation_station_secured')));
+      expect(campaign.flags, contains('operation_failed_secure_station'));
     });
 
     test('invalid save values fall back to a safe opening scene', () {
