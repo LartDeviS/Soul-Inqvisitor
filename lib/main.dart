@@ -1100,6 +1100,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   int supplyCachesOpened = 0;
   int randomMissionEvents = 0;
   double _fieldEventClock = 0;
+  bool _storyArchiveBossSpawned = false;
   MapLayout get activeMapLayout {
     // The first floor of each story deployment gets a recognizable tactical layout.
     if (expansionSystems.storyCampaign.operationInProgress && currentFloor == 1) {
@@ -2630,6 +2631,40 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     persistExpansion();
   }
 
+  /// Resolves a story-specific field object. Each objective is accepted only once
+  /// and only while its matching operation is active.
+  void activateStoryFieldObjective(String objectiveId, String label) {
+    if (!isPlaying || isPaused || !expansionSystems.storyCampaign.operationInProgress) return;
+    final campaignStory = expansionSystems.storyCampaign;
+    if (!campaignStory.collectFieldObjective(objectiveId)) return;
+    requisition += 4 + currentFloor;
+    campaign.evidence++;
+    campaign.cluesFound++;
+    recordCareerProgress(evidence: 1);
+    campaign.alarm = max(0, campaign.alarm - 3);
+    spawnDamageNumber(player.position, 0, color: const Color(0xFF80DEEA), label: 'ОБЪЕКТ СОХРАНЁН: $label');
+    campaignChronicle.insert(0, 'Полевой объект подтверждён: $label (${campaignStory.activeOperationProgressLabel}).');
+    if (campaignStory.activeOperationFieldObjectivesComplete) {
+      spawnDamageNumber(player.position, 0, color: const Color(0xFFB9F6CA), label: 'ПОЛЕВЫЕ ЦЕЛИ ВЫПОЛНЕНЫ');
+      _spawnStoryArchiveBossIfNeeded();
+    }
+    persistExpansion();
+  }
+
+  void _spawnStoryArchiveBossIfNeeded() {
+    final story = expansionSystems.storyCampaign;
+    if (!isPlaying || story.activeOperationId != 'breach_archive' ||
+        !story.activeOperationFieldObjectivesComplete || _storyArchiveBossSpawned) return;
+    _storyArchiveBossSpawned = true;
+    final bossPosition = Vector2(mapWidth * 0.5, mapHeight * 0.5);
+    world.add(Boss(floor: currentFloor < 2 ? 2 : currentFloor, position: bossPosition)..priority = 27);
+    enemiesAlive++;
+    enemiesToSpawn++;
+    enemiesSpawned++;
+    triggerShake(power: 11, time: 0.32);
+    spawnDamageNumber(player.position, 0, color: const Color(0xFFFF5252), label: 'СТРАЖ АРХИВА: КОНТАКТ');
+  }
+
   void chooseEvacuationRoute(int route) {
     evacuationRoute = route.clamp(0, 2).toInt();
     spawnDamageNumber(player.position, 0, color: const Color(0xFFFFD54F), label: 'МАРШРУТ ЭВАКУАЦИИ ВЫБРАН');
@@ -3267,6 +3302,33 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
     }
 
+    // Story-specific objective props turn each deployment into a distinct field mission.
+    // Markers are placed after procedural cover and clear nearby obstacles to remain reachable.
+    final activeStoryOperation = expansionSystems.storyCampaign.activeOperation;
+    if (activeStoryOperation != null && currentFloor == 1) {
+      final objectivePositions = <String, Vector2>{
+        'station_relay_disabled': Vector2(mapWidth * 0.74, mapHeight * 0.25),
+        'cargo_manifest_secured': Vector2(mapWidth * 0.74, mapHeight * 0.72),
+        'archive_core_alpha': Vector2(mapWidth * 0.27, mapHeight * 0.25),
+        'archive_core_omega': Vector2(mapWidth * 0.73, mapHeight * 0.73),
+      };
+      for (final objectiveId in activeStoryOperation.requiredFieldObjectives) {
+        final objectivePosition = objectivePositions[objectiveId];
+        if (objectivePosition == null || expansionSystems.storyCampaign.operationFieldObjectives.contains(objectiveId)) continue;
+        for (final obstacle in world.children.whereType<Obstacle>().toList()) {
+          if (obstacle.position.distanceTo(objectivePosition) < 105) obstacle.removeFromParent();
+        }
+        final objectiveLabel = switch (objectiveId) {
+          'station_relay_disabled' => 'Вокс-реле',
+          'cargo_manifest_secured' => 'Грузовая накладная',
+          'archive_core_alpha' => 'Архивный узел Альфа',
+          'archive_core_omega' => 'Архивный узел Омега',
+          _ => 'Полевой объект',
+        };
+        world.add(StoryFieldObjective(position: objectivePosition, objectiveId: objectiveId, label: objectiveLabel)..priority = 9);
+      }
+    }
+
     // Rest node: heal + portal immediately
     if (node == PathNodeKind.rest) {
       enemiesToSpawn = 0;
@@ -3304,6 +3366,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       enemiesSpawned++;
     }
 
+    _spawnStoryArchiveBossIfNeeded();
     _maybeSpawnEcho();
     _spawnEventProps();
     _setupHudAndPlayer(node == PathNodeKind.rest);
@@ -3956,6 +4019,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     final living = countLivingHostiles();
     final pending = (enemiesToSpawn - enemiesSpawned).clamp(0, 999);
     if (living <= 0 && pending <= 0) {
+      final story = expansionSystems.storyCampaign;
+      if (story.operationInProgress && currentFloor == 1 && !story.activeOperationFieldObjectivesComplete) {
+        // Keep the exit sealed until all mission-specific evidence/objectives are secured.
+        return;
+      }
       _forceSpawnPortal();
     }
   }
@@ -4579,6 +4647,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void startNewRun() {
     operationSerial++;
+    _storyArchiveBossSpawned = false;
     consumables[TacticalConsumable.fragGrenade] = 2;
     consumables[TacticalConsumable.stim] = 1;
     consumables[TacticalConsumable.smoke] = 1;
@@ -5100,6 +5169,66 @@ class FieldTerminal extends PositionComponent with HasGameReference<InquisitorGa
     canvas.drawRect(Rect.fromLTWH(14, 16, 13, 2), Paint()..color = c.withOpacity(0.8));
     canvas.drawRect(Rect.fromLTWH(14, 21, 16, 2), Paint()..color = c.withOpacity(0.6));
     canvas.drawLine(const Offset(23, 32), const Offset(23, 43), Paint()..color = const Color(0xFF90A4AE)..strokeWidth = 3);
+  }
+}
+
+/// A physical story objective. Touching the prop secures the evidence/objective.
+/// Different silhouettes and colors help distinguish relay, cargo and archive targets.
+class StoryFieldObjective extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final String objectiveId;
+  final String label;
+  double pulse = 0;
+  bool _resolved = false;
+
+  StoryFieldObjective({required Vector2 position, required this.objectiveId, required this.label})
+      : super(position: position, size: Vector2(66, 70), anchor: Anchor.center, priority: 9);
+
+  Color get _accent => switch (objectiveId) {
+    'station_relay_disabled' => const Color(0xFF4FC3F7),
+    'cargo_manifest_secured' => const Color(0xFFFFD54F),
+    'archive_core_alpha' || 'archive_core_omega' => const Color(0xFFCE93D8),
+    _ => const Color(0xFF80CBC4),
+  };
+
+  @override
+  Future<void> onLoad() async => add(CircleHitbox(radius: 30));
+
+  @override
+  void update(double dt) { super.update(dt); pulse += dt; }
+
+  @override
+  void onCollisionStart(Set<Vector2> points, PositionComponent other) {
+    super.onCollisionStart(points, other);
+    if (_resolved || other is! Player) return;
+    _resolved = true;
+    game.activateStoryFieldObjective(objectiveId, label);
+    removeFromParent();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final glow = 0.18 + sin(pulse * 3.5).abs() * 0.20;
+    final center = Offset(size.x / 2, size.y / 2);
+    canvas.drawCircle(center, 30 + sin(pulse * 2).abs() * 3, Paint()..color = _accent.withOpacity(glow));
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(10, 8, 46, 52), const Radius.circular(5)), Paint()..color = const Color(0xFF172027));
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(10, 8, 46, 52), const Radius.circular(5)), Paint()..color = _accent..style = PaintingStyle.stroke..strokeWidth = 2);
+    if (objectiveId == 'cargo_manifest_secured') {
+      canvas.drawRect(Rect.fromLTWH(20, 17, 26, 34), Paint()..color = const Color(0xFF3E3420));
+      for (int i = 0; i < 5; i++) {
+        canvas.drawLine(Offset(24, 23 + i * 5.0), Offset(42 - (i % 2) * 4.0, 23 + i * 5.0), Paint()..color = _accent..strokeWidth = 2);
+      }
+    } else if (objectiveId.startsWith('archive_core')) {
+      canvas.drawCircle(center, 14, Paint()..color = _accent.withOpacity(0.22));
+      canvas.drawCircle(center, 10, Paint()..color = _accent..style = PaintingStyle.stroke..strokeWidth = 2);
+      canvas.drawCircle(center, 4, Paint()..color = _accent);
+    } else {
+      canvas.drawRect(Rect.fromLTWH(19, 17, 28, 22), Paint()..color = _accent.withOpacity(0.20));
+      canvas.drawRect(Rect.fromLTWH(23, 21, 20, 3), Paint()..color = _accent);
+      canvas.drawRect(Rect.fromLTWH(23, 28, 14, 3), Paint()..color = _accent.withOpacity(0.8));
+      canvas.drawCircle(Offset(33, 47), 4 + sin(pulse * 4).abs() * 2, Paint()..color = _accent);
+    }
+    final tp = TextPainter(text: TextSpan(text: label.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 3)])), textDirection: TextDirection.ltr)..layout(maxWidth: 120);
+    tp.paint(canvas, Offset((size.x - tp.width) / 2, size.y + 1));
   }
 }
 

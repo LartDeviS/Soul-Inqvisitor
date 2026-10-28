@@ -64,6 +64,9 @@ void main() {
       expect(campaign.beginCurrentOperation(), isTrue);
       expect(campaign.choose('purge_station'), isFalse, reason: 'choices are locked while deployed');
       for (var i = 0; i < 12; i++) { campaign.recordActiveOperationKill(); }
+      expect(campaign.activeOperationObjectivesComplete, isFalse, reason: 'the field relay must also be secured');
+      expect(campaign.collectFieldObjective('station_relay_disabled'), isTrue);
+      expect(campaign.collectFieldObjective('station_relay_disabled'), isFalse, reason: 'field objectives can only be secured once');
       expect(campaign.activeOperationObjectivesComplete, isTrue);
       final resolved = campaign.resolveActiveOperation(success: true);
       expect(resolved?.id, 'secure_station');
@@ -87,6 +90,7 @@ void main() {
       expect(campaign.beginCurrentOperation(), isTrue);
       expect(campaign.attemptsFor(campaign.currentOperation!), 2);
       for (var i = 0; i < 12; i++) { campaign.recordActiveOperationKill(); }
+      campaign.collectFieldObjective('station_relay_disabled');
       campaign.resolveActiveOperation(success: true);
       expect(campaign.isOperationCompleted(campaign.currentOperation!), isTrue);
     });
@@ -106,9 +110,31 @@ void main() {
       expect(restored.operationKills, 10);
       expect(restored.activeOperationObjectivesComplete, isFalse);
       restored.recordActiveOperationKill(isChampion: true);
+      expect(restored.activeOperationObjectivesComplete, isFalse);
+      expect(restored.collectFieldObjective('cargo_manifest_secured'), isTrue);
       expect(restored.activeOperationObjectivesComplete, isTrue);
       restored.resolveActiveOperation(success: true);
       expect(restored.flags, contains('operation_cargo_intercepted'));
+    });
+
+    test('archive operation requires both archive cores and the boss objective', () {
+      final campaign = StoryCampaignSystem();
+      campaign.choose('seal_sector');
+      campaign.collectEvidence('access_log');
+      campaign.choose('question_deacon');
+      campaign.choose('coerce_witness');
+      campaign.collectEvidence('cargo_manifest');
+      campaign.choose('follow_archive');
+      expect(campaign.currentNode.id, 'archive_confrontation');
+      expect(campaign.beginCurrentOperation(), isTrue);
+      for (var i = 0; i < 8; i++) { campaign.recordActiveOperationKill(); }
+      campaign.recordActiveOperationKill(isBoss: true);
+      expect(campaign.collectFieldObjective('archive_core_alpha'), isTrue);
+      expect(campaign.activeOperationObjectivesComplete, isFalse);
+      final restored = StoryCampaignSystem()..loadJson(campaign.toJson());
+      expect(restored.operationFieldObjectives, contains('archive_core_alpha'));
+      expect(restored.collectFieldObjective('archive_core_omega'), isTrue);
+      expect(restored.activeOperationObjectivesComplete, isTrue);
     });
 
     test('victory without required objectives does not unlock the operation route', () {
@@ -119,6 +145,20 @@ void main() {
       campaign.resolveActiveOperation(success: true);
       expect(campaign.flags, isNot(contains('operation_station_secured')));
       expect(campaign.flags, contains('operation_failed_secure_station'));
+    });
+
+    test('story field objectives are operation-specific and persist safely', () {
+      final campaign = StoryCampaignSystem();
+      campaign.choose('seal_sector');
+      expect(campaign.beginCurrentOperation(), isTrue);
+      expect(campaign.collectFieldObjective('cargo_manifest_secured'), isFalse,
+          reason: 'cargo evidence must not satisfy a station operation');
+      expect(campaign.collectFieldObjective('station_relay_disabled'), isTrue);
+      final restored = StoryCampaignSystem()..loadJson(campaign.toJson());
+      expect(restored.operationFieldObjectives, contains('station_relay_disabled'));
+      expect(restored.activeOperationProgressLabel, contains('Объекты: 1/1'));
+      for (var i = 0; i < 12; i++) { restored.recordActiveOperationKill(); }
+      expect(restored.activeOperationObjectivesComplete, isTrue);
     });
 
     test('invalid save values fall back to a safe opening scene', () {

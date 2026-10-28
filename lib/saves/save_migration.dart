@@ -1,7 +1,7 @@
 /// Migrates expansion save payloads forward while preserving unknown fields.
 class SaveMigration {
   static Map<String, dynamic> migrate(dynamic raw) {
-    if (raw is! Map) return {'schemaVersion': 8};
+    if (raw is! Map) return {'schemaVersion': 9};
     final result = Map<String, dynamic>.from(raw);
     final version = result['schemaVersion'] is num
         ? (result['schemaVersion'] as num).toInt()
@@ -63,7 +63,16 @@ class SaveMigration {
         story.putIfAbsent('operationBosses', () => 0);
       }
     }
-    result['schemaVersion'] = 8;
+    if (version < 9) {
+      if (result['systems'] is! Map) result['systems'] = <String, dynamic>{};
+      final systems = result['systems'] as Map;
+      if (systems['storyCampaign'] is Map) {
+        final story = systems['storyCampaign'] as Map;
+        story['schemaVersion'] = 4;
+        story.putIfAbsent('operationFieldObjectives', () => <dynamic>[]);
+      }
+    }
+    result['schemaVersion'] = 9;
     return result;
   }
 }
