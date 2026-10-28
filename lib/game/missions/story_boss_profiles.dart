@@ -1,6 +1,6 @@
 /// Data-driven identities for the three campaign operation bosses.
 /// This file deliberately has no Flutter/Flame dependency so its rules are testable.
-enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal }
+enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer }
 
 class StoryBossProfile {
   final StoryBossKind kind;
@@ -110,6 +110,30 @@ class StoryBossProfile {
       subtitle: 'Командир блокирующего отряда',
       healthMultiplier: 1.16, movementMultiplier: 0.96,
       attackIntervalMultiplier: 0.86, damageTakenMultiplier: 0.88,
+      phaseOneAttacks: [3, 0, 2, 3], phaseTwoAttacks: [3, 4, 0, 2],
+      phaseThreeAttacks: [4, 3, 2, 0, 4],
+    ),
+    StoryBossKind.authorityAuditor: StoryBossProfile(
+      kind: StoryBossKind.authorityAuditor,
+      title: 'Аудитор полномочий', subtitle: 'Стирает следы чужих приказов',
+      healthMultiplier: 1.24, movementMultiplier: 0.84,
+      attackIntervalMultiplier: 1.08, damageTakenMultiplier: 0.80,
+      phaseOneAttacks: [0, 3, 1, 0], phaseTwoAttacks: [3, 4, 0, 1],
+      phaseThreeAttacks: [4, 3, 0, 4, 1],
+    ),
+    StoryBossKind.signalPursuer: StoryBossProfile(
+      kind: StoryBossKind.signalPursuer,
+      title: 'Преследователь сигнала', subtitle: 'Охрана мобильного канала',
+      healthMultiplier: 0.96, movementMultiplier: 1.28,
+      attackIntervalMultiplier: 0.76, damageTakenMultiplier: 1.04,
+      phaseOneAttacks: [1, 4, 2, 1], phaseTwoAttacks: [4, 2, 1, 3],
+      phaseThreeAttacks: [4, 1, 2, 4, 3],
+    ),
+    StoryBossKind.supplyLineEnforcer: StoryBossProfile(
+      kind: StoryBossKind.supplyLineEnforcer,
+      title: 'Каратель цепочки снабжения', subtitle: 'Защитник складских документов',
+      healthMultiplier: 1.14, movementMultiplier: 0.94,
+      attackIntervalMultiplier: 0.90, damageTakenMultiplier: 0.86,
       phaseOneAttacks: [3, 0, 2, 3], phaseTwoAttacks: [3, 4, 0, 2],
       phaseThreeAttacks: [4, 3, 2, 0, 4],
     ),

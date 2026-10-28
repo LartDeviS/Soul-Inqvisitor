@@ -157,6 +157,33 @@ class StoryCampaignSystem {
       requiredKills: 7, requiredBosses: 1,
       requiredFieldObjectives: <String>{'case5_route_cache_recovered'},
     ),
+    StoryOperation(
+      id: 'case6_registry_audit_operation', nodeId: 'case_06_registry_audit',
+      title: 'Операция «Чёрная подпись»',
+      objective: 'Изъять реестр полномочий и победить хранителя аудита.',
+      briefing: 'Командный реестр указывает на архив полномочий, где можно установить, кто продолжает подписывать приказы от имени мёртвых. Изымите журнал и не дайте противнику стереть цепочку подтверждений.',
+      successFlag: 'operation_case6_registry_audit_secured',
+      requiredKills: 8, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case6_authority_ledger_seized'},
+    ),
+    StoryOperation(
+      id: 'case6_mobile_pursuit_operation', nodeId: 'case_06_mobile_pursuit',
+      title: 'Операция «Охота на движущийся сигнал»',
+      objective: 'Отключить маяк слежения и остановить мобильную передачу.',
+      briefing: 'Журнал буферизации ведёт к передвижному ретранслятору. Отключите маяк, прежде чем сеть сменит частоту, и устраните командира охраны.',
+      successFlag: 'operation_case6_mobile_pursuit_secured',
+      requiredKills: 9, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case6_tracking_beacon_disabled'},
+    ),
+    StoryOperation(
+      id: 'case6_supplier_trace_operation', nodeId: 'case_06_supplier_trace',
+      title: 'Операция «Код поставщика»',
+      objective: 'Извлечь накладную и подтвердить маршрут поставок.',
+      briefing: 'Обрывочный маршрут привёл отряд к складу компонентов. Найдите накладную, переживите возможную засаду, и захватите связного, охраняющего цепочку снабжения.',
+      successFlag: 'operation_case6_supplier_trace_secured',
+      requiredKills: 7, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case6_supplier_manifest_recovered'},
+    ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
@@ -522,6 +549,39 @@ class StoryCampaignSystem {
       briefing: 'Операция санкционирована с ограниченным снабжением. Три района остаются возможными целями, а совпадение кода поставщика даёт лишь слабое преимущество. Отряд отправится по наиболее вероятному маршруту, сохраняя резерв на случай засады.',
       dialogueSpeaker: 'Инквизитор', dialogue: '«Мы идём не потому, что уверены. Мы идём потому, что промедление оставит врагу время стереть остатки следа».', ending: true,
     ),
+    StoryNode(
+      id: 'case_06_registry_audit', chapterId: 'case_06', chapterTitle: 'Дело VI — Подпись мертвеца',
+      title: 'Чёрная подпись', location: 'Архив полномочий «Ночной реестр»',
+      briefing: 'Сверка командного ключа вывела группу к закрытому реестру полномочий. Здесь фиксировались подтверждения приказов, включая те, что были подписаны после смерти владельцев. Изымите журнал и остановите хранителя аудита.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Мёртвые не отдают приказы. Значит, кто-то носит их имена как маску».',
+      choices: <StoryChoice>[StoryChoice(id: 'case6_complete_registry_audit', label: 'Передать реестр криптоаналитикам', consequenceText: 'Цепочка полномочий сохранена. Следующее расследование сможет установить, кто подделывал командные подписи.', nextNodeId: 'ending_case6_registry_audit', requiredFlags: <String>{'operation_case6_registry_audit_secured'}, flagsToAdd: <String>{'case6_authority_chain_preserved'}, requisitionDelta: 18, tone: StoryChoiceTone.investigative)],
+    ),
+    StoryNode(
+      id: 'case_06_mobile_pursuit', chapterId: 'case_06', chapterTitle: 'Дело VI — Подпись мертвеца',
+      title: 'Охота на движущийся сигнал', location: 'Транспортный узел «Стрела-9»',
+      briefing: 'Журнал буферизации указывает на мобильный передатчик, который покидает позицию после каждого сеанса. Отключите маяк слежения и извлеките пакет маршрутизации до того, как противник сменит частоту.',
+      dialogueSpeaker: 'Сервочереп «Люмен»', dialogue: '«Сигнал подтверждён, но его окно нестабильно. Уничтожение охраны не заменит отключение маяка».',
+      choices: <StoryChoice>[StoryChoice(id: 'case6_complete_mobile_pursuit', label: 'Извлечь пакет маршрутизации', consequenceText: 'Мобильная сеть раскрыла следующий узел. Пакет сохранён для независимой проверки.', nextNodeId: 'ending_case6_mobile_pursuit', requiredFlags: <String>{'operation_case6_mobile_pursuit_secured'}, flagsToAdd: <String>{'case6_mobile_route_confirmed'}, requisitionDelta: 18, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'case_06_supplier_trace', chapterId: 'case_06', chapterTitle: 'Дело VI — Подпись мертвеца',
+      title: 'Код поставщика', location: 'Склад компонентов «Клин-8»',
+      briefing: 'Фрагмент маршрута привёл к складу, где хранятся компоненты для узлов связи. Извлеките накладную и установите, кто поставлял оборудование сети. Данные неполны, поэтому связной может попытаться уничтожить документы.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Мы не будем объявлять виновного по совпадению маркировки. Нужна накладная и подтверждённая цепочка поставок».',
+      choices: <StoryChoice>[StoryChoice(id: 'case6_complete_supplier_trace', label: 'Приобщить накладную к делу', consequenceText: 'Поставщик установлен по независимому документу. Ордо получает проверяемое направление для следующего удара.', nextNodeId: 'ending_case6_supplier_trace', requiredFlags: <String>{'operation_case6_supplier_trace_secured'}, flagsToAdd: <String>{'case6_supply_chain_confirmed'}, requisitionDelta: 12, tone: StoryChoiceTone.puritan)],
+    ),
+    StoryNode(
+      id: 'ending_case6_registry_audit', chapterId: 'epilogue', chapterTitle: 'Дело VI продолжается', title: 'Цепь мёртвых полномочий',
+      location: 'Лаборатория криптоанализа крейсера', briefing: 'Реестр подтверждает, что командные подписи использовались после смерти владельцев. Цепочка сохранена, но конечный подписант скрыт за несколькими слоями подмены.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case6_mobile_pursuit', chapterId: 'epilogue', chapterTitle: 'Дело VI продолжается', title: 'След на новой частоте',
+      location: 'Навигационный мостик крейсера', briefing: 'Мобильная передача остановлена, а пакет маршрутизации указывает на следующий узел сети. У Инквизиции появился шанс перехватить сообщение до его отправки.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case6_supplier_trace', chapterId: 'epilogue', chapterTitle: 'Дело VI продолжается', title: 'Накладная на чужую войну',
+      location: 'Архив доказательств крейсера', briefing: 'Накладная связывает склад компонентов с несколькими посредниками. Это ещё не доказывает вину конечного заказчика, но впервые позволяет двигаться по подтверждённой цепочке снабжения.', ending: true,
+    ),
     // Retained as a valid legacy destination for saves created by Update 12.
     StoryNode(
       id: 'ending_case4_expedition', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Курс на внешний ретранслятор',
@@ -796,7 +856,8 @@ class StoryCampaignSystem {
     if (currentNode.chapterId == 'case_03') return 3;
     if (currentNode.chapterId == 'case_04') return 4;
     if (currentNode.chapterId == 'case_05') return 5;
-    return completed ? 5 : 1;
+    if (currentNode.chapterId == 'case_06') return 6;
+    return completed ? 6 : 1;
   }
   double get progress => visitedNodes.length / nodes.length;
   static StoryNode? nodeById(String id) {
@@ -855,7 +916,25 @@ class StoryCampaignSystem {
     final caseFiveFieldEndings = <String>{
       'ending_case5_interrogation', 'ending_case5_signal_hunt', 'ending_case5_limited_search',
     };
-    if (caseFiveFieldEndings.contains(previousEnding)) {
+    final caseFiveOperationEndings = <String>{
+      'ending_case5_field_interrogation', 'ending_case5_field_signal_intercept', 'ending_case5_field_fragment_search',
+    };
+    if (caseFiveOperationEndings.contains(previousEnding)) {
+      switch (previousEnding) {
+        case 'ending_case5_field_interrogation':
+          flags.add('case6_route_registry_audit');
+          currentNodeId = 'case_06_registry_audit';
+          break;
+        case 'ending_case5_field_signal_intercept':
+          flags.add('case6_route_mobile_pursuit');
+          currentNodeId = 'case_06_mobile_pursuit';
+          break;
+        default:
+          flags.add('case6_route_supplier_trace');
+          currentNodeId = 'case_06_supplier_trace';
+          break;
+      }
+    } else if (caseFiveFieldEndings.contains(previousEnding)) {
       switch (previousEnding) {
         case 'ending_case5_interrogation':
           flags.add('case5_operation_interrogation');
