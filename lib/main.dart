@@ -1123,6 +1123,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case 'case10_trial_evidence_operation': return MapLayout.chambers;
         case 'case10_cell_cleanup_operation': return MapLayout.openYard;
         case 'case10_shadow_network_operation': return MapLayout.ring;
+        case 'case11_trial_counterproof_operation': return MapLayout.chambers;
+        case 'case11_cell_sweep_operation': return MapLayout.openYard;
+        case 'case11_network_override_operation': return MapLayout.ring;
         case 'secure_outer_relay':
           final routeFlags = expansionSystems.storyCampaign.flags;
           if (routeFlags.contains('case4_route_civilian')) return MapLayout.ring;
@@ -2718,6 +2721,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       'case10_trial_evidence_operation' => story_boss_profiles.StoryBossKind.tribunalJusticiar,
       'case10_cell_cleanup_operation' => story_boss_profiles.StoryBossKind.cellPursuer,
       'case10_shadow_network_operation' => story_boss_profiles.StoryBossKind.shadowNetworkWarden,
+      'case11_trial_counterproof_operation' => story_boss_profiles.StoryBossKind.counterproofArchivist,
+      'case11_cell_sweep_operation' => story_boss_profiles.StoryBossKind.fugitiveRouteMarshal,
+      'case11_network_override_operation' => story_boss_profiles.StoryBossKind.networkOverrideSentinel,
       _ => null,
     };
     if (kind == null) return;
@@ -3400,6 +3406,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'case10_testimony_archive_seized': Vector2(mapWidth * 0.72, mapHeight * 0.25),
         'case10_fugitive_registry_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.72),
         'case10_control_key_extracted': Vector2(mapWidth * 0.50, mapHeight * 0.18),
+        'case11_counterproof_protocol_seized': Vector2(mapWidth * 0.72, mapHeight * 0.25),
+        'case11_fugitive_contacts_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.72),
+        'case11_override_key_extracted': Vector2(mapWidth * 0.50, mapHeight * 0.18),
       };
       for (final objectiveId in activeStoryOperation.requiredFieldObjectives) {
         final objectivePosition = objectivePositions[objectiveId];
@@ -3426,6 +3435,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
           'case10_testimony_archive_seized' => 'Архив показаний',
           'case10_fugitive_registry_recovered' => 'Список беглецов',
           'case10_control_key_extracted' => 'Контрольный ключ',
+          'case11_counterproof_protocol_seized' => 'Протокол подмены',
+          'case11_fugitive_contacts_recovered' => 'Контакты беглецов',
+          'case11_override_key_extracted' => 'Управляющий ключ',
           'outer_relay_uplink_secured' => expansionSystems.storyCampaign.flags.contains('case4_route_civilian')
               ? 'Гражданский сервисный шлюз'
               : expansionSystems.storyCampaign.flags.contains('case4_route_military')
@@ -5402,6 +5414,9 @@ class StoryFieldObjective extends PositionComponent with HasGameReference<Inquis
     'case10_testimony_archive_seized' => const Color(0xFFB39DDB),
     'case10_fugitive_registry_recovered' => const Color(0xFFFFAB91),
     'case10_control_key_extracted' => const Color(0xFF80CBC4),
+    'case11_counterproof_protocol_seized' => const Color(0xFFB39DDB),
+    'case11_fugitive_contacts_recovered' => const Color(0xFFFFAB91),
+    'case11_override_key_extracted' => const Color(0xFF80CBC4),
     _ => const Color(0xFF80CBC4),
   };
 
@@ -11276,6 +11291,9 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         story_boss_profiles.StoryBossKind.tribunalJusticiar => const Color(0xFFB39DDB),
         story_boss_profiles.StoryBossKind.cellPursuer => const Color(0xFFFFAB91),
         story_boss_profiles.StoryBossKind.shadowNetworkWarden => const Color(0xFF80CBC4),
+        story_boss_profiles.StoryBossKind.counterproofArchivist => const Color(0xFFB39DDB),
+        story_boss_profiles.StoryBossKind.fugitiveRouteMarshal => const Color(0xFFFFAB91),
+        story_boss_profiles.StoryBossKind.networkOverrideSentinel => const Color(0xFF80CBC4),
       };
       canvas.drawCircle(Offset(cx, cy), 59, Paint()..color = auraColor.withOpacity(0.10 + pulse * 0.12)..style = PaintingStyle.stroke..strokeWidth = 4);
       final titlePainter = TextPainter(

@@ -1,6 +1,6 @@
 /// Data-driven identities for the three campaign operation bosses.
 /// This file deliberately has no Flutter/Flame dependency so its rules are testable.
-enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster, rootOrderCoordinator, deadSignatoryMagister, tribunalJusticiar, cellPursuer, shadowNetworkWarden }
+enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster, rootOrderCoordinator, deadSignatoryMagister, tribunalJusticiar, cellPursuer, shadowNetworkWarden, counterproofArchivist, fugitiveRouteMarshal, networkOverrideSentinel }
 
 class StoryBossProfile {
   final StoryBossKind kind;
@@ -219,6 +219,33 @@ class StoryBossProfile {
       damageTakenMultiplier: 0.82,
       phaseOneAttacks: [2, 0, 3, 1],
       phaseTwoAttacks: [4, 2, 3, 0, 1],
+      phaseThreeAttacks: [4, 3, 2, 4, 0, 1],
+    ),
+    StoryBossKind.counterproofArchivist: StoryBossProfile(
+      kind: StoryBossKind.counterproofArchivist,
+      title: 'Архивист контрдоказательства',
+      subtitle: 'Скрывает следы редакции показаний',
+      healthMultiplier: 1.14, movementMultiplier: 0.92,
+      attackIntervalMultiplier: 0.86, damageTakenMultiplier: 0.88,
+      phaseOneAttacks: [0, 2, 1, 3], phaseTwoAttacks: [3, 4, 1, 2],
+      phaseThreeAttacks: [4, 3, 1, 4, 0],
+    ),
+    StoryBossKind.fugitiveRouteMarshal: StoryBossProfile(
+      kind: StoryBossKind.fugitiveRouteMarshal,
+      title: 'Маршал маршрутов бегства',
+      subtitle: 'Координатор последних ячеек',
+      healthMultiplier: 1.06, movementMultiplier: 1.26,
+      attackIntervalMultiplier: 0.76, damageTakenMultiplier: 0.98,
+      phaseOneAttacks: [1, 4, 2, 1], phaseTwoAttacks: [4, 2, 3, 1],
+      phaseThreeAttacks: [4, 1, 3, 2, 4],
+    ),
+    StoryBossKind.networkOverrideSentinel: StoryBossProfile(
+      kind: StoryBossKind.networkOverrideSentinel,
+      title: 'Страж управляющего ключа',
+      subtitle: 'Автономный протокол самозащиты',
+      healthMultiplier: 1.22, movementMultiplier: 1.00,
+      attackIntervalMultiplier: 0.82, damageTakenMultiplier: 0.84,
+      phaseOneAttacks: [2, 0, 3, 1], phaseTwoAttacks: [4, 2, 3, 0, 1],
       phaseThreeAttacks: [4, 3, 2, 4, 0, 1],
     ),
   };

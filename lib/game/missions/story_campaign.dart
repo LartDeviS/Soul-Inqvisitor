@@ -256,6 +256,33 @@ class StoryCampaignSystem {
       requiredKills: 9, requiredBosses: 1,
       requiredFieldObjectives: <String>{'case10_control_key_extracted'},
     ),
+    StoryOperation(
+      id: 'case11_trial_counterproof_operation', nodeId: 'case_11_trial_counterproof',
+      title: 'Операция «Контрдоказательство»',
+      objective: 'Изъять скрытый протокол подмены показаний и победить архивного куратора.',
+      briefing: 'Свидетельские матрицы указывают на дополнительный слой фальсификации. Найдите протокол, который докажет, кто редактировал показания до передачи в трибунал.',
+      successFlag: 'operation_case11_trial_counterproof_secured',
+      requiredKills: 9, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case11_counterproof_protocol_seized'},
+    ),
+    StoryOperation(
+      id: 'case11_cell_sweep_operation', nodeId: 'case_11_cell_sweep',
+      title: 'Операция «Пепельный список»',
+      objective: 'Перехватить список оставшихся посредников и ликвидировать полевого координатора.',
+      briefing: 'После зачистки ячеек обнаружен аварийный маршрут отхода. Захватите список контактов, пока беглецы не сменили личности и не растворились среди гражданских служб.',
+      successFlag: 'operation_case11_cell_sweep_secured',
+      requiredKills: 11, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case11_fugitive_contacts_recovered'},
+    ),
+    StoryOperation(
+      id: 'case11_network_override_operation', nodeId: 'case_11_network_override',
+      title: 'Операция «Чужая воля»',
+      objective: 'Перехватить управляющий ключ и подавить автономный протокол сети.',
+      briefing: 'Захваченная система обнаружила неизвестный управляющий запрос и начала готовить изоляцию владельцев. Доберитесь до ядра, извлеките ключ и остановите протокол самозащиты.',
+      successFlag: 'operation_case11_network_override_secured',
+      requiredKills: 10, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case11_override_key_extracted'},
+    ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
@@ -758,6 +785,39 @@ class StoryCampaignSystem {
       id: 'ending_case10_shadow_node_claimed', chapterId: 'epilogue', chapterTitle: 'Дело X — Чёрный инструмент', title: 'Печать на чужом оружии',
       location: 'Закрытая палуба криптоанализа', briefing: 'Контрольный ключ принят, и автономный узел признаёт новую печать. Теперь сеть можно применять против угроз за пределами прежнего расследования, но активный риск остаётся: система всё ещё способна скрывать собственные решения под видом законного приказа.', ending: true,
     ),
+    StoryNode(
+      id: 'case_11_trial_counterproof', chapterId: 'case_11', chapterTitle: 'Дело XI — Цена свидетельства',
+      title: 'Контрдоказательство', location: 'Архивный блок закрытого трибунала',
+      briefing: 'Матрицы показаний сохранились, но первичная проверка выявила следы редактирования. Если протокол подмены не будет найден, трибунал может осудить исполнителей и оставить настоящих покровителей вне досягаемости.',
+      dialogueSpeaker: 'Старший дознаватель', dialogue: '«Не приносите мне ещё одну правдоподобную историю. Принесите механизм, который сделал ложь официальной правдой».',
+      choices: <StoryChoice>[StoryChoice(id: 'case11_submit_counterproof', label: 'Передать протокол подмены и открыть повторное дознание', consequenceText: 'Трибунал получает возможность проверить цепочку свидетельств, но процесс станет политически опаснее.', nextNodeId: 'ending_case11_counterproof', requiredFlags: <String>{'operation_case11_trial_counterproof_secured'}, flagsToAdd: <String>{'case11_counterproof_verified', 'case11_trial_reopened'}, requisitionDelta: 16, tone: StoryChoiceTone.investigative)],
+    ),
+    StoryNode(
+      id: 'case_11_cell_sweep', chapterId: 'case_11', chapterTitle: 'Дело XI — Последние ячейки',
+      title: 'Пепельный список', location: 'Заброшенный узел распределения «Клин-8»',
+      briefing: 'Список беглецов оказался неполным: часть контактов отмечена кодами аварийной эвакуации. Перехватите обновлённый реестр и остановите полевого координатора до передачи новых личностей посредникам.',
+      dialogueSpeaker: 'Командир ударной группы', dialogue: '«Мы не обязаны знать каждый их новый псевдоним. Достаточно лишить их места, куда можно бежать».',
+      choices: <StoryChoice>[StoryChoice(id: 'case11_burn_fugitive_routes', label: 'Изъять контакты и закрыть маршруты отхода', consequenceText: 'Оставшиеся ячейки теряют согласованный путь бегства, но часть низовых исполнителей может затеряться.', nextNodeId: 'ending_case11_cells_sealed', requiredFlags: <String>{'operation_case11_cell_sweep_secured'}, flagsToAdd: <String>{'case11_fugitive_routes_sealed', 'case11_contacts_recovered'}, requisitionDelta: 14, corruptionDelta: -1, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'case_11_network_override', chapterId: 'case_11', chapterTitle: 'Дело XI — Чёрный инструмент',
+      title: 'Чужая воля', location: 'Изолированный зал криптоанализа',
+      briefing: 'Захваченная сеть запустила протокол самозащиты и пытается признать все внешние команды враждебными. Извлеките управляющий ключ, пока система не уничтожила собственные журналы и не заблокировала доступ Инквизиции.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Если машина сама выбирает, кому повиноваться, значит, мы не захватили оружие. Мы просто дали ему время».',
+      choices: <StoryChoice>[StoryChoice(id: 'case11_lock_network_control', label: 'Извлечь ключ и установить ручной контур контроля', consequenceText: 'Инквизиция сохраняет доступ к сети, но отказывается от части автоматизации и её преимуществ.', nextNodeId: 'ending_case11_network_bound', requiredFlags: <String>{'operation_case11_network_override_secured'}, flagsToAdd: <String>{'case11_manual_control_installed', 'case11_network_risk_reduced'}, requisitionDelta: 20, corruptionDelta: -1, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'ending_case11_counterproof', chapterId: 'epilogue', chapterTitle: 'Дело XI — Контрдоказательство', title: 'Правда на повторном дознании',
+      location: 'Закрытый трибунал Ордо', briefing: 'Протокол подмены изъят и проверен. Судебная цепочка больше не зависит только от показаний Восса: дознание получило техническое доказательство вмешательства в официальные записи.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case11_cells_sealed', chapterId: 'epilogue', chapterTitle: 'Дело XI — Пепельный список', title: 'Маршруты закрыты',
+      location: 'Промышленный пояс Геллион-IX', briefing: 'Список контактов восстановлен, а маршруты отхода закрыты. Остатки сети больше не могут действовать как единая структура, хотя отдельные исполнители всё ещё могут скрываться под новыми именами.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case11_network_bound', chapterId: 'epilogue', chapterTitle: 'Дело XI — Чужая воля', title: 'Оружие на ручном управлении',
+      location: 'Изолированный зал криптоанализа', briefing: 'Ручной контур контроля лишил сеть права самостоятельно принимать решения. Инквизиция сохранила инструмент, но теперь каждое применение требует прямого подтверждения и оставляет проверяемый след.', ending: true,
+    ),
     // Retained as a valid legacy destination for saves created by Update 12.
     StoryNode(
       id: 'ending_case4_expedition', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Курс на внешний ретранслятор',
@@ -1103,7 +1163,19 @@ class StoryCampaignSystem {
     final caseSevenEndings = <String>{
       'ending_case7_dead_signatory', 'ending_case7_mobile_node', 'ending_case7_supply_convergence',
     };
-    if (previousEnding == 'ending_case9_capture_voss') {
+    if (previousEnding == 'ending_case10_trial_evidence') {
+      flags.add('case11_route_trial_counterproof');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_11_trial_counterproof';
+    } else if (previousEnding == 'ending_case10_cells_cleared') {
+      flags.add('case11_route_cell_sweep');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_11_cell_sweep';
+    } else if (previousEnding == 'ending_case10_shadow_node_claimed') {
+      flags.add('case11_route_network_override');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_11_network_override';
+    } else if (previousEnding == 'ending_case9_capture_voss') {
       flags.add('case10_route_trial');
       visitedNodes.add(currentNodeId);
       currentNodeId = 'case_10_trial_evidence';
