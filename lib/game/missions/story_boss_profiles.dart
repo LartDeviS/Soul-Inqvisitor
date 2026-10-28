@@ -1,6 +1,6 @@
 /// Data-driven identities for the three campaign operation bosses.
 /// This file deliberately has no Flutter/Flame dependency so its rules are testable.
-enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster, rootOrderCoordinator, deadSignatoryMagister, tribunalJusticiar, cellPursuer, shadowNetworkWarden, counterproofArchivist, fugitiveRouteMarshal, networkOverrideSentinel, tribunalConspirator, evacuationInterdictor, authorityArbiter }
+enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster, rootOrderCoordinator, deadSignatoryMagister, tribunalJusticiar, cellPursuer, shadowNetworkWarden, counterproofArchivist, fugitiveRouteMarshal, networkOverrideSentinel, tribunalConspirator, evacuationInterdictor, authorityArbiter, witnessExecutioner, convoyReclaimer, autonomyDaemon}
 
 class StoryBossProfile {
   final StoryBossKind kind;
@@ -274,6 +274,24 @@ class StoryBossProfile {
       attackIntervalMultiplier: 0.90, damageTakenMultiplier: 0.82,
       phaseOneAttacks: [2, 0, 3, 1], phaseTwoAttacks: [4, 2, 3, 0, 1],
       phaseThreeAttacks: [4, 3, 2, 4, 0, 1],
+    ),
+    StoryBossKind.witnessExecutioner: StoryBossProfile(
+      kind: StoryBossKind.witnessExecutioner, title: 'Каратель свидетелей',
+      subtitle: 'Зачистка независимого дознания',
+      healthMultiplier: 1.12, movementMultiplier: 1.10, attackIntervalMultiplier: 0.82, damageTakenMultiplier: 0.94,
+      phaseOneAttacks: [1, 2, 3, 1], phaseTwoAttacks: [3, 4, 2, 1], phaseThreeAttacks: [4, 3, 2, 4, 1],
+    ),
+    StoryBossKind.convoyReclaimer: StoryBossProfile(
+      kind: StoryBossKind.convoyReclaimer, title: 'Командир последнего конвоя',
+      subtitle: 'Военный эскорт посредников',
+      healthMultiplier: 1.24, movementMultiplier: 0.94, attackIntervalMultiplier: 0.92, damageTakenMultiplier: 0.82,
+      phaseOneAttacks: [0, 3, 0, 2], phaseTwoAttacks: [3, 4, 0, 2], phaseThreeAttacks: [4, 3, 0, 4, 2],
+    ),
+    StoryBossKind.autonomyDaemon: StoryBossProfile(
+      kind: StoryBossKind.autonomyDaemon, title: 'Демон автономного протокола',
+      subtitle: 'Скрытая команда внутри сети',
+      healthMultiplier: 1.28, movementMultiplier: 1.02, attackIntervalMultiplier: 0.80, damageTakenMultiplier: 0.80,
+      phaseOneAttacks: [2, 0, 3, 1], phaseTwoAttacks: [4, 2, 3, 0, 1], phaseThreeAttacks: [4, 3, 2, 4, 0, 1],
     ),
   };
 

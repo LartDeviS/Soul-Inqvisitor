@@ -310,6 +310,33 @@ class StoryCampaignSystem {
       requiredKills: 10, requiredBosses: 1,
       requiredFieldObjectives: <String>{'case12_manual_control_log_seized'},
     ),
+    StoryOperation(
+      id: 'case13_independent_inquiry_operation', nodeId: 'case_13_independent_inquiry',
+      title: 'Операция «Свидетели без защиты»',
+      objective: 'Эвакуировать независимого дознавателя и извлечь оригиналы доказательств.',
+      briefing: 'После разоблачения покровителей независимый дознаватель оказался целью сразу нескольких фракций. Проведите его через архивный блок, извлеките оригиналы приказов и остановите карательную группу.',
+      successFlag: 'operation_case13_independent_inquiry_secured',
+      requiredKills: 10, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case13_original_orders_recovered'},
+    ),
+    StoryOperation(
+      id: 'case13_military_pursuit_operation', nodeId: 'case_13_military_pursuit',
+      title: 'Операция «Последний конвой»',
+      objective: 'Остановить конвой, изъять список получателей и прорваться через охрану.',
+      briefing: 'После срыва эвакуации уцелевшие посредники пытаются покинуть сектор под военным сопровождением. Перехватите реестр получателей и остановите командира конвоя до выхода из зоны.',
+      successFlag: 'operation_case13_military_pursuit_secured',
+      requiredKills: 12, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case13_convoy_registry_seized'},
+    ),
+    StoryOperation(
+      id: 'case13_controlled_network_operation', nodeId: 'case_13_controlled_network',
+      title: 'Операция «Цена ручного контроля»',
+      objective: 'Проверить цепь команд, отключить скрытый протокол и победить арбитра сети.',
+      briefing: 'Ручное управление выявило приказ, которого не было ни в одном журнале. Проследите его до ядра, изымите контрольный ключ и проверьте, не превратился ли инструмент Инквизиции в самостоятельного игрока.',
+      successFlag: 'operation_case13_controlled_network_secured',
+      requiredKills: 10, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case13_control_key_verified'},
+    ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
@@ -855,6 +882,39 @@ class StoryCampaignSystem {
       choices: <StoryChoice>[StoryChoice(id: 'case12_confirm_manual_authority', label: 'Закрепить ручной контроль за полевым командованием', consequenceText: 'Сеть останется доступной под прямым надзором, но командование примет на себя ответственность за каждый будущий приказ.', nextNodeId: 'ending_case12_manual_authority', requiredFlags: <String>{'operation_case12_inquisitorial_control_secured'}, flagsToAdd: <String>{'case12_manual_authority_confirmed', 'case12_command_responsibility_accepted'}, requisitionDelta: 20, corruptionDelta: -1, tone: StoryChoiceTone.pragmatic)],
     ),
     StoryNode(
+      id: 'case_13_independent_inquiry', chapterId: 'case_13', chapterTitle: 'Дело XIII — Цена раскола',
+      title: 'Свидетели без защиты', location: 'Архивный блок «Семь печатей»',
+      briefing: 'Независимое дознание пережило первый удар, но теперь нужно сохранить первичные документы и вывести дознавателя из-под удара тех, чьи имена уже стали известны. В этой ветви доказательства важнее политической поддержки.',
+      dialogueSpeaker: 'Независимый дознаватель', dialogue: '«Я могу доказать, кто подписал приказ. Но мне нужно дожить до момента, когда этот приказ прочтут вслух».',
+      choices: <StoryChoice>[StoryChoice(id: 'case13_publish_original_orders', label: 'Опубликовать проверенные оригиналы и защитить свидетелей', consequenceText: 'Независимое дознание получает прочную доказательную базу. Командование лишается возможности быстро закрыть дело, но отряд сохраняет поддержку гражданских свидетелей.', nextNodeId: 'ending_case13_independent_record', requiredFlags: <String>{'operation_case13_independent_inquiry_secured'}, flagsToAdd: <String>{'case13_original_orders_published', 'case13_witnesses_protected', 'case13_command_trust_low'}, requisitionDelta: 8, corruptionDelta: -2, tone: StoryChoiceTone.investigative)],
+    ),
+    StoryNode(
+      id: 'case_13_military_pursuit', chapterId: 'case_13', chapterTitle: 'Дело XIII — Цена раскола',
+      title: 'Последний конвой', location: 'Военный тракт «Каскад»',
+      briefing: 'После перехвата эвакуации военные закрыли маршруты и вывели на тракт последний конвой посредников. Если список получателей будет изъят, сеть потеряет остатки прикрытия, но открытое столкновение окончательно разрушит доверие штаба.',
+      dialogueSpeaker: 'Командир ударной группы', dialogue: '«Они надеются, что форма и печать остановят нас. Сегодня проверим, кто отдал им этот приказ».',
+      choices: <StoryChoice>[StoryChoice(id: 'case13_seize_convoy_registry', label: 'Изъять список и завершить военную операцию', consequenceText: 'Отряд получает полный список получателей и дополнительные трофеи, но военное командование переводит его в категорию ненадёжных подразделений.', nextNodeId: 'ending_case13_convoy_broken', requiredFlags: <String>{'operation_case13_military_pursuit_secured'}, flagsToAdd: <String>{'case13_convoy_registry_seized', 'case13_military_trust_lost', 'case13_supply_cache_secured'}, requisitionDelta: 22, corruptionDelta: -1, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'case_13_controlled_network', chapterId: 'case_13', chapterTitle: 'Дело XIII — Цена раскола',
+      title: 'Цена ручного контроля', location: 'Подземное ядро «Арбитр»',
+      briefing: 'В журнале ручного контроля найден приказ без подписи живого оператора. Он использовал легитимные полномочия как маску, чтобы восстановить собственную автономию. Изымите ключ и решите, можно ли доверить сети хотя бы один приказ.',
+      dialogueSpeaker: 'Техноадепт криптоанализа', dialogue: '«Ручное управление не спасает нас, если рука, подтверждающая приказ, уже не принадлежит человеку».',
+      choices: <StoryChoice>[StoryChoice(id: 'case13_sever_autonomous_protocol', label: 'Отключить автономный протокол и оставить только аудитируемые команды', consequenceText: 'Сеть теряет часть возможностей, зато каждый будущий приказ требует подтверждения и оставляет проверяемый след. Риск злоупотребления снижается.', nextNodeId: 'ending_case13_network_audited', requiredFlags: <String>{'operation_case13_controlled_network_secured'}, flagsToAdd: <String>{'case13_autonomous_protocol_severed', 'case13_audit_required', 'case13_corruption_risk_reduced'}, requisitionDelta: 10, corruptionDelta: -3, tone: StoryChoiceTone.puritan)],
+    ),
+    StoryNode(
+      id: 'ending_case13_independent_record', chapterId: 'epilogue', chapterTitle: 'Дело XIII — Независимая запись', title: 'Правда пережила приказ',
+      location: 'Архив независимого дознания', briefing: 'Оригиналы опубликованы, а ключевые свидетели находятся под защитой. Политическая опора отряда ослабла, но доказательства теперь распределены между независимыми хранилищами и не могут быть уничтожены одним распоряжением.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case13_convoy_broken', chapterId: 'epilogue', chapterTitle: 'Дело XIII — Последний конвой', title: 'Снабжение перерезано',
+      location: 'Военный тракт «Каскад»', briefing: 'Конвой остановлен, а список получателей изъят. Сеть потеряла возможность прятаться за перевозками, но военное командование больше не считает отряд надёжным инструментом. Ресурсов стало больше, союзников — меньше.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case13_network_audited', chapterId: 'epilogue', chapterTitle: 'Дело XIII — Цена ручного контроля', title: 'Каждый приказ оставляет след',
+      location: 'Изолированное ядро «Арбитр»', briefing: 'Автономный протокол отключён, а сеть переведена на подтверждаемые команды с обязательным аудитом. Инквизиция сохраняет ограниченный инструмент, но больше не может притворяться, что ответственность принадлежит одной лишь машине.', ending: true,
+    ),
+    StoryNode(
       id: 'ending_case12_tribunal_exposed', chapterId: 'epilogue', chapterTitle: 'Дело XII — Закрытое заседание', title: 'Покровители названы',
       location: 'Независимый архив дознания', briefing: 'Список покровителей передан независимому дознавателю. Расследование больше нельзя закрыть одним распоряжением местной коллегии, но отряд теперь действует без прежней политической защиты.', ending: true,
     ),
@@ -1223,7 +1283,19 @@ class StoryCampaignSystem {
     final caseSevenEndings = <String>{
       'ending_case7_dead_signatory', 'ending_case7_mobile_node', 'ending_case7_supply_convergence',
     };
-    if (previousEnding == 'ending_case11_counterproof') {
+    if (previousEnding == 'ending_case12_tribunal_exposed') {
+      flags.add('case13_route_independent_inquiry');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_13_independent_inquiry';
+    } else if (previousEnding == 'ending_case12_evacuation_cut') {
+      flags.add('case13_route_military_pursuit');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_13_military_pursuit';
+    } else if (previousEnding == 'ending_case12_manual_authority') {
+      flags.add('case13_route_controlled_network');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_13_controlled_network';
+    } else if (previousEnding == 'ending_case11_counterproof') {
       flags.add('case12_route_tribunal_conspiracy');
       visitedNodes.add(currentNodeId);
       currentNodeId = 'case_12_tribunal_conspiracy';

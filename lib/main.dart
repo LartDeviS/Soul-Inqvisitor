@@ -1129,6 +1129,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case 'case12_tribunal_conspiracy_operation': return MapLayout.chambers;
         case 'case12_purge_allies_operation': return MapLayout.openYard;
         case 'case12_inquisitorial_control_operation': return MapLayout.ring;
+        case 'case13_independent_inquiry_operation': return MapLayout.chambers;
+        case 'case13_military_pursuit_operation': return MapLayout.openYard;
+        case 'case13_controlled_network_operation': return MapLayout.ring;
         case 'secure_outer_relay':
           final routeFlags = expansionSystems.storyCampaign.flags;
           if (routeFlags.contains('case4_route_civilian')) return MapLayout.ring;
@@ -2730,6 +2733,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       'case12_tribunal_conspiracy_operation' => story_boss_profiles.StoryBossKind.tribunalConspirator,
       'case12_purge_allies_operation' => story_boss_profiles.StoryBossKind.evacuationInterdictor,
       'case12_inquisitorial_control_operation' => story_boss_profiles.StoryBossKind.authorityArbiter,
+      'case13_independent_inquiry_operation' => story_boss_profiles.StoryBossKind.witnessExecutioner,
+      'case13_military_pursuit_operation' => story_boss_profiles.StoryBossKind.convoyReclaimer,
+      'case13_controlled_network_operation' => story_boss_profiles.StoryBossKind.autonomyDaemon,
       _ => null,
     };
     if (kind == null) return;
@@ -3418,6 +3424,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'case12_patron_list_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.25),
         'case12_evacuation_channel_intercepted': Vector2(mapWidth * 0.50, mapHeight * 0.18),
         'case12_manual_control_log_seized': Vector2(mapWidth * 0.72, mapHeight * 0.72),
+        'case13_original_orders_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.25),
+        'case13_convoy_registry_seized': Vector2(mapWidth * 0.50, mapHeight * 0.18),
+        'case13_control_key_verified': Vector2(mapWidth * 0.72, mapHeight * 0.72),
       };
       for (final objectiveId in activeStoryOperation.requiredFieldObjectives) {
         final objectivePosition = objectivePositions[objectiveId];
@@ -3450,6 +3459,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
           'case12_patron_list_recovered' => 'Список покровителей',
           'case12_evacuation_channel_intercepted' => 'Канал эвакуации',
           'case12_manual_control_log_seized' => 'Журнал ручного контроля',
+          'case13_original_orders_recovered' => 'Оригиналы приказов',
+          'case13_convoy_registry_seized' => 'Реестр конвоя',
+          'case13_control_key_verified' => 'Проверенный контрольный ключ',
           'outer_relay_uplink_secured' => expansionSystems.storyCampaign.flags.contains('case4_route_civilian')
               ? 'Гражданский сервисный шлюз'
               : expansionSystems.storyCampaign.flags.contains('case4_route_military')
@@ -5432,6 +5444,9 @@ class StoryFieldObjective extends PositionComponent with HasGameReference<Inquis
     'case12_patron_list_recovered' => const Color(0xFFB39DDB),
     'case12_evacuation_channel_intercepted' => const Color(0xFFFFAB91),
     'case12_manual_control_log_seized' => const Color(0xFF80CBC4),
+    'case13_original_orders_recovered' => const Color(0xFFB39DDB),
+    'case13_convoy_registry_seized' => const Color(0xFFFFAB91),
+    'case13_control_key_verified' => const Color(0xFF80CBC4),
     _ => const Color(0xFF80CBC4),
   };
 
@@ -11312,6 +11327,9 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         story_boss_profiles.StoryBossKind.tribunalConspirator => const Color(0xFFB39DDB),
         story_boss_profiles.StoryBossKind.evacuationInterdictor => const Color(0xFFFFAB91),
         story_boss_profiles.StoryBossKind.authorityArbiter => const Color(0xFF80CBC4),
+        story_boss_profiles.StoryBossKind.witnessExecutioner => const Color(0xFFB39DDB),
+        story_boss_profiles.StoryBossKind.convoyReclaimer => const Color(0xFFFFAB91),
+        story_boss_profiles.StoryBossKind.autonomyDaemon => const Color(0xFF80CBC4),
       };
       canvas.drawCircle(Offset(cx, cy), 59, Paint()..color = auraColor.withOpacity(0.10 + pulse * 0.12)..style = PaintingStyle.stroke..strokeWidth = 4);
       final titlePainter = TextPainter(
