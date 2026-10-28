@@ -5,8 +5,8 @@ void main() {
   group('Story boss profiles', () {
     test('each operation boss has a distinct identity and combat profile', () {
       final profiles = StoryBossProfile.all.values.toList();
-      expect(profiles, hasLength(21));
-      expect(profiles.map((p) => p.title).toSet(), hasLength(21));
+      expect(profiles, hasLength(24));
+      expect(profiles.map((p) => p.title).toSet(), hasLength(24));
       for (final profile in profiles) {
         expect(profile.healthMultiplier, greaterThan(0));
         expect(profile.movementMultiplier, greaterThan(0));

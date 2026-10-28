@@ -1,6 +1,6 @@
 /// Data-driven identities for the three campaign operation bosses.
 /// This file deliberately has no Flutter/Flame dependency so its rules are testable.
-enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster, rootOrderCoordinator, deadSignatoryMagister, tribunalJusticiar, cellPursuer, shadowNetworkWarden, counterproofArchivist, fugitiveRouteMarshal, networkOverrideSentinel }
+enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster, rootOrderCoordinator, deadSignatoryMagister, tribunalJusticiar, cellPursuer, shadowNetworkWarden, counterproofArchivist, fugitiveRouteMarshal, networkOverrideSentinel, tribunalConspirator, evacuationInterdictor, authorityArbiter }
 
 class StoryBossProfile {
   final StoryBossKind kind;
@@ -245,6 +245,33 @@ class StoryBossProfile {
       subtitle: 'Автономный протокол самозащиты',
       healthMultiplier: 1.22, movementMultiplier: 1.00,
       attackIntervalMultiplier: 0.82, damageTakenMultiplier: 0.84,
+      phaseOneAttacks: [2, 0, 3, 1], phaseTwoAttacks: [4, 2, 3, 0, 1],
+      phaseThreeAttacks: [4, 3, 2, 4, 0, 1],
+    ),
+    StoryBossKind.tribunalConspirator: StoryBossProfile(
+      kind: StoryBossKind.tribunalConspirator,
+      title: 'Инквизиторский заговорщик',
+      subtitle: 'Скрывает список покровителей',
+      healthMultiplier: 1.18, movementMultiplier: 0.96,
+      attackIntervalMultiplier: 0.88, damageTakenMultiplier: 0.86,
+      phaseOneAttacks: [0, 3, 2, 1], phaseTwoAttacks: [3, 4, 1, 2],
+      phaseThreeAttacks: [4, 3, 2, 4, 1],
+    ),
+    StoryBossKind.evacuationInterdictor: StoryBossProfile(
+      kind: StoryBossKind.evacuationInterdictor,
+      title: 'Перехватчик эвакуации',
+      subtitle: 'Командует конвоем беглецов',
+      healthMultiplier: 1.08, movementMultiplier: 1.20,
+      attackIntervalMultiplier: 0.78, damageTakenMultiplier: 0.98,
+      phaseOneAttacks: [1, 4, 2, 1], phaseTwoAttacks: [4, 2, 3, 1],
+      phaseThreeAttacks: [4, 1, 3, 2, 4],
+    ),
+    StoryBossKind.authorityArbiter: StoryBossProfile(
+      kind: StoryBossKind.authorityArbiter,
+      title: 'Арбитр полномочий',
+      subtitle: 'Защищает автономный командный узел',
+      healthMultiplier: 1.26, movementMultiplier: 0.90,
+      attackIntervalMultiplier: 0.90, damageTakenMultiplier: 0.82,
       phaseOneAttacks: [2, 0, 3, 1], phaseTwoAttacks: [4, 2, 3, 0, 1],
       phaseThreeAttacks: [4, 3, 2, 4, 0, 1],
     ),

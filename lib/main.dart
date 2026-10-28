@@ -1126,6 +1126,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case 'case11_trial_counterproof_operation': return MapLayout.chambers;
         case 'case11_cell_sweep_operation': return MapLayout.openYard;
         case 'case11_network_override_operation': return MapLayout.ring;
+        case 'case12_tribunal_conspiracy_operation': return MapLayout.chambers;
+        case 'case12_purge_allies_operation': return MapLayout.openYard;
+        case 'case12_inquisitorial_control_operation': return MapLayout.ring;
         case 'secure_outer_relay':
           final routeFlags = expansionSystems.storyCampaign.flags;
           if (routeFlags.contains('case4_route_civilian')) return MapLayout.ring;
@@ -2724,6 +2727,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       'case11_trial_counterproof_operation' => story_boss_profiles.StoryBossKind.counterproofArchivist,
       'case11_cell_sweep_operation' => story_boss_profiles.StoryBossKind.fugitiveRouteMarshal,
       'case11_network_override_operation' => story_boss_profiles.StoryBossKind.networkOverrideSentinel,
+      'case12_tribunal_conspiracy_operation' => story_boss_profiles.StoryBossKind.tribunalConspirator,
+      'case12_purge_allies_operation' => story_boss_profiles.StoryBossKind.evacuationInterdictor,
+      'case12_inquisitorial_control_operation' => story_boss_profiles.StoryBossKind.authorityArbiter,
       _ => null,
     };
     if (kind == null) return;
@@ -3409,6 +3415,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'case11_counterproof_protocol_seized': Vector2(mapWidth * 0.72, mapHeight * 0.25),
         'case11_fugitive_contacts_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.72),
         'case11_override_key_extracted': Vector2(mapWidth * 0.50, mapHeight * 0.18),
+        'case12_patron_list_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.25),
+        'case12_evacuation_channel_intercepted': Vector2(mapWidth * 0.50, mapHeight * 0.18),
+        'case12_manual_control_log_seized': Vector2(mapWidth * 0.72, mapHeight * 0.72),
       };
       for (final objectiveId in activeStoryOperation.requiredFieldObjectives) {
         final objectivePosition = objectivePositions[objectiveId];
@@ -3438,6 +3447,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
           'case11_counterproof_protocol_seized' => 'Протокол подмены',
           'case11_fugitive_contacts_recovered' => 'Контакты беглецов',
           'case11_override_key_extracted' => 'Управляющий ключ',
+          'case12_patron_list_recovered' => 'Список покровителей',
+          'case12_evacuation_channel_intercepted' => 'Канал эвакуации',
+          'case12_manual_control_log_seized' => 'Журнал ручного контроля',
           'outer_relay_uplink_secured' => expansionSystems.storyCampaign.flags.contains('case4_route_civilian')
               ? 'Гражданский сервисный шлюз'
               : expansionSystems.storyCampaign.flags.contains('case4_route_military')
@@ -5417,6 +5429,9 @@ class StoryFieldObjective extends PositionComponent with HasGameReference<Inquis
     'case11_counterproof_protocol_seized' => const Color(0xFFB39DDB),
     'case11_fugitive_contacts_recovered' => const Color(0xFFFFAB91),
     'case11_override_key_extracted' => const Color(0xFF80CBC4),
+    'case12_patron_list_recovered' => const Color(0xFFB39DDB),
+    'case12_evacuation_channel_intercepted' => const Color(0xFFFFAB91),
+    'case12_manual_control_log_seized' => const Color(0xFF80CBC4),
     _ => const Color(0xFF80CBC4),
   };
 
@@ -11294,6 +11309,9 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         story_boss_profiles.StoryBossKind.counterproofArchivist => const Color(0xFFB39DDB),
         story_boss_profiles.StoryBossKind.fugitiveRouteMarshal => const Color(0xFFFFAB91),
         story_boss_profiles.StoryBossKind.networkOverrideSentinel => const Color(0xFF80CBC4),
+        story_boss_profiles.StoryBossKind.tribunalConspirator => const Color(0xFFB39DDB),
+        story_boss_profiles.StoryBossKind.evacuationInterdictor => const Color(0xFFFFAB91),
+        story_boss_profiles.StoryBossKind.authorityArbiter => const Color(0xFF80CBC4),
       };
       canvas.drawCircle(Offset(cx, cy), 59, Paint()..color = auraColor.withOpacity(0.10 + pulse * 0.12)..style = PaintingStyle.stroke..strokeWidth = 4);
       final titlePainter = TextPainter(

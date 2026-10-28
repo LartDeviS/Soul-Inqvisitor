@@ -283,6 +283,33 @@ class StoryCampaignSystem {
       requiredKills: 10, requiredBosses: 1,
       requiredFieldObjectives: <String>{'case11_override_key_extracted'},
     ),
+    StoryOperation(
+      id: 'case12_tribunal_conspiracy_operation', nodeId: 'case_12_tribunal_conspiracy',
+      title: 'Операция «Закрытое заседание»',
+      objective: 'Изъять список скрытых покровителей и удержать зал заседаний.',
+      briefing: 'Контрдоказательства вызвали раскол в трибунале. Часть судей пытается закрыть дело и уничтожить список лиц, санкционировавших подмену приказов. Сохраните список и переживите штурм.',
+      successFlag: 'operation_case12_tribunal_conspiracy_secured',
+      requiredKills: 9, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case12_patron_list_recovered'},
+    ),
+    StoryOperation(
+      id: 'case12_purge_allies_operation', nodeId: 'case_12_purge_allies',
+      title: 'Операция «Пепельные союзники»',
+      objective: 'Перехватить канал эвакуации и установить, кто укрывает беглецов.',
+      briefing: 'Закрытые маршруты заставили остатки сети искать защиту у военного командования. Перехватите эвакуационный канал и зафиксируйте имена тех, кто предоставил беглецам транспорт.',
+      successFlag: 'operation_case12_purge_allies_secured',
+      requiredKills: 11, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case12_evacuation_channel_intercepted'},
+    ),
+    StoryOperation(
+      id: 'case12_inquisitorial_control_operation', nodeId: 'case_12_inquisitorial_control',
+      title: 'Операция «Право последнего приказа»',
+      objective: 'Извлечь журнал ручного контроля и остановить автономный командный узел.',
+      briefing: 'Сеть подчиняется вручную, но новый приказ требует подтвердить полномочия самой Инквизиции. Найдите журнал контроля, прежде чем автономный узел признает все стороны незаконными владельцами.',
+      successFlag: 'operation_case12_inquisitorial_control_secured',
+      requiredKills: 10, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case12_manual_control_log_seized'},
+    ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
@@ -807,6 +834,39 @@ class StoryCampaignSystem {
       choices: <StoryChoice>[StoryChoice(id: 'case11_lock_network_control', label: 'Извлечь ключ и установить ручной контур контроля', consequenceText: 'Инквизиция сохраняет доступ к сети, но отказывается от части автоматизации и её преимуществ.', nextNodeId: 'ending_case11_network_bound', requiredFlags: <String>{'operation_case11_network_override_secured'}, flagsToAdd: <String>{'case11_manual_control_installed', 'case11_network_risk_reduced'}, requisitionDelta: 20, corruptionDelta: -1, tone: StoryChoiceTone.pragmatic)],
     ),
     StoryNode(
+      id: 'case_12_tribunal_conspiracy', chapterId: 'case_12', chapterTitle: 'Дело XII — Раскол Ордо',
+      title: 'Закрытое заседание', location: 'Трибунальный комплекс «Семь печатей»',
+      briefing: 'Техническое доказательство вынудило трибунал возобновить дело, но теперь внутри Ордо началась борьба за контроль над расследованием. Изымите список покровителей, пока заседание не превратилось в зачистку свидетелей.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Когда доказательство становится неудобным, виновный редко просит опровергнуть его. Он просит закрыть заседание».',
+      choices: <StoryChoice>[StoryChoice(id: 'case12_submit_patron_list', label: 'Передать список покровителей независимому дознавателю', consequenceText: 'Доказательства сохраняются вне контроля местной коллегии, но доверие части командования будет потеряно.', nextNodeId: 'ending_case12_tribunal_exposed', requiredFlags: <String>{'operation_case12_tribunal_conspiracy_secured'}, flagsToAdd: <String>{'case12_patron_network_exposed', 'case12_independent_inquiry'}, requisitionDelta: 18, corruptionDelta: -1, tone: StoryChoiceTone.investigative)],
+    ),
+    StoryNode(
+      id: 'case_12_purge_allies', chapterId: 'case_12', chapterTitle: 'Дело XII — Раскол Ордо',
+      title: 'Пепельные союзники', location: 'Военный перевалочный узел «Каскад»',
+      briefing: 'Беглецы получили транспорт и охрану от офицеров, чьи приказы не совпадают с официальными журналами. Перехватите канал эвакуации и зафиксируйте цепочку помощи, не позволив военным уничтожить записи.',
+      dialogueSpeaker: 'Сержант-разведчик', dialogue: '«Они не исчезают. Их просто каждый раз встречает новый конвой с правильными печатями».',
+      choices: <StoryChoice>[StoryChoice(id: 'case12_seal_evacuation_channel', label: 'Перехватить канал и обнародовать цепочку помощи', consequenceText: 'Остатки сети лишаются безопасного выхода, но отношения с частью военного командования резко ухудшаются.', nextNodeId: 'ending_case12_evacuation_cut', requiredFlags: <String>{'operation_case12_purge_allies_secured'}, flagsToAdd: <String>{'case12_evacuation_network_cut', 'case12_military_trust_damaged'}, requisitionDelta: 14, corruptionDelta: -1, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'case_12_inquisitorial_control', chapterId: 'case_12', chapterTitle: 'Дело XII — Раскол Ордо',
+      title: 'Право последнего приказа', location: 'Изолированный командный узел «Арбитр»',
+      briefing: 'Ручной контроль над теневой сетью привлёк внимание старших кураторов. Чтобы не потерять доступ, отряд должен извлечь журнал операций и доказать, что каждый приказ подтверждался живым уполномоченным лицом.',
+      dialogueSpeaker: 'Техноадепт криптоанализа', dialogue: '«Система не просит верить ей. Она просит определить, кто имеет право заставить её повиноваться».',
+      choices: <StoryChoice>[StoryChoice(id: 'case12_confirm_manual_authority', label: 'Закрепить ручной контроль за полевым командованием', consequenceText: 'Сеть останется доступной под прямым надзором, но командование примет на себя ответственность за каждый будущий приказ.', nextNodeId: 'ending_case12_manual_authority', requiredFlags: <String>{'operation_case12_inquisitorial_control_secured'}, flagsToAdd: <String>{'case12_manual_authority_confirmed', 'case12_command_responsibility_accepted'}, requisitionDelta: 20, corruptionDelta: -1, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'ending_case12_tribunal_exposed', chapterId: 'epilogue', chapterTitle: 'Дело XII — Закрытое заседание', title: 'Покровители названы',
+      location: 'Независимый архив дознания', briefing: 'Список покровителей передан независимому дознавателю. Расследование больше нельзя закрыть одним распоряжением местной коллегии, но отряд теперь действует без прежней политической защиты.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case12_evacuation_cut', chapterId: 'epilogue', chapterTitle: 'Дело XII — Пепельные союзники', title: 'Эвакуация сорвана',
+      location: 'Военный перевалочный узел «Каскад»', briefing: 'Эвакуационный канал перехвачен, а цепочка помощи зафиксирована. Часть офицеров лишится полномочий, однако военное командование сочтёт действия отряда прямым вызовом.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case12_manual_authority', chapterId: 'epilogue', chapterTitle: 'Дело XII — Право последнего приказа', title: 'Ответственность за приказ',
+      location: 'Командный узел «Арбитр»', briefing: 'Ручной контроль закреплён за полевым командованием. Сеть не может действовать без подтверждения, а каждый приказ оставляет проверяемый след. Теперь отряд отвечает не только за применение инструмента, но и за его последствия.', ending: true,
+    ),
+    StoryNode(
       id: 'ending_case11_counterproof', chapterId: 'epilogue', chapterTitle: 'Дело XI — Контрдоказательство', title: 'Правда на повторном дознании',
       location: 'Закрытый трибунал Ордо', briefing: 'Протокол подмены изъят и проверен. Судебная цепочка больше не зависит только от показаний Восса: дознание получило техническое доказательство вмешательства в официальные записи.', ending: true,
     ),
@@ -1163,7 +1223,19 @@ class StoryCampaignSystem {
     final caseSevenEndings = <String>{
       'ending_case7_dead_signatory', 'ending_case7_mobile_node', 'ending_case7_supply_convergence',
     };
-    if (previousEnding == 'ending_case10_trial_evidence') {
+    if (previousEnding == 'ending_case11_counterproof') {
+      flags.add('case12_route_tribunal_conspiracy');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_12_tribunal_conspiracy';
+    } else if (previousEnding == 'ending_case11_cells_sealed') {
+      flags.add('case12_route_purge_allies');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_12_purge_allies';
+    } else if (previousEnding == 'ending_case11_network_bound') {
+      flags.add('case12_route_inquisitorial_control');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_12_inquisitorial_control';
+    } else if (previousEnding == 'ending_case10_trial_evidence') {
       flags.add('case11_route_trial_counterproof');
       visitedNodes.add(currentNodeId);
       currentNodeId = 'case_11_trial_counterproof';
