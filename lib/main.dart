@@ -2632,6 +2632,26 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     persistExpansion();
   }
 
+  void resolveStoryCrisisEvent(String eventId, String title, {required bool success}) {
+    if (!isPlaying || isPaused) return;
+    final story = expansionSystems.storyCampaign;
+    if (!story.resolveCrisisEvent(eventId, success: success)) return;
+    if (success) {
+      requisition += 12;
+      campaign.evidence++;
+      campaign.cluesFound++;
+      recordCareerProgress(evidence: 1);
+      spawnDamageNumber(player.position, 0, color: const Color(0xFF80CBC4), label: 'СЮЖЕТНОЕ СОБЫТИЕ ВЫПОЛНЕНО');
+      campaignChronicle.insert(0, '$title: цель спасена. Дополнительный путь дознания открыт.');
+    } else {
+      campaign.alarm = min(100, campaign.alarm + 8);
+      spawnDamageNumber(player.position, 0, color: const Color(0xFFFF5252), label: 'СЮЖЕТНАЯ ЦЕЛЬ ПОТЕРЯНА');
+      campaignChronicle.insert(0, '$title: цель потеряна. Часть доказательств или свидетелей недоступна.');
+    }
+    if (campaignChronicle.length > 80) campaignChronicle.removeRange(80, campaignChronicle.length);
+    persistExpansion();
+  }
+
   /// Resolves a story-specific field object. Each objective is accepted only once
   /// and only while its matching operation is active.
   void activateStoryFieldObjective(String objectiveId, String label) {
@@ -3345,6 +3365,31 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
           _ => 'Полевой объект',
         };
         world.add(StoryFieldObjective(position: objectivePosition, objectiveId: objectiveId, label: objectiveLabel)..priority = 9);
+      }
+    }
+
+    // Timed story crises are optional side objectives. Their outcome changes
+    // persistent investigation flags and can unlock additional narrative routes.
+    if (activeStoryOperation != null && currentFloor == 1) {
+      final crisis = switch (activeStoryOperation.id) {
+        'secure_station' => (id: 'station_witness', title: 'СПАСТИ СВИДЕТЕЛЯ', subtitle: 'До подавления сигнала', seconds: 38, position: Vector2(mapWidth * 0.28, mapHeight * 0.72)),
+        'intercept_cargo' => (id: 'cargo_evidence', title: 'СОХРАНИТЬ НАКЛАДНУЮ', subtitle: 'Улики уничтожают', seconds: 32, position: Vector2(mapWidth * 0.28, mapHeight * 0.28)),
+        'breach_archive' => (id: 'archive_archivist', title: 'ВЫВЕСТИ АРХИВАРИУСА', subtitle: 'Периметр рушится', seconds: 35, position: Vector2(mapWidth * 0.50, mapHeight * 0.82)),
+        _ => null,
+      };
+      if (crisis != null &&
+          !expansionSystems.storyCampaign.flags.contains('crisis_success_${crisis.id}') &&
+          !expansionSystems.storyCampaign.flags.contains('crisis_failed_${crisis.id}')) {
+        for (final obstacle in world.children.whereType<Obstacle>().toList()) {
+          if (obstacle.position.distanceTo(crisis.position) < 100) obstacle.removeFromParent();
+        }
+        world.add(StoryCrisisEvent(
+          position: crisis.position,
+          eventId: crisis.id,
+          title: crisis.title,
+          subtitle: crisis.subtitle,
+          timeLimit: crisis.seconds.toDouble(),
+        )..priority = 10);
       }
     }
 
@@ -5188,6 +5233,66 @@ class FieldTerminal extends PositionComponent with HasGameReference<InquisitorGa
     canvas.drawRect(Rect.fromLTWH(14, 16, 13, 2), Paint()..color = c.withOpacity(0.8));
     canvas.drawRect(Rect.fromLTWH(14, 21, 16, 2), Paint()..color = c.withOpacity(0.6));
     canvas.drawLine(const Offset(23, 32), const Offset(23, 43), Paint()..color = const Color(0xFF90A4AE)..strokeWidth = 3);
+  }
+}
+
+/// Optional timed battlefield event. Touching the marker resolves it as a
+/// success; letting the countdown expire records a persistent failure outcome.
+class StoryCrisisEvent extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks {
+  final String eventId;
+  final String title;
+  final String subtitle;
+  final double timeLimit;
+  double remaining;
+  double pulse = 0;
+  bool _resolved = false;
+
+  StoryCrisisEvent({required Vector2 position, required this.eventId, required this.title,
+    required this.subtitle, required this.timeLimit})
+      : remaining = timeLimit,
+        super(position: position, size: Vector2(84, 86), anchor: Anchor.center);
+
+  @override
+  Future<void> onLoad() async => add(CircleHitbox(radius: 38));
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    pulse += dt;
+    if (_resolved || !game.isPlaying || game.isPaused) return;
+    remaining -= dt;
+    if (remaining <= 0) {
+      _resolved = true;
+      game.resolveStoryCrisisEvent(eventId, title, success: false);
+      removeFromParent();
+    }
+  }
+
+  @override
+  void onCollisionStart(Set<Vector2> points, PositionComponent other) {
+    super.onCollisionStart(points, other);
+    if (_resolved || other is! Player) return;
+    _resolved = true;
+    game.resolveStoryCrisisEvent(eventId, title, success: true);
+    removeFromParent();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final accent = remaining <= 10 ? const Color(0xFFFF5252) : const Color(0xFFFFD54F);
+    final center = Offset(size.x / 2, size.y / 2);
+    final glow = 0.14 + sin(pulse * 5).abs() * 0.22;
+    canvas.drawCircle(center, 35 + sin(pulse * 3).abs() * 4, Paint()..color = accent.withOpacity(glow));
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(14, 10, 56, 54), const Radius.circular(7)), Paint()..color = const Color(0xFF211B13));
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(14, 10, 56, 54), const Radius.circular(7)), Paint()..color = accent..style = PaintingStyle.stroke..strokeWidth = 2);
+    canvas.drawLine(Offset(26, 25), Offset(58, 25), Paint()..color = accent..strokeWidth = 3);
+    canvas.drawLine(Offset(26, 34), Offset(51, 34), Paint()..color = accent..strokeWidth = 2);
+    final timer = TextPainter(text: TextSpan(text: '${remaining.ceil()}с', style: TextStyle(color: accent, fontSize: 13, fontWeight: FontWeight.bold)), textDirection: TextDirection.ltr)..layout();
+    timer.paint(canvas, Offset((size.x - timer.width) / 2, 45));
+    final label = TextPainter(text: TextSpan(text: title, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 3)])), textDirection: TextDirection.ltr)..layout(maxWidth: 150);
+    label.paint(canvas, Offset((size.x - label.width) / 2, size.y + 1));
+    final hint = TextPainter(text: TextSpan(text: subtitle, style: const TextStyle(color: Color(0xFFFFE0B2), fontSize: 7)), textDirection: TextDirection.ltr)..layout(maxWidth: 150);
+    hint.paint(canvas, Offset((size.x - hint.width) / 2, size.y + 11));
   }
 }
 

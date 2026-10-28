@@ -180,6 +180,7 @@ class StoryCampaignSystem {
         StoryChoice(id: 'ambush_cargo_convoy', label: 'Устроить засаду на грузовой конвой', consequenceText: 'Полевой перехват позволяет войти в архив через охраняемый грузовой шлюз.', nextNodeId: 'archive_confrontation', requiredFlags: <String>{'operation_cargo_intercepted'}, requiredEvidence: <String>{'cargo_manifest'}, flagsToAdd: <String>{'cargo_intercept', 'archive_entry_secure'}, requisitionDelta: 18, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'follow_archive', label: 'Перехватить груз у архивного комплекса', consequenceText: 'Позволит выйти на организатора сети.', nextNodeId: 'archive_confrontation', requiredEvidence: <String>{'cargo_manifest'}, flagsToAdd: <String>{'cargo_intercept'}, requisitionDelta: 10, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'use_witness_mark', label: 'Использовать тайный знак защищённого свидетеля', consequenceText: 'Только защищённый Вейл может открыть запасной вход в архив.', nextNodeId: 'archive_confrontation', requiredFlags: <String>{'witness_protected'}, requiredEvidence: <String>{'cargo_manifest'}, flagsToAdd: <String>{'witness_route'}, requisitionDelta: 15, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'submit_preserved_manifest', label: 'Передать сохранённую накладную Ордо', consequenceText: 'Сохранённая накладная подтверждает цепочку снабжения и укрепляет доказательную базу перед штурмом.', nextNodeId: 'archive_confrontation', requiredFlags: <String>{'cargo_evidence_preserved'}, requiredEvidence: <String>{'cargo_manifest'}, flagsToAdd: <String>{'manifest_chain_verified'}, requisitionDelta: 22, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'broadcast_accusation', label: 'Обнародовать обвинение через местный вокс', consequenceText: 'Поднимет тревогу и вынудит заговорщиков действовать открыто.', nextNodeId: 'archive_confrontation', flagsToAdd: <String>{'public_accusation'}, corruptionDelta: 3, requisitionDelta: 15, tone: StoryChoiceTone.pragmatic),
         StoryChoice(id: 'destroy_manifest', label: 'Уничтожить накладные и изъять груз', consequenceText: 'Скроет операцию от властей, но осложнит доказательство вины.', nextNodeId: 'archive_confrontation', flagsToAdd: <String>{'evidence_suppressed'}, corruptionDelta: 4, requisitionDelta: 20, tone: StoryChoiceTone.radical),
       ],
@@ -199,6 +200,7 @@ class StoryCampaignSystem {
         StoryChoice(id: 'tactical_capture_curator', label: 'Задержать куратора после штурма архива', consequenceText: 'Полевой успех позволяет сохранить документы и взять куратора живым. Это открывает отдельный тактический финал.', nextNodeId: 'ending_tactical_justice', requiredFlags: <String>{'operation_archive_breached'}, requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'curator_captured_alive', 'archive_secured'}, requisitionDelta: 65, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'expose_curator', label: 'Предъявить доказательства и арестовать куратора', consequenceText: 'Доступно при наличии приказа и списка исчезнувших.', nextNodeId: 'ending_justice', requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'curator_exposed'}, requisitionDelta: 35, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'testify_with_witness', label: 'Вывести защищённого свидетеля и дать показания', consequenceText: 'Особый путь справедливости: свидетель подтверждает цепочку приказов.', nextNodeId: 'ending_witness_justice', requiredFlags: <String>{'witness_protected'}, requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'witness_testified', 'curator_exposed'}, requisitionDelta: 50, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'testify_with_archivist', label: 'Вывести спасённого архивариуса к трибуналу', consequenceText: 'Архивариус пережил штурм и подтверждает, что документы не были подменены после захвата.', nextNodeId: 'ending_justice', requiredFlags: <String>{'archive_archivist_rescued'}, requiredEvidence: <String>{'sealed_order', 'missing_names'}, flagsToAdd: <String>{'archivist_testified', 'curator_exposed'}, requisitionDelta: 42, tone: StoryChoiceTone.investigative),
         StoryChoice(id: 'purge_archive', label: 'Объявить архив заражённым и уничтожить его', consequenceText: 'Сохранит секретность, но правда останется погребённой.', nextNodeId: 'ending_purge', flagsToAdd: <String>{'archive_purged'}, corruptionDelta: -8, requisitionDelta: 20, tone: StoryChoiceTone.puritan),
         StoryChoice(id: 'use_blueprint', label: 'Присвоить схему и использовать её против врагов', consequenceText: 'Откроет радикальный исход при наличии схемы подавителя.', nextNodeId: 'ending_radical', requiredEvidence: <String>{'warp_blueprint'}, flagsToAdd: <String>{'blueprint_taken'}, corruptionDelta: 12, requisitionDelta: 45, tone: StoryChoiceTone.radical),
       ],
@@ -303,6 +305,26 @@ class StoryCampaignSystem {
     }
     return parts.join(' • ');
   }
+  /// Records the outcome of an optional timed battlefield crisis. Outcomes are
+  /// stored in the existing campaign flags so older save files remain compatible.
+  bool resolveCrisisEvent(String eventId, {required bool success}) {
+    final expectedOperation = switch (eventId) {
+      'station_witness' => 'secure_station',
+      'cargo_evidence' => 'intercept_cargo',
+      'archive_archivist' => 'breach_archive',
+      _ => null,
+    };
+    if (activeOperation == null || activeOperationId != expectedOperation) return false;
+    final successFlag = 'crisis_success_$eventId';
+    final failedFlag = 'crisis_failed_$eventId';
+    if (flags.contains(successFlag) || flags.contains(failedFlag)) return false;
+    flags.add(success ? successFlag : failedFlag);
+    if (success && eventId == 'station_witness') flags.add('witness_protected');
+    if (success && eventId == 'cargo_evidence') flags.add('cargo_evidence_preserved');
+    if (success && eventId == 'archive_archivist') flags.add('archive_archivist_rescued');
+    return true;
+  }
+
   bool collectFieldObjective(String objectiveId) {
     final operation = activeOperation;
     if (operation == null || !operation.requiredFieldObjectives.contains(objectiveId)) return false;
@@ -328,6 +350,10 @@ class StoryCampaignSystem {
     if (completed || operation == null || operationInProgress || isOperationCompleted(operation)) return false;
     activeOperationId = operation.id;
     operationKills = 0; operationChampions = 0; operationBosses = 0; operationFieldObjectives.clear();
+    for (final eventId in <String>['station_witness', 'cargo_evidence', 'archive_archivist']) {
+      flags.remove('crisis_success_$eventId');
+      flags.remove('crisis_failed_$eventId');
+    }
     operationAttempts[operation.id] = (operationAttempts[operation.id] ?? 0) + 1;
     return true;
   }
