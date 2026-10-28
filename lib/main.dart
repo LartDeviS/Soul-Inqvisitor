@@ -10229,7 +10229,10 @@ class Enemy extends PositionComponent with HasGameReference<InquisitorGame>, Col
     if (!fromStatus && game.ammoDoctrine == AmmoDoctrine.suppressive) applyStatus(StatusType.slow, game.combatDoctrine == CombatDoctrine.control ? 2.1 : 1.55, tickDamage: 0);
     hurtFlash = 0.12;
     hitReactTimer = 0.16;
-    game.triggerShake(power: min(2.4, 0.65 + amount * 0.025), time: 0.045);
+    // Do not shake the whole camera for every projectile hit. Automatic weapons can
+    // register several hits per second; repeated camera offsets make the HUD controls
+    // appear to flicker/jitter while the player is holding the fire joystick.
+    // Stronger shake remains enabled for player damage, explosions, and major events.
     final fromDir = (position - game.player.position).normalized();
     game.spawnDamageNumber(position, dmg);
     if (currentHp <= 0) {
