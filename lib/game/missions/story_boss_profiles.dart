@@ -1,6 +1,6 @@
 /// Data-driven identities for the three campaign operation bosses.
 /// This file deliberately has no Flutter/Flame dependency so its rules are testable.
-enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster, rootOrderCoordinator }
+enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster, rootOrderCoordinator, deadSignatoryMagister }
 
 class StoryBossProfile {
   final StoryBossKind kind;
@@ -172,6 +172,18 @@ class StoryBossProfile {
       phaseOneAttacks: [1, 0, 2, 1],
       phaseTwoAttacks: [3, 2, 4, 1, 3],
       phaseThreeAttacks: [4, 3, 4, 2, 1, 3],
+    ),
+    StoryBossKind.deadSignatoryMagister: StoryBossProfile(
+      kind: StoryBossKind.deadSignatoryMagister,
+      title: 'Магистр Севериан Восс',
+      subtitle: 'Создатель сети мёртвых личностей',
+      healthMultiplier: 1.30,
+      movementMultiplier: 0.90,
+      attackIntervalMultiplier: 0.82,
+      damageTakenMultiplier: 0.78,
+      phaseOneAttacks: [0, 2, 3, 0],
+      phaseTwoAttacks: [3, 4, 1, 2, 3],
+      phaseThreeAttacks: [4, 3, 4, 1, 2, 4],
     ),
   };
 

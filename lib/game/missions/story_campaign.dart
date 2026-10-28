@@ -220,6 +220,15 @@ class StoryCampaignSystem {
       requiredKills: 10, requiredBosses: 1,
       requiredFieldObjectives: <String>{'case8_root_order_recovered'},
     ),
+    StoryOperation(
+      id: 'case9_coordinator_confrontation_operation', nodeId: 'case_09_coordinator_confrontation',
+      title: 'Операция «Личность под печатью»',
+      objective: 'Подтвердить личность координатора, изъять реестр полномочий и пережить бой.',
+      briefing: 'Расшифровка корневого приказа вывела на магистра Севериана Восса — официально погибшего администратора снабжения. Он находится в командном узле «Слепой престол». Захватите реестр идентичностей и остановите его до запуска протокола стирания.',
+      successFlag: 'operation_case9_coordinator_confrontation_secured',
+      requiredKills: 11, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case9_identity_ledger_secured'},
+    ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
@@ -663,6 +672,32 @@ class StoryCampaignSystem {
       location: 'Комната криптоанализа крейсера «Безмолвный приговор»',
       briefing: 'Корневой приказ доказывает существование единого координатора, использовавшего поддельные личности, мобильную синхронизацию и распределённые поставки. Имя скрыто многоуровневой печатью, но структура командования больше не является догадкой. Следующий этап — установить личность того, кто подписал приказ.', ending: true,
     ),
+    StoryNode(
+      id: 'case_09_coordinator_confrontation', chapterId: 'case_09', chapterTitle: 'Дело IX — Личность под печатью',
+      title: 'Слепой престол', location: 'Командный узел «Слепой престол», орбитальная крепость',
+      briefing: 'Последний слой шифрования раскрывает имя координатора: магистр Севериан Восс, администратор снабжения, официально погибший семь лет назад. Восс создал сеть мёртвых личностей, чтобы отдавать приказы вне действующей цепочки командования. Его реестр способен доказать заговор, но также содержит тысячи действующих кодов доступа. Захватите реестр и решите, что делать с самим Воссом и созданной им системой.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Мёртвые не подписывают приказы. Живые прячутся за их именами. Сегодня мы выясним, кто из нас готов заплатить за правду».',
+      choices: <StoryChoice>[
+        StoryChoice(id: 'case9_capture_voss', label: 'Захватить Восса живым и передать его Инквизиции', consequenceText: 'Восс станет свидетелем и обвиняемым. Суд сможет установить, кто помогал ему внутри Империума, но часть сети успеет уйти в подполье.', nextNodeId: 'ending_case9_capture_voss', requiredFlags: <String>{'operation_case9_coordinator_confrontation_secured'}, flagsToAdd: <String>{'case9_voss_captured', 'case9_network_preserved_for_trial'}, requisitionDelta: 20, tone: StoryChoiceTone.puritan),
+        StoryChoice(id: 'case9_destroy_network', label: 'Уничтожить реестр и сжечь сеть целиком', consequenceText: 'Связь поддельных приказов будет разорвана, но часть доказательств и кодов доступа исчезнет навсегда. Восс не сможет восстановить систему.', nextNodeId: 'ending_case9_network_destroyed', requiredFlags: <String>{'operation_case9_coordinator_confrontation_secured'}, flagsToAdd: <String>{'case9_network_destroyed', 'case9_evidence_burned'}, corruptionDelta: -2, requisitionDelta: 10, tone: StoryChoiceTone.pragmatic),
+        StoryChoice(id: 'case9_turn_network', label: 'Перехватить сеть и использовать её против большей угрозы', consequenceText: 'Инквизиция получает контроль над инфраструктурой, но принимает на себя риск, что средство охоты однажды начнёт диктовать собственные решения.', nextNodeId: 'ending_case9_network_repurposed', requiredFlags: <String>{'operation_case9_coordinator_confrontation_secured'}, flagsToAdd: <String>{'case9_network_repurposed', 'case9_radical_authority_claimed'}, corruptionDelta: 3, requisitionDelta: 30, tone: StoryChoiceTone.radical),
+      ],
+    ),
+    StoryNode(
+      id: 'ending_case9_capture_voss', chapterId: 'epilogue', chapterTitle: 'Дело IX — Итог дознания', title: 'Свидетель в цепях',
+      location: 'Изолятор крейсера «Безмолвный приговор»',
+      briefing: 'Севериан Восс взят живым. Его реестр запечатан как доказательство, а сам магистр передан под стражу Ордо. Он обещает назвать имена покровителей, но предупреждает: некоторые из них до сих пор занимают свои места.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case9_network_destroyed', chapterId: 'epilogue', chapterTitle: 'Дело IX — Итог дознания', title: 'Пепел без подписи',
+      location: 'Командный узел «Слепой престол»',
+      briefing: 'Реестр и узел синхронизации уничтожены. Сеть больше не сможет отдавать приказы от имени мёртвых, однако часть сообщников растворилась в бюрократическом аппарате. Сектор спасён от немедленной угрозы ценой утраты полного списка виновных.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case9_network_repurposed', chapterId: 'epilogue', chapterTitle: 'Дело IX — Итог дознания', title: 'Орудие в тени',
+      location: 'Закрытая палуба криптоанализа',
+      briefing: 'Инквизиция захватила сеть и переписала корневые полномочия. Теперь она может выявлять угрозы раньше, чем те проявятся, но каждый новый приказ напоминает, насколько тонка граница между охотой на заговорщиков и созданием нового заговора.', ending: true,
+    ),
     // Retained as a valid legacy destination for saves created by Update 12.
     StoryNode(
       id: 'ending_case4_expedition', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Курс на внешний ретранслятор',
@@ -989,6 +1024,13 @@ class StoryCampaignSystem {
   bool continueAfterEnding() {
     final previousEnding = endingId;
     if (previousEnding == null || !completed || operationInProgress) return false;
+    // Case IX outcomes are deliberate campaign endpoints in this update.
+    // A later update can add the next case without falling back to the old Case IV dispatch.
+    if (<String>{
+      'ending_case9_capture_voss',
+      'ending_case9_network_destroyed',
+      'ending_case9_network_repurposed',
+    }.contains(previousEnding)) return false;
     flags.add('prior_ending_$previousEnding');
     final caseFourEndings = <String>{
       'ending_case4_operator_captured',
@@ -1008,7 +1050,12 @@ class StoryCampaignSystem {
     final caseSevenEndings = <String>{
       'ending_case7_dead_signatory', 'ending_case7_mobile_node', 'ending_case7_supply_convergence',
     };
-    if (caseSevenEndings.contains(previousEnding)) {
+    if (previousEnding == 'ending_case8_origin_convergence') {
+      flags.add('case9_root_order_decoded');
+      flags.add('case9_coordinator_identity_revealed');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_09_coordinator_confrontation';
+    } else if (caseSevenEndings.contains(previousEnding)) {
       switch (previousEnding) {
         case 'ending_case7_dead_signatory':
           flags.add('case8_evidence_biometric_key');

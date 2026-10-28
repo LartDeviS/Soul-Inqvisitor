@@ -1119,6 +1119,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case 'case7_mobile_node_operation': return MapLayout.openYard;
         case 'case7_supply_convergence_operation': return MapLayout.fractured;
         case 'case8_origin_convergence_operation': return MapLayout.chambers;
+        case 'case9_coordinator_confrontation_operation': return MapLayout.fractured;
         case 'secure_outer_relay':
           final routeFlags = expansionSystems.storyCampaign.flags;
           if (routeFlags.contains('case4_route_civilian')) return MapLayout.ring;
@@ -2710,6 +2711,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       'case7_mobile_node_operation' => story_boss_profiles.StoryBossKind.syncNodeHunter,
       'case7_supply_convergence_operation' => story_boss_profiles.StoryBossKind.requisitionMaster,
       'case8_origin_convergence_operation' => story_boss_profiles.StoryBossKind.rootOrderCoordinator,
+      'case9_coordinator_confrontation_operation' => story_boss_profiles.StoryBossKind.deadSignatoryMagister,
       _ => null,
     };
     if (kind == null) return;
@@ -3388,6 +3390,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'case7_sync_relay_disabled': Vector2(mapWidth * 0.50, mapHeight * 0.18),
         'case7_original_order_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.72),
         'case8_root_order_recovered': Vector2(mapWidth * 0.50, mapHeight * 0.22),
+        'case9_identity_ledger_secured': Vector2(mapWidth * 0.50, mapHeight * 0.72),
       };
       for (final objectiveId in activeStoryOperation.requiredFieldObjectives) {
         final objectivePosition = objectivePositions[objectiveId];
@@ -3410,6 +3413,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
           'case7_sync_relay_disabled' => 'Синхронизатор',
           'case7_original_order_recovered' => 'Оригинал заказа',
           'case8_root_order_recovered' => 'Корневой приказ',
+          'case9_identity_ledger_secured' => 'Реестр идентичностей',
           'outer_relay_uplink_secured' => expansionSystems.storyCampaign.flags.contains('case4_route_civilian')
               ? 'Гражданский сервисный шлюз'
               : expansionSystems.storyCampaign.flags.contains('case4_route_military')
@@ -5382,6 +5386,7 @@ class StoryFieldObjective extends PositionComponent with HasGameReference<Inquis
     'case7_sync_relay_disabled' => const Color(0xFF4FC3F7),
     'case7_original_order_recovered' => const Color(0xFFFFAB91),
     'case8_root_order_recovered' => const Color(0xFFE1BEE7),
+    'case9_identity_ledger_secured' => const Color(0xFFFFCDD2),
     _ => const Color(0xFF80CBC4),
   };
 
@@ -11251,6 +11256,8 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         story_boss_profiles.StoryBossKind.biometricKeeper => const Color(0xFF80CBC4),
         story_boss_profiles.StoryBossKind.syncNodeHunter => const Color(0xFF4FC3F7),
         story_boss_profiles.StoryBossKind.requisitionMaster => const Color(0xFFFFAB91),
+        story_boss_profiles.StoryBossKind.rootOrderCoordinator => const Color(0xFFE1BEE7),
+        story_boss_profiles.StoryBossKind.deadSignatoryMagister => const Color(0xFFFFCDD2),
       };
       canvas.drawCircle(Offset(cx, cy), 59, Paint()..color = auraColor.withOpacity(0.10 + pulse * 0.12)..style = PaintingStyle.stroke..strokeWidth = 4);
       final titlePainter = TextPainter(
