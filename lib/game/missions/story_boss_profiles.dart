@@ -1,6 +1,6 @@
 /// Data-driven identities for the three campaign operation bosses.
 /// This file deliberately has no Flutter/Flame dependency so its rules are testable.
-enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer }
+enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel, commandCustodian, mobileInterceptor, ambushMarshal, authorityAuditor, signalPursuer, supplyLineEnforcer, biometricKeeper, syncNodeHunter, requisitionMaster }
 
 class StoryBossProfile {
   final StoryBossKind kind;
@@ -134,6 +134,30 @@ class StoryBossProfile {
       title: 'Каратель цепочки снабжения', subtitle: 'Защитник складских документов',
       healthMultiplier: 1.14, movementMultiplier: 0.94,
       attackIntervalMultiplier: 0.90, damageTakenMultiplier: 0.86,
+      phaseOneAttacks: [3, 0, 2, 3], phaseTwoAttacks: [3, 4, 0, 2],
+      phaseThreeAttacks: [4, 3, 2, 0, 4],
+    ),
+    StoryBossKind.biometricKeeper: StoryBossProfile(
+      kind: StoryBossKind.biometricKeeper,
+      title: 'Хранитель биометрической печати', subtitle: 'Защитник капсулы идентификации',
+      healthMultiplier: 1.20, movementMultiplier: 0.90,
+      attackIntervalMultiplier: 0.92, damageTakenMultiplier: 0.82,
+      phaseOneAttacks: [0, 3, 2, 0], phaseTwoAttacks: [3, 4, 2, 1],
+      phaseThreeAttacks: [4, 3, 2, 0, 4],
+    ),
+    StoryBossKind.syncNodeHunter: StoryBossProfile(
+      kind: StoryBossKind.syncNodeHunter,
+      title: 'Охотник за синхронизатором', subtitle: 'Командир мобильного узла',
+      healthMultiplier: 1.00, movementMultiplier: 1.30,
+      attackIntervalMultiplier: 0.74, damageTakenMultiplier: 1.02,
+      phaseOneAttacks: [1, 4, 2, 1], phaseTwoAttacks: [4, 2, 3, 1],
+      phaseThreeAttacks: [4, 1, 2, 3, 4],
+    ),
+    StoryBossKind.requisitionMaster: StoryBossProfile(
+      kind: StoryBossKind.requisitionMaster,
+      title: 'Распорядитель реквизиций', subtitle: 'Хранитель оригинала заказа',
+      healthMultiplier: 1.16, movementMultiplier: 0.92,
+      attackIntervalMultiplier: 0.88, damageTakenMultiplier: 0.85,
       phaseOneAttacks: [3, 0, 2, 3], phaseTwoAttacks: [3, 4, 0, 2],
       phaseThreeAttacks: [4, 3, 2, 0, 4],
     ),

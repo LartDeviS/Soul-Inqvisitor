@@ -1115,6 +1115,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case 'case6_registry_audit_operation': return MapLayout.chambers;
         case 'case6_mobile_pursuit_operation': return MapLayout.openYard;
         case 'case6_supplier_trace_operation': return MapLayout.killbox;
+        case 'case7_dead_signatory_operation': return MapLayout.chambers;
+        case 'case7_mobile_node_operation': return MapLayout.openYard;
+        case 'case7_supply_convergence_operation': return MapLayout.fractured;
         case 'secure_outer_relay':
           final routeFlags = expansionSystems.storyCampaign.flags;
           if (routeFlags.contains('case4_route_civilian')) return MapLayout.ring;
@@ -2702,6 +2705,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       'case6_registry_audit_operation' => story_boss_profiles.StoryBossKind.authorityAuditor,
       'case6_mobile_pursuit_operation' => story_boss_profiles.StoryBossKind.signalPursuer,
       'case6_supplier_trace_operation' => story_boss_profiles.StoryBossKind.supplyLineEnforcer,
+      'case7_dead_signatory_operation' => story_boss_profiles.StoryBossKind.biometricKeeper,
+      'case7_mobile_node_operation' => story_boss_profiles.StoryBossKind.syncNodeHunter,
+      'case7_supply_convergence_operation' => story_boss_profiles.StoryBossKind.requisitionMaster,
       _ => null,
     };
     if (kind == null) return;
@@ -3376,6 +3382,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'case6_authority_ledger_seized': Vector2(mapWidth * 0.72, mapHeight * 0.25),
         'case6_tracking_beacon_disabled': Vector2(mapWidth * 0.50, mapHeight * 0.18),
         'case6_supplier_manifest_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.72),
+        'case7_biometric_key_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.25),
+        'case7_sync_relay_disabled': Vector2(mapWidth * 0.50, mapHeight * 0.18),
+        'case7_original_order_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.72),
       };
       for (final objectiveId in activeStoryOperation.requiredFieldObjectives) {
         final objectivePosition = objectivePositions[objectiveId];
@@ -3394,6 +3403,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
           'case6_authority_ledger_seized' => 'Реестр полномочий',
           'case6_tracking_beacon_disabled' => 'Маяк слежения',
           'case6_supplier_manifest_recovered' => 'Накладная поставщика',
+          'case7_biometric_key_recovered' => 'Биометрический ключ',
+          'case7_sync_relay_disabled' => 'Синхронизатор',
+          'case7_original_order_recovered' => 'Оригинал заказа',
           'outer_relay_uplink_secured' => expansionSystems.storyCampaign.flags.contains('case4_route_civilian')
               ? 'Гражданский сервисный шлюз'
               : expansionSystems.storyCampaign.flags.contains('case4_route_military')
@@ -5362,6 +5374,9 @@ class StoryFieldObjective extends PositionComponent with HasGameReference<Inquis
     'case6_authority_ledger_seized' => const Color(0xFFB39DDB),
     'case6_tracking_beacon_disabled' => const Color(0xFFFF8A65),
     'case6_supplier_manifest_recovered' => const Color(0xFFFFD54F),
+    'case7_biometric_key_recovered' => const Color(0xFF80CBC4),
+    'case7_sync_relay_disabled' => const Color(0xFF4FC3F7),
+    'case7_original_order_recovered' => const Color(0xFFFFAB91),
     _ => const Color(0xFF80CBC4),
   };
 
@@ -11228,6 +11243,9 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         story_boss_profiles.StoryBossKind.authorityAuditor => const Color(0xFFB39DDB),
         story_boss_profiles.StoryBossKind.signalPursuer => const Color(0xFFFF8A65),
         story_boss_profiles.StoryBossKind.supplyLineEnforcer => const Color(0xFFFFD54F),
+        story_boss_profiles.StoryBossKind.biometricKeeper => const Color(0xFF80CBC4),
+        story_boss_profiles.StoryBossKind.syncNodeHunter => const Color(0xFF4FC3F7),
+        story_boss_profiles.StoryBossKind.requisitionMaster => const Color(0xFFFFAB91),
       };
       canvas.drawCircle(Offset(cx, cy), 59, Paint()..color = auraColor.withOpacity(0.10 + pulse * 0.12)..style = PaintingStyle.stroke..strokeWidth = 4);
       final titlePainter = TextPainter(

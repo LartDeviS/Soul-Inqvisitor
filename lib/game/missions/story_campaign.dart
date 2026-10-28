@@ -184,6 +184,33 @@ class StoryCampaignSystem {
       requiredKills: 7, requiredBosses: 1,
       requiredFieldObjectives: <String>{'case6_supplier_manifest_recovered'},
     ),
+    StoryOperation(
+      id: 'case7_dead_signatory_operation', nodeId: 'case_07_dead_signatory',
+      title: 'Операция «Подпись мертвеца»',
+      objective: 'Изъять биометрический ключ и доказать подмену личности.',
+      briefing: 'Сверка реестра вывела отряд к капсуле идентификации. Найдите физический ключ, который подтверждает приказы от имени погибших офицеров, и остановите хранителя капсулы.',
+      successFlag: 'operation_case7_dead_signatory_secured',
+      requiredKills: 9, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case7_biometric_key_recovered'},
+    ),
+    StoryOperation(
+      id: 'case7_mobile_node_operation', nodeId: 'case_07_mobile_node',
+      title: 'Операция «Узел без координат»',
+      objective: 'Перехватить пакет синхронизации до смены частоты.',
+      briefing: 'Мобильный маршрут приводит к узлу, который существует в сети лишь несколько минут за цикл. Отключите синхронизатор и победите командира перехвата.',
+      successFlag: 'operation_case7_mobile_node_secured',
+      requiredKills: 8, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case7_sync_relay_disabled'},
+    ),
+    StoryOperation(
+      id: 'case7_supply_convergence_operation', nodeId: 'case_07_supply_convergence',
+      title: 'Операция «Сходятся все накладные»',
+      objective: 'Сопоставить три поставки и извлечь оригинал заказа.',
+      briefing: 'Цепочка снабжения ведёт к распределительному складу, где сводятся документы всех посредников. Найдите оригинал заказа и устраните распорядителя склада.',
+      successFlag: 'operation_case7_supply_convergence_secured',
+      requiredKills: 8, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case7_original_order_recovered'},
+    ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
@@ -582,6 +609,39 @@ class StoryCampaignSystem {
       id: 'ending_case6_supplier_trace', chapterId: 'epilogue', chapterTitle: 'Дело VI продолжается', title: 'Накладная на чужую войну',
       location: 'Архив доказательств крейсера', briefing: 'Накладная связывает склад компонентов с несколькими посредниками. Это ещё не доказывает вину конечного заказчика, но впервые позволяет двигаться по подтверждённой цепочке снабжения.', ending: true,
     ),
+    StoryNode(
+      id: 'case_07_dead_signatory', chapterId: 'case_07', chapterTitle: 'Дело VII — Личность под печатью',
+      title: 'Подпись мертвеца', location: 'Крипта идентификации «Семь печатей»',
+      briefing: 'Командный реестр показывает повторяющийся биометрический отпечаток, зарегистрированный после смерти нескольких владельцев. В крипте «Семь печатей» хранится физический ключ, способный доказать подмену личности. Изымите его до очистки хранилища.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Мы нашли не просто фальшивый приказ. Мы нашли личность, которая переживает своих носителей».',
+      choices: <StoryChoice>[StoryChoice(id: 'case7_complete_dead_signatory', label: 'Передать биометрический ключ на независимую экспертизу', consequenceText: 'Ключ подтверждает использование одной личности через несколько погибших владельцев. Следующая операция сможет установить, где синхронизируются поддельные подписи.', nextNodeId: 'ending_case7_dead_signatory', requiredFlags: <String>{'operation_case7_dead_signatory_secured'}, flagsToAdd: <String>{'case7_identity_substitution_proven'}, requisitionDelta: 20, tone: StoryChoiceTone.investigative)],
+    ),
+    StoryNode(
+      id: 'case_07_mobile_node', chapterId: 'case_07', chapterTitle: 'Дело VII — Личность под печатью',
+      title: 'Узел без координат', location: 'Мобильная платформа «Горизонт-Ноль»',
+      briefing: 'Пакет маршрутизации ведёт к синхронизатору, который появляется в эфире на короткое окно и затем меняет положение. Перехватите его до передачи следующего набора команд.',
+      dialogueSpeaker: 'Сервочереп «Люмен»', dialogue: '«Координаты не повторяются. Но временная метка совпадает с подписями, зарегистрированными после смерти владельцев».',
+      choices: <StoryChoice>[StoryChoice(id: 'case7_complete_mobile_node', label: 'Сохранить пакет синхронизации', consequenceText: 'Пакет раскрывает расписание следующего сеанса и общий источник синхронизации.', nextNodeId: 'ending_case7_mobile_node', requiredFlags: <String>{'operation_case7_mobile_node_secured'}, flagsToAdd: <String>{'case7_sync_schedule_secured'}, requisitionDelta: 18, tone: StoryChoiceTone.pragmatic)],
+    ),
+    StoryNode(
+      id: 'case_07_supply_convergence', chapterId: 'case_07', chapterTitle: 'Дело VII — Личность под печатью',
+      title: 'Сходятся все накладные', location: 'Распределительный склад «Меридиан-13»',
+      briefing: 'Документы трёх посредников сходятся на одном распределительном складе. Оригинал заказа может связать крипту идентификации, мобильный узел и заказчика, скрытого за цепочкой поставок.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Совпадение стало маршрутом. Теперь нужен оригинал, который нельзя списать на ошибку писца».',
+      choices: <StoryChoice>[StoryChoice(id: 'case7_complete_supply_convergence', label: 'Изъять оригинал заказа и опечатать склад', consequenceText: 'Оригинал связывает поставки с общей системой синхронизации. Доказательства готовы к объединению в единое дело.', nextNodeId: 'ending_case7_supply_convergence', requiredFlags: <String>{'operation_case7_supply_convergence_secured'}, flagsToAdd: <String>{'case7_original_order_verified'}, requisitionDelta: 18, tone: StoryChoiceTone.puritan)],
+    ),
+    StoryNode(
+      id: 'ending_case7_dead_signatory', chapterId: 'epilogue', chapterTitle: 'Дело VII продолжается', title: 'Личность без живого носителя',
+      location: 'Лаборатория биометрической экспертизы', briefing: 'Биометрический ключ доказывает, что одна идентичность использовалась после гибели зарегистрированных владельцев. Подмена подтверждена, но источник синхронизации всё ещё скрыт.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case7_mobile_node', chapterId: 'epilogue', chapterTitle: 'Дело VII продолжается', title: 'Расписание призрачного узла',
+      location: 'Навигационный мостик крейсера', briefing: 'Пакет синхронизации содержит расписание коротких сеансов и след общего источника. Следующий перехват можно спланировать по времени, а не по нестабильным координатам.', ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case7_supply_convergence', chapterId: 'epilogue', chapterTitle: 'Дело VII продолжается', title: 'Оригинал чужого приказа',
+      location: 'Архив доказательств крейсера', briefing: 'Оригинал заказа связывает поставки оборудования с общей системой синхронизации. Это первая независимая связка между поддельными личностями и инфраструктурой сети.', ending: true,
+    ),
     // Retained as a valid legacy destination for saves created by Update 12.
     StoryNode(
       id: 'ending_case4_expedition', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Курс на внешний ретранслятор',
@@ -857,6 +917,7 @@ class StoryCampaignSystem {
     if (currentNode.chapterId == 'case_04') return 4;
     if (currentNode.chapterId == 'case_05') return 5;
     if (currentNode.chapterId == 'case_06') return 6;
+    if (currentNode.chapterId == 'case_07') return 7;
     return completed ? 6 : 1;
   }
   double get progress => visitedNodes.length / nodes.length;
@@ -919,7 +980,25 @@ class StoryCampaignSystem {
     final caseFiveOperationEndings = <String>{
       'ending_case5_field_interrogation', 'ending_case5_field_signal_intercept', 'ending_case5_field_fragment_search',
     };
-    if (caseFiveOperationEndings.contains(previousEnding)) {
+    final caseSixEndings = <String>{
+      'ending_case6_registry_audit', 'ending_case6_mobile_pursuit', 'ending_case6_supplier_trace',
+    };
+    if (caseSixEndings.contains(previousEnding)) {
+      switch (previousEnding) {
+        case 'ending_case6_registry_audit':
+          flags.add('case7_route_dead_signatory');
+          currentNodeId = 'case_07_dead_signatory';
+          break;
+        case 'ending_case6_mobile_pursuit':
+          flags.add('case7_route_mobile_node');
+          currentNodeId = 'case_07_mobile_node';
+          break;
+        default:
+          flags.add('case7_route_supply_convergence');
+          currentNodeId = 'case_07_supply_convergence';
+          break;
+      }
+    } else if (caseFiveOperationEndings.contains(previousEnding)) {
       switch (previousEnding) {
         case 'ending_case5_field_interrogation':
           flags.add('case6_route_registry_audit');
