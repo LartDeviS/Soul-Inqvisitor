@@ -1118,6 +1118,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case 'case7_dead_signatory_operation': return MapLayout.chambers;
         case 'case7_mobile_node_operation': return MapLayout.openYard;
         case 'case7_supply_convergence_operation': return MapLayout.fractured;
+        case 'case8_origin_convergence_operation': return MapLayout.chambers;
         case 'secure_outer_relay':
           final routeFlags = expansionSystems.storyCampaign.flags;
           if (routeFlags.contains('case4_route_civilian')) return MapLayout.ring;
@@ -2708,6 +2709,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       'case7_dead_signatory_operation' => story_boss_profiles.StoryBossKind.biometricKeeper,
       'case7_mobile_node_operation' => story_boss_profiles.StoryBossKind.syncNodeHunter,
       'case7_supply_convergence_operation' => story_boss_profiles.StoryBossKind.requisitionMaster,
+      'case8_origin_convergence_operation' => story_boss_profiles.StoryBossKind.rootOrderCoordinator,
       _ => null,
     };
     if (kind == null) return;
@@ -3385,6 +3387,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'case7_biometric_key_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.25),
         'case7_sync_relay_disabled': Vector2(mapWidth * 0.50, mapHeight * 0.18),
         'case7_original_order_recovered': Vector2(mapWidth * 0.72, mapHeight * 0.72),
+        'case8_root_order_recovered': Vector2(mapWidth * 0.50, mapHeight * 0.22),
       };
       for (final objectiveId in activeStoryOperation.requiredFieldObjectives) {
         final objectivePosition = objectivePositions[objectiveId];
@@ -3406,6 +3409,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
           'case7_biometric_key_recovered' => 'Биометрический ключ',
           'case7_sync_relay_disabled' => 'Синхронизатор',
           'case7_original_order_recovered' => 'Оригинал заказа',
+          'case8_root_order_recovered' => 'Корневой приказ',
           'outer_relay_uplink_secured' => expansionSystems.storyCampaign.flags.contains('case4_route_civilian')
               ? 'Гражданский сервисный шлюз'
               : expansionSystems.storyCampaign.flags.contains('case4_route_military')
@@ -5377,6 +5381,7 @@ class StoryFieldObjective extends PositionComponent with HasGameReference<Inquis
     'case7_biometric_key_recovered' => const Color(0xFF80CBC4),
     'case7_sync_relay_disabled' => const Color(0xFF4FC3F7),
     'case7_original_order_recovered' => const Color(0xFFFFAB91),
+    'case8_root_order_recovered' => const Color(0xFFE1BEE7),
     _ => const Color(0xFF80CBC4),
   };
 

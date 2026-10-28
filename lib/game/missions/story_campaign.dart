@@ -211,6 +211,15 @@ class StoryCampaignSystem {
       requiredKills: 8, requiredBosses: 1,
       requiredFieldObjectives: <String>{'case7_original_order_recovered'},
     ),
+    StoryOperation(
+      id: 'case8_origin_convergence_operation', nodeId: 'case_08_origin_convergence',
+      title: 'Операция «Источник под печатью»',
+      objective: 'Синхронизировать три доказательства и извлечь корневой приказ.',
+      briefing: 'Биометрический ключ, расписание мобильного узла и оригинал заказа указывают на одну точку — подземный командный архив «Нулевая печать». Найдите корневой приказ, удержите архивный канал и победите координатора сети.',
+      successFlag: 'operation_case8_origin_convergence_secured',
+      requiredKills: 10, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'case8_root_order_recovered'},
+    ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
@@ -642,6 +651,18 @@ class StoryCampaignSystem {
       id: 'ending_case7_supply_convergence', chapterId: 'epilogue', chapterTitle: 'Дело VII продолжается', title: 'Оригинал чужого приказа',
       location: 'Архив доказательств крейсера', briefing: 'Оригинал заказа связывает поставки оборудования с общей системой синхронизации. Это первая независимая связка между поддельными личностями и инфраструктурой сети.', ending: true,
     ),
+    StoryNode(
+      id: 'case_08_origin_convergence', chapterId: 'case_08', chapterTitle: 'Дело VIII — Нулевая печать',
+      title: 'Источник под печатью', location: 'Подземный командный архив «Нулевая печать»',
+      briefing: 'Три независимых доказательства сходятся в одном месте: биометрический ключ подтверждает подмену личности, пакет синхронизации задаёт окно доступа, а оригинал заказа раскрывает поставку оборудования. В архиве «Нулевая печать» хранится корневой приказ — документ, который связывает всю сеть с её настоящим координатором. Извлеките его до запуска протокола очистки.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Теперь у нас есть личность, время и поставка. Осталось найти приказ, который превратил три улики в одну систему».',
+      choices: <StoryChoice>[StoryChoice(id: 'case8_complete_origin_convergence', label: 'Изъять корневой приказ и сохранить архивный канал', consequenceText: 'Корневой приказ подтверждает, что сеть управлялась через единый узел, но имя координатора закрыто последним уровнем шифрования. Впервые у Инквизиции есть физическое доказательство, способное вывести расследование на организатора.', nextNodeId: 'ending_case8_origin_convergence', requiredFlags: <String>{'operation_case8_origin_convergence_secured'}, flagsToAdd: <String>{'case8_root_order_verified', 'case8_three_evidence_chains_unified'}, requisitionDelta: 25, tone: StoryChoiceTone.investigative)],
+    ),
+    StoryNode(
+      id: 'ending_case8_origin_convergence', chapterId: 'epilogue', chapterTitle: 'Дело VIII продолжается', title: 'Приказ без имени',
+      location: 'Комната криптоанализа крейсера «Безмолвный приговор»',
+      briefing: 'Корневой приказ доказывает существование единого координатора, использовавшего поддельные личности, мобильную синхронизацию и распределённые поставки. Имя скрыто многоуровневой печатью, но структура командования больше не является догадкой. Следующий этап — установить личность того, кто подписал приказ.', ending: true,
+    ),
     // Retained as a valid legacy destination for saves created by Update 12.
     StoryNode(
       id: 'ending_case4_expedition', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Курс на внешний ретранслятор',
@@ -918,6 +939,7 @@ class StoryCampaignSystem {
     if (currentNode.chapterId == 'case_05') return 5;
     if (currentNode.chapterId == 'case_06') return 6;
     if (currentNode.chapterId == 'case_07') return 7;
+    if (currentNode.chapterId == 'case_08') return 8;
     return completed ? 6 : 1;
   }
   double get progress => visitedNodes.length / nodes.length;
@@ -983,7 +1005,27 @@ class StoryCampaignSystem {
     final caseSixEndings = <String>{
       'ending_case6_registry_audit', 'ending_case6_mobile_pursuit', 'ending_case6_supplier_trace',
     };
-    if (caseSixEndings.contains(previousEnding)) {
+    final caseSevenEndings = <String>{
+      'ending_case7_dead_signatory', 'ending_case7_mobile_node', 'ending_case7_supply_convergence',
+    };
+    if (caseSevenEndings.contains(previousEnding)) {
+      switch (previousEnding) {
+        case 'ending_case7_dead_signatory':
+          flags.add('case8_evidence_biometric_key');
+          break;
+        case 'ending_case7_mobile_node':
+          flags.add('case8_evidence_sync_schedule');
+          break;
+        case 'ending_case7_supply_convergence':
+          flags.add('case8_evidence_original_order');
+          break;
+      }
+      // All three investigation routes converge on the same operation. Keep
+      // the route flags so the source of the evidence remains available to saves.
+      flags.add('case8_converged_from_case7');
+      visitedNodes.add(currentNodeId);
+      currentNodeId = 'case_08_origin_convergence';
+    } else if (caseSixEndings.contains(previousEnding)) {
       switch (previousEnding) {
         case 'ending_case6_registry_audit':
           flags.add('case7_route_dead_signatory');
