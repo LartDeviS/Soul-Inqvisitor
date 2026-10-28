@@ -7362,6 +7362,31 @@ class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
                     ]),
                   ),
                 ],
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF171D27),
+                    border: Border.all(color: const Color(0xFF607D8B).withOpacity(0.7)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      const Icon(Icons.shield_outlined, color: Color(0xFF90CAF9), size: 17),
+                      const SizedBox(width: 6),
+                      const Expanded(child: Text('СОСТОЯНИЕ СЕКТОРА', style: TextStyle(color: Color(0xFF90CAF9), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1))),
+                      Text('${system.sectorStabilityScore}/10', style: const TextStyle(color: Color(0xFFFFD180), fontSize: 12, fontWeight: FontWeight.w900)),
+                    ]),
+                    const SizedBox(height: 5),
+                    Text(system.sectorStabilityLabel, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 7),
+                    ...system.allyNetworkSummary.map((line) => Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text('• $line', style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.35)),
+                    )),
+                  ]),
+                ),
                 if (node.dialogue.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: const BoxDecoration(color: Color(0xFF0C0B0E), border: Border(left: BorderSide(color: Color(0xFFFFD700), width: 3))),

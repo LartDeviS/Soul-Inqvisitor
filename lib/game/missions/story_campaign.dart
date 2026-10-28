@@ -318,6 +318,7 @@ class StoryCampaignSystem {
         var rank = 0;
         if (flags.contains('witness_protected')) rank++;
         if (flags.contains('cargo_evidence_preserved')) rank++;
+        if (flags.contains('archive_archivist_rescued')) rank++;
         return rank;
       default:
         return 0;
@@ -325,6 +326,47 @@ class StoryCampaignSystem {
   }
 
   int get activeOperationSupportRequisitionBonus => activeOperationSupportRank * 8;
+
+  /// A compact, derived measure of the sector's condition. It is calculated
+  /// from existing campaign flags so old saves need no migration.
+  int get sectorStabilityScore {
+    var score = 3;
+    if (flags.contains('witness_protected')) score += 2;
+    if (flags.contains('cargo_evidence_preserved')) score += 2;
+    if (flags.contains('archive_archivist_rescued')) score += 2;
+    if (flags.contains('curator_exposed')) score += 2;
+    if (flags.contains('complete_dossier_submitted')) score += 1;
+    if (flags.contains('archive_purged') || flags.contains('station_purged')) score -= 3;
+    if (flags.contains('crisis_failed_station_witness')) score -= 1;
+    return score.clamp(0, 10).toInt();
+  }
+
+  String get sectorStabilityLabel {
+    final score = sectorStabilityScore;
+    if (score >= 8) return 'Сектор стабилизирован';
+    if (score >= 5) return 'Порядок удерживается';
+    if (score >= 3) return 'Нестабильность сохраняется';
+    return 'Сектор на грани распада';
+  }
+
+  List<String> get allyNetworkSummary {
+    final allies = <String>[];
+    if (flags.contains('witness_protected')) {
+      allies.add('Диакон Вейл: свидетельские показания и разведка маршрутов.');
+    } else if (flags.contains('witness_coerced')) {
+      allies.add('Диакон Вейл: сведения получены, но доверие утрачено.');
+    } else if (flags.contains('deacon_executed')) {
+      allies.add('Диакон Вейл: погиб; его свидетельские показания недоступны.');
+    }
+    if (flags.contains('cargo_evidence_preserved')) {
+      allies.add('Грузовая сеть: накладная сохранена и может подтвердить цепочку снабжения.');
+    }
+    if (flags.contains('archive_archivist_rescued')) {
+      allies.add('Архивариус Кастор: доступен для подтверждения подлинности документов.');
+    }
+    if (allies.isEmpty) allies.add('Надёжные союзники и подтверждённые линии доказательств пока не получены.');
+    return allies;
+  }
 
   List<String> get activeOperationSupportSummary {
     switch (activeOperationId ?? currentOperation?.id) {
@@ -337,6 +379,7 @@ class StoryCampaignSystem {
         final effects = <String>[];
         if (flags.contains('witness_protected')) effects.add('Вейл передал обходной маршрут: ниже шанс элитного подкрепления.');
         if (flags.contains('cargo_evidence_preserved')) effects.add('Накладная раскрыла снабжение архива: ниже шанс элитного подкрепления.');
+        if (flags.contains('archive_archivist_rescued')) effects.add('Архивариус Кастор передал план внутренних переходов: ниже шанс элитного подкрепления.');
         if (effects.isEmpty) return <String>['Нет подтверждённых разведданных о внутренней охране архива.'];
         effects.add('Бонус при успехе: +${activeOperationSupportRequisitionBonus} реквизиции.');
         return effects;
