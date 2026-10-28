@@ -43,8 +43,21 @@ void main() {
       expect(campaign.currentNodeId, 'case_04_signal_review');
       expect(campaign.availableChoices.map((choice) => choice.id), contains('authorize_outer_relay_expedition'));
       expect(campaign.choose('authorize_outer_relay_expedition'), isTrue);
-      expect(campaign.endingId, 'ending_case4_expedition');
+      expect(campaign.currentNodeId, 'case_04_field_operation');
+      expect(campaign.endingId, isNull);
       expect(campaign.flags, contains('case4_expedition_authorized'));
+      expect(campaign.currentOperation?.id, 'secure_outer_relay');
+      expect(campaign.beginCurrentOperation(), isTrue);
+      expect(campaign.collectFieldObjective('outer_relay_uplink_secured'), isTrue);
+      for (var i = 0; i < 7; i++) {
+        campaign.recordActiveOperationKill();
+      }
+      campaign.recordActiveOperationKill(isBoss: true);
+      expect(campaign.activeOperationObjectivesComplete, isTrue);
+      expect(campaign.resolveActiveOperation(success: true)?.id, 'secure_outer_relay');
+      expect(campaign.choose('complete_outer_relay_operation'), isTrue);
+      expect(campaign.endingId, 'ending_case4_expedition');
+      expect(campaign.flags, contains('case4_expedition_completed'));
     });
 
     test('prior ending and sequel progress survive serialization', () {

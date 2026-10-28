@@ -1109,6 +1109,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         case 'secure_station': return MapLayout.corridors;
         case 'intercept_cargo': return MapLayout.openYard;
         case 'breach_archive': return MapLayout.chambers;
+        case 'secure_outer_relay':
+          final routeFlags = expansionSystems.storyCampaign.flags;
+          if (routeFlags.contains('case4_route_civilian')) return MapLayout.ring;
+          if (routeFlags.contains('case4_route_military')) return MapLayout.corridors;
+          if (routeFlags.contains('case4_route_quarantine')) return MapLayout.chambers;
+          return MapLayout.fractured;
       }
     }
     return MapLayout.values[(currentFloor * 3 + currentLevel + pathIndex + (activeBiome.index * 2)) % MapLayout.values.length];
@@ -2683,6 +2689,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       'secure_station' => story_boss_profiles.StoryBossKind.voxWarden,
       'intercept_cargo' => story_boss_profiles.StoryBossKind.convoyEnforcer,
       'breach_archive' => story_boss_profiles.StoryBossKind.archiveGuardian,
+      'secure_outer_relay' => story_boss_profiles.StoryBossKind.relaySentinel,
       _ => null,
     };
     if (kind == null) return;
@@ -3350,6 +3357,7 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
         'cargo_manifest_secured': Vector2(mapWidth * 0.74, mapHeight * 0.72),
         'archive_core_alpha': Vector2(mapWidth * 0.27, mapHeight * 0.25),
         'archive_core_omega': Vector2(mapWidth * 0.73, mapHeight * 0.73),
+        'outer_relay_uplink_secured': Vector2(mapWidth * 0.50, mapHeight * 0.20),
       };
       for (final objectiveId in activeStoryOperation.requiredFieldObjectives) {
         final objectivePosition = objectivePositions[objectiveId];
@@ -3362,6 +3370,13 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
           'cargo_manifest_secured' => 'Грузовая накладная',
           'archive_core_alpha' => 'Архивный узел Альфа',
           'archive_core_omega' => 'Архивный узел Омега',
+          'outer_relay_uplink_secured' => expansionSystems.storyCampaign.flags.contains('case4_route_civilian')
+              ? 'Гражданский сервисный шлюз'
+              : expansionSystems.storyCampaign.flags.contains('case4_route_military')
+                  ? 'Военный контрольный терминал'
+                  : expansionSystems.storyCampaign.flags.contains('case4_route_quarantine')
+                      ? 'Изолированная линия маяка'
+                      : 'Контур остаточного сигнала',
           _ => 'Полевой объект',
         };
         world.add(StoryFieldObjective(position: objectivePosition, objectiveId: objectiveId, label: objectiveLabel)..priority = 9);
@@ -11176,6 +11191,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
         story_boss_profiles.StoryBossKind.voxWarden => const Color(0xFF26C6DA),
         story_boss_profiles.StoryBossKind.convoyEnforcer => const Color(0xFFFFA726),
         story_boss_profiles.StoryBossKind.archiveGuardian => const Color(0xFFAB47BC),
+        story_boss_profiles.StoryBossKind.relaySentinel => const Color(0xFFEF5350),
       };
       canvas.drawCircle(Offset(cx, cy), 59, Paint()..color = auraColor.withOpacity(0.10 + pulse * 0.12)..style = PaintingStyle.stroke..strokeWidth = 4);
       final titlePainter = TextPainter(

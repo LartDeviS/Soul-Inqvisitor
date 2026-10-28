@@ -1,6 +1,6 @@
 /// Data-driven identities for the three campaign operation bosses.
 /// This file deliberately has no Flutter/Flame dependency so its rules are testable.
-enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian }
+enum StoryBossKind { voxWarden, convoyEnforcer, archiveGuardian, relaySentinel }
 
 class StoryBossProfile {
   final StoryBossKind kind;
@@ -73,6 +73,18 @@ class StoryBossProfile {
       phaseOneAttacks: [2, 1, 3],
       phaseTwoAttacks: [4, 2, 3, 1],
       phaseThreeAttacks: [4, 3, 2, 4, 1],
+    ),
+    StoryBossKind.relaySentinel: StoryBossProfile(
+      kind: StoryBossKind.relaySentinel,
+      title: 'Страж внешнего ретранслятора',
+      subtitle: 'Автономный перехватчик сигнала',
+      healthMultiplier: 1.18,
+      movementMultiplier: 1.12,
+      attackIntervalMultiplier: 0.88,
+      damageTakenMultiplier: 0.90,
+      phaseOneAttacks: [1, 4, 2, 1],
+      phaseTwoAttacks: [4, 3, 1, 2],
+      phaseThreeAttacks: [4, 2, 3, 4, 1, 2],
     ),
   };
 

@@ -121,6 +121,15 @@ class StoryCampaignSystem {
       requiredKills: 8, requiredBosses: 1,
       requiredFieldObjectives: <String>{'archive_core_alpha', 'archive_core_omega'},
     ),
+    StoryOperation(
+      id: 'secure_outer_relay', nodeId: 'case_04_field_operation',
+      title: 'Операция «Эхо за печатью»',
+      objective: 'Захватить внешний ретранслятор, извлечь пакет и ликвидировать его стража.',
+      briefing: 'Источник сигнала находится за пределами Геллион-IX. Маршрут разведки определяет подход к узлу, но сам ретранслятор охраняет неизвестная боевая единица. Активируйте восходящий канал, затем уничтожьте стража и завершите вылазку живым.',
+      successFlag: 'operation_outer_relay_secured',
+      requiredKills: 8, requiredBosses: 1,
+      requiredFieldObjectives: <String>{'outer_relay_uplink_secured'},
+    ),
   ];
   static const List<StoryNode> nodes = <StoryNode>[
     StoryNode(
@@ -335,10 +344,20 @@ class StoryCampaignSystem {
       briefing: 'Собранный материал подтверждает: сигнал не является автоматическим эхом. Кто-то отправил его после завершения дела Серой свечи и намеренно использовал старый идентификатор. Улика указывает на узел связи за пределами Геллион-IX. Следующий шаг — подготовить отдельную экспедицию и установить, кто пережил зачистку.',
       dialogueSpeaker: 'Инквизитор', dialogue: '«Первое дело показало нам, кто лгал. Второе должно показать, кто остался за пределами нашего приговора».',
       choices: <StoryChoice>[
-        StoryChoice(id: 'authorize_outer_relay_expedition', label: 'Одобрить экспедицию к внешнему ретранслятору', consequenceText: 'Следующее дело получает официальный статус. Собранная улика и выбранный маршрут сохраняются в хронике.', nextNodeId: 'ending_case4_expedition', requiredFlags: <String>{'case4_route_civilian'}, requiredEvidence: <String>{'case4_civilian_trace'}, flagsToAdd: <String>{'case4_expedition_authorized'}, requisitionDelta: 20, tone: StoryChoiceTone.investigative),
-        StoryChoice(id: 'authorize_garrison_audit', label: 'Начать с проверки военных журналов', consequenceText: 'Экспедиция будет сопровождаться внутренним аудитом гарнизонных каналов.', nextNodeId: 'ending_case4_expedition', requiredFlags: <String>{'case4_route_military'}, requiredEvidence: <String>{'case4_garrison_log'}, flagsToAdd: <String>{'case4_expedition_authorized', 'case4_audit_required'}, requisitionDelta: 16, tone: StoryChoiceTone.pragmatic),
-        StoryChoice(id: 'authorize_quarantine_probe', label: 'Отправить зонд к карантинному маяку', consequenceText: 'Экспедиция начнётся с изоляции источника и проверки сигнала на биологические и варп-аномалии.', nextNodeId: 'ending_case4_expedition', requiredFlags: <String>{'case4_route_quarantine'}, requiredEvidence: <String>{'case4_quarantine_packet'}, flagsToAdd: <String>{'case4_expedition_authorized', 'case4_quarantine_protocol'}, requisitionDelta: 16, tone: StoryChoiceTone.puritan),
-        StoryChoice(id: 'authorize_limited_expedition', label: 'Одобрить ограниченную экспедицию', consequenceText: 'Недостаточно данных для точной локализации, поэтому экспедиция отправится с минимальным снабжением.', nextNodeId: 'ending_case4_expedition', requiredFlags: <String>{'case4_route_residual'}, requiredEvidence: <String>{'case4_residual_fragment'}, flagsToAdd: <String>{'case4_expedition_authorized', 'case4_limited_intelligence'}, requisitionDelta: 5, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'authorize_outer_relay_expedition', label: 'Одобрить экспедицию к внешнему ретранслятору', consequenceText: 'Следующее дело получает официальный статус. Собранная улика и выбранный маршрут сохраняются в хронике.', nextNodeId: 'case_04_field_operation', requiredFlags: <String>{'case4_route_civilian'}, requiredEvidence: <String>{'case4_civilian_trace'}, flagsToAdd: <String>{'case4_expedition_authorized'}, requisitionDelta: 20, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'authorize_garrison_audit', label: 'Начать с проверки военных журналов', consequenceText: 'Экспедиция будет сопровождаться внутренним аудитом гарнизонных каналов.', nextNodeId: 'case_04_field_operation', requiredFlags: <String>{'case4_route_military'}, requiredEvidence: <String>{'case4_garrison_log'}, flagsToAdd: <String>{'case4_expedition_authorized', 'case4_audit_required'}, requisitionDelta: 16, tone: StoryChoiceTone.pragmatic),
+        StoryChoice(id: 'authorize_quarantine_probe', label: 'Отправить зонд к карантинному маяку', consequenceText: 'Экспедиция начнётся с изоляции источника и проверки сигнала на биологические и варп-аномалии.', nextNodeId: 'case_04_field_operation', requiredFlags: <String>{'case4_route_quarantine'}, requiredEvidence: <String>{'case4_quarantine_packet'}, flagsToAdd: <String>{'case4_expedition_authorized', 'case4_quarantine_protocol'}, requisitionDelta: 16, tone: StoryChoiceTone.puritan),
+        StoryChoice(id: 'authorize_limited_expedition', label: 'Одобрить ограниченную экспедицию', consequenceText: 'Недостаточно данных для точной локализации, поэтому экспедиция отправится с минимальным снабжением.', nextNodeId: 'case_04_field_operation', requiredFlags: <String>{'case4_route_residual'}, requiredEvidence: <String>{'case4_residual_fragment'}, flagsToAdd: <String>{'case4_expedition_authorized', 'case4_limited_intelligence'}, requisitionDelta: 5, tone: StoryChoiceTone.investigative),
+      ],
+    ),
+    StoryNode(
+      id: 'case_04_field_operation', chapterId: 'case_04', chapterTitle: 'Дело IV — Эхо за печатью',
+      title: 'Узел за пределами карты', location: 'Внешний ретранслятор «Немезида-9»',
+      briefing: 'Крейсер вышел на дальность высадки. На узле обнаружены следы недавнего обслуживания и активный защитный контур. Разведывательный маршрут определяет, какие системы будут доступны на подходе, но не отменяет необходимости взять передатчик силой.',
+      dialogueSpeaker: 'Инквизитор',
+      dialogue: '«Мы прошли через ложь, карантин и пепел. Теперь найдите того, кто всё ещё отвечает на этот сигнал. Не уничтожайте пакет — он должен говорить на допросе».',
+      choices: <StoryChoice>[
+        StoryChoice(id: 'complete_outer_relay_operation', label: 'Извлечь пакет и санкционировать отход', consequenceText: 'Операция считается завершённой только после активации восходящего канала, восьми подтверждённых ликвидаций и уничтожения стража ретранслятора.', nextNodeId: 'ending_case4_expedition', requiredFlags: <String>{'operation_outer_relay_secured'}, flagsToAdd: <String>{'case4_expedition_completed'}, requisitionDelta: 12, tone: StoryChoiceTone.investigative),
       ],
     ),
     StoryNode(
@@ -420,6 +439,10 @@ class StoryCampaignSystem {
         if (flags.contains('cargo_evidence_preserved')) rank++;
         if (flags.contains('archive_archivist_rescued')) rank++;
         return rank;
+      case 'secure_outer_relay':
+        if (flags.contains('case4_route_civilian')) return 2;
+        if (flags.contains('case4_route_military') || flags.contains('case4_route_quarantine')) return 1;
+        return 0;
       default:
         return 0;
     }
@@ -483,6 +506,15 @@ class StoryCampaignSystem {
         if (effects.isEmpty) return <String>['Нет подтверждённых разведданных о внутренней охране архива.'];
         effects.add('Бонус при успехе: +${activeOperationSupportRequisitionBonus} реквизиции.');
         return effects;
+      case 'secure_outer_relay':
+        final route = flags.contains('case4_route_civilian')
+            ? 'Гражданский маршрут: доступен обходной сервисный шлюз.'
+            : flags.contains('case4_route_military')
+                ? 'Военный аудит: открыт контрольный журнал, элитное подкрепление менее вероятно.'
+                : flags.contains('case4_route_quarantine')
+                    ? 'Карантинный зонд: обнаружена изолированная линия питания.'
+                    : 'Остаточный сигнал: ограниченная локализация и минимум поддержки.';
+        return <String>[route, 'Разведывательный ранг: $activeOperationSupportRank.', 'Бонус при успехе: +${activeOperationSupportRequisitionBonus} реквизиции.'];
       default:
         return <String>[];
     }
