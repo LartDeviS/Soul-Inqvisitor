@@ -3862,7 +3862,9 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     world.add(EnemySpawnPortal(position: pos)..priority = 3);
     final forceChamp = (isEliteNode && enemiesSpawned < 2) || (expansionSystems.storyCampaign.activeOperationId == 'intercept_cargo' && currentFloor == 1 && enemiesSpawned == 0);
     final directorElite = arenaMode && expansionSystems.waveDirector.phase == wave_director.WavePhase.elite && !_eliteWaveChampionSpawned;
-    final isChamp = forceChamp || directorElite || (overallLevel >= 5 && Random().nextDouble() < (0.08 + currentFloor * 0.015 + (highThreatOperation ? 0.08 : 0)));
+    final storySupportRank = expansionSystems.storyCampaign.activeOperationSupportRank;
+    final eliteChance = (0.08 + currentFloor * 0.015 + (highThreatOperation ? 0.08 : 0) - storySupportRank * 0.025).clamp(0.03, 0.50).toDouble();
+    final isChamp = forceChamp || directorElite || (overallLevel >= 5 && Random().nextDouble() < eliteChance);
     if (directorElite) _eliteWaveChampionSpawned = true;
     final type = _chooseEnemyType();
     // Warp summoners now occur as a deliberate battlefield role, not only as a
@@ -4501,11 +4503,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
   void showVictory() {
     final storySystem = expansionSystems.storyCampaign;
     final objectiveSuccess = storySystem.activeOperationObjectivesComplete;
+    final supportBonusBeforeResolve = storySystem.activeOperationSupportRequisitionBonus;
     final storyOperation = storySystem.resolveActiveOperation(success: objectiveSuccess);
     if (storyOperation != null) {
       if (objectiveSuccess) {
         requisition += 25;
-        campaignChronicle.insert(0, 'Сюжетная операция выполнена: ${storyOperation.title}. Цели подтверждены. Получено 25 реквизиции; открыт дополнительный маршрут дознания.');
+        final supportBonus = supportBonusBeforeResolve;
+        requisition += supportBonus;
+        final supportMessage = supportBonus > 0 ? ' и ещё $supportBonus за стратегическую поддержку' : '';
+        campaignChronicle.insert(0, 'Сюжетная операция выполнена: ${storyOperation.title}. Цели подтверждены. Получено 25 реквизиции$supportMessage; открыт дополнительный маршрут дознания.');
       } else {
         campaignChronicle.insert(0, 'Вылазка завершена, но цели операции «${storyOperation.title}» не выполнены. Расследование сохранено; операцию можно повторить.');
       }
@@ -7392,6 +7398,19 @@ class _StoryCampaignMenuState extends State<StoryCampaignMenu> {
                     Text('Условия завершения: ${operation.requiredKills > 0 ? 'враги ${operation.requiredKills}' : ''}${operation.requiredChampions > 0 ? ' • элита ${operation.requiredChampions}' : ''}${operation.requiredBosses > 0 ? ' • боссы ${operation.requiredBosses}' : ''}', style: const TextStyle(color: Color(0xFFFFD180), fontSize: 11, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 5),
                     Text(operation.briefing, style: const TextStyle(color: Colors.white60, height: 1.4, fontSize: 12)),
+                    if (!done && system.activeOperationSupportSummary.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(color: const Color(0xFF171D27), border: Border.all(color: const Color(0xFF607D8B).withOpacity(0.7)), borderRadius: BorderRadius.circular(5)),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('СТРАТЕГИЧЕСКАЯ ПОДДЕРЖКА', style: TextStyle(color: Color(0xFF90CAF9), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+                          const SizedBox(height: 4),
+                          ...system.activeOperationSupportSummary.map((line) => Padding(padding: const EdgeInsets.only(top: 3), child: Text('• $line', style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.3)))),
+                        ]),
+                      ),
+                    ],
                     if (attempts > 0) ...[
                       const SizedBox(height: 5),
                       Text('Попыток: $attempts', style: const TextStyle(color: Colors.white38, fontSize: 11)),

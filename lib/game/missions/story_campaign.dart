@@ -308,6 +308,43 @@ class StoryCampaignSystem {
     return result;
   }
 
+  /// Tactical support earned from earlier decisions. These effects are derived
+  /// from persistent flags, so old saves automatically receive the correct state.
+  int get activeOperationSupportRank {
+    switch (activeOperationId ?? currentOperation?.id) {
+      case 'intercept_cargo':
+        return flags.contains('witness_protected') ? 1 : 0;
+      case 'breach_archive':
+        var rank = 0;
+        if (flags.contains('witness_protected')) rank++;
+        if (flags.contains('cargo_evidence_preserved')) rank++;
+        return rank;
+      default:
+        return 0;
+    }
+  }
+
+  int get activeOperationSupportRequisitionBonus => activeOperationSupportRank * 8;
+
+  List<String> get activeOperationSupportSummary {
+    switch (activeOperationId ?? currentOperation?.id) {
+      case 'intercept_cargo':
+        if (flags.contains('witness_protected')) {
+          return <String>['Поддержка Вейла: маршрут конвоя известен заранее.', 'Тактический эффект: ниже шанс появления элитного противника.', 'Бонус при успехе: +8 реквизиции.'];
+        }
+        return <String>['Поддержка отсутствует: конвой сохраняет элемент неожиданности.'];
+      case 'breach_archive':
+        final effects = <String>[];
+        if (flags.contains('witness_protected')) effects.add('Вейл передал обходной маршрут: ниже шанс элитного подкрепления.');
+        if (flags.contains('cargo_evidence_preserved')) effects.add('Накладная раскрыла снабжение архива: ниже шанс элитного подкрепления.');
+        if (effects.isEmpty) return <String>['Нет подтверждённых разведданных о внутренней охране архива.'];
+        effects.add('Бонус при успехе: +${activeOperationSupportRequisitionBonus} реквизиции.');
+        return effects;
+      default:
+        return <String>[];
+    }
+  }
+
   StoryOperation? get currentOperation => operationForNode(currentNodeId);
   bool get operationInProgress => activeOperationId != null;
   bool isOperationCompleted(StoryOperation operation) => flags.contains(operation.successFlag);
