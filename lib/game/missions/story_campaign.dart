@@ -357,9 +357,43 @@ class StoryCampaignSystem {
       dialogueSpeaker: 'Инквизитор',
       dialogue: '«Мы прошли через ложь, карантин и пепел. Теперь найдите того, кто всё ещё отвечает на этот сигнал. Не уничтожайте пакет — он должен говорить на допросе».',
       choices: <StoryChoice>[
-        StoryChoice(id: 'complete_outer_relay_operation', label: 'Извлечь пакет и санкционировать отход', consequenceText: 'Операция считается завершённой только после активации восходящего канала, восьми подтверждённых ликвидаций и уничтожения стража ретранслятора.', nextNodeId: 'ending_case4_expedition', requiredFlags: <String>{'operation_outer_relay_secured'}, flagsToAdd: <String>{'case4_expedition_completed'}, requisitionDelta: 12, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'complete_outer_relay_operation', label: 'Извлечь пакет и перейти к оценке узла', consequenceText: 'После активации восходящего канала, восьми подтверждённых ликвидаций и уничтожения стража отряд получает доступ к последнему решению: допросить оператора, извлечь данные или уничтожить ретранслятор.', nextNodeId: 'case_04_relay_aftermath', requiredFlags: <String>{'operation_outer_relay_secured'}, flagsToAdd: <String>{'case4_expedition_completed'}, requisitionDelta: 12, tone: StoryChoiceTone.investigative),
       ],
     ),
+    StoryNode(
+      id: 'case_04_relay_aftermath', chapterId: 'case_04', chapterTitle: 'Дело IV — Эхо за печатью',
+      title: 'Последний выбор у узла', location: 'Внешний ретранслятор «Немезида-9»',
+      briefing: 'Страж уничтожен, восходящий канал активен, а пакет извлечён из буферного ядра. За бронестеклом обнаружен живой оператор, подключённый к резервному терминалу. Узел ещё можно сохранить, но передача уже готовится к повтору. Несколько секунд отделяют допрос от уничтожения единственного свидетеля и источника сигнала.',
+      dialogueSpeaker: 'Инквизитор',
+      dialogue: '«У нас три пути. Живой оператор может назвать заказчика. Сырые данные могут привести нас к следующему узлу. Или мы уничтожим передатчик и лишим врага возможности ответить. Выбирайте, что важнее: голос, истина или безопасность».',
+      choices: <StoryChoice>[
+        StoryChoice(id: 'capture_relay_operator', label: 'Захватить оператора живым для допроса', consequenceText: 'Оператор сохранён как свидетель. Его личность и цепь приказов станут центральной линией следующего дела, но удержание пленника потребует ресурсов.', nextNodeId: 'ending_case4_operator_captured', requiredFlags: <String>{'case4_expedition_completed'}, flagsToAdd: <String>{'case4_operator_captured', 'case4_operator_alive', 'case4_next_case_interrogation'}, requisitionDelta: 24, tone: StoryChoiceTone.investigative),
+        StoryChoice(id: 'extract_relay_data', label: 'Извлечь данные и оставить узел целым', consequenceText: 'Сырые журналы передачи сохранены, а ретранслятор остаётся доступным для дальнейшего наблюдения. Вы получаете технический след к следующему узлу, но оператор может исчезнуть до возвращения отряда.', nextNodeId: 'ending_case4_data_extracted', requiredFlags: <String>{'case4_expedition_completed'}, flagsToAdd: <String>{'case4_data_extracted', 'case4_relay_intact', 'case4_next_case_signal_trace'}, requisitionDelta: 20, tone: StoryChoiceTone.pragmatic),
+        StoryChoice(id: 'destroy_outer_relay', label: 'Уничтожить ретранслятор и подавить сигнал', consequenceText: 'Повторная передача остановлена, но оператор и большая часть исходных журналов потеряны. Угроза немедленной утечки ниже, зато следующую цель придётся искать по обрывочным следам.', nextNodeId: 'ending_case4_relay_destroyed', requiredFlags: <String>{'case4_expedition_completed'}, flagsToAdd: <String>{'case4_relay_destroyed', 'case4_signal_suppressed', 'case4_next_case_fragmentary_trace'}, corruptionDelta: -2, requisitionDelta: 10, tone: StoryChoiceTone.puritan),
+      ],
+    ),
+    StoryNode(
+      id: 'ending_case4_operator_captured', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Свидетель под печатью',
+      location: 'Изолятор крейсера «Безмолвный приговор»',
+      briefing: 'Оператор ретранслятора доставлен на крейсер живым и помещён под печать Ордо. Он отказывается называть заказчика, но его имплант содержит ключ, который не мог быть выдан без доступа к закрытому командному реестру. Следующее дело начнётся с допроса и проверки цепи приказов. Свидетель опасен, но его голос может связать внешний узел с теми, кто считал себя недосягаемым.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Не ломайте его прежде, чем узнаем, кто выдал ему ключ. Правда иногда говорит тише боли — и потому требует терпения».',
+      ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case4_data_extracted', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'След в машинном коде',
+      location: 'Лаборатория криптоанализа крейсера',
+      briefing: 'Журналы ретранслятора извлечены без разрушения узла. В последовательности передач обнаружена координатная подпись следующего узла, а также временное окно, когда сеть переходит на резервный канал. Оператор исчезает в хаосе эвакуации, но данные дают точный технический след. Следующее дело начнётся с охоты на передатчик, пока противник ещё не понял, что его маршрут раскрыт.',
+      dialogueSpeaker: 'Сервочереп «Люмен»', dialogue: '«Пакет проверен на подмену. Координаты согласуются с тремя независимыми временными метками. Рекомендация: немедленно продолжить отслеживание».',
+      ending: true,
+    ),
+    StoryNode(
+      id: 'ending_case4_relay_destroyed', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Тишина после сигнала',
+      location: 'Обломки внешнего ретранслятора «Немезида-9»',
+      briefing: 'Ретранслятор уничтожен до повторной передачи. Сигнал оборван, а противник лишён безопасного канала связи. Вместе с узлом погибли оператор и большая часть исходных журналов. На обугленном накопителе остался только фрагмент маршрута, достаточный для приблизительного поиска следующей цели. Ордо одобрило решение как меру сдерживания, но расследование потеряло важнейший источник.',
+      dialogueSpeaker: 'Инквизитор', dialogue: '«Мы закрыли канал. Теперь придётся выяснить, кто был на другом конце, не имея возможности спросить его напрямую».',
+      ending: true,
+    ),
+    // Retained as a valid legacy destination for saves created by Update 12.
     StoryNode(
       id: 'ending_case4_expedition', chapterId: 'epilogue', chapterTitle: 'Конец дела IV', title: 'Курс на внешний ретранслятор',
       location: 'Навигационный мостик крейсера «Безмолвный приговор»',

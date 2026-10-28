@@ -3,7 +3,7 @@ import '../lib/game/missions/story_campaign.dart';
 import '../lib/game/missions/story_boss_profiles.dart';
 
 void main() {
-  group('Update 12: outer relay field operation', () {
+  group('Update 13: outer relay aftermath and choices', () {
     StoryCampaignSystem prepareRoute(String evidenceId, String submitChoice) {
       final campaign = StoryCampaignSystem()
         ..currentNodeId = 'ending_sector_restored'
@@ -60,7 +60,8 @@ void main() {
       campaign.resolveActiveOperation(success: true);
       expect(campaign.availableChoices.map((choice) => choice.id), contains('complete_outer_relay_operation'));
       expect(campaign.choose('complete_outer_relay_operation'), isTrue);
-      expect(campaign.endingId, 'ending_case4_expedition');
+      expect(campaign.currentNodeId, 'case_04_relay_aftermath');
+      expect(campaign.endingId, isNull);
     });
 
     test('route evidence changes tactical support rank', () {
@@ -97,6 +98,42 @@ void main() {
       expect(restored.activeOperationId, 'secure_outer_relay');
       expect(restored.operationFieldObjectives, contains('outer_relay_uplink_secured'));
       expect(restored.flags, contains('case4_route_civilian'));
+    });
+
+    test('all three post-operation choices lead to distinct endings and flags', () {
+      final scenarios = <({String choice, String ending, String flag})>[
+        (choice: 'capture_relay_operator', ending: 'ending_case4_operator_captured', flag: 'case4_operator_alive'),
+        (choice: 'extract_relay_data', ending: 'ending_case4_data_extracted', flag: 'case4_data_extracted'),
+        (choice: 'destroy_outer_relay', ending: 'ending_case4_relay_destroyed', flag: 'case4_signal_suppressed'),
+      ];
+      for (final scenario in scenarios) {
+        final campaign = StoryCampaignSystem()
+          ..currentNodeId = 'case_04_relay_aftermath'
+          ..flags.add('case4_expedition_completed');
+        expect(campaign.choose(scenario.choice), isTrue);
+        expect(campaign.currentNodeId, scenario.ending);
+        expect(campaign.endingId, scenario.ending);
+        expect(campaign.flags, contains(scenario.flag));
+      }
+    });
+
+    test('post-operation choices stay locked until the field operation is complete', () {
+      final campaign = StoryCampaignSystem()..currentNodeId = 'case_04_relay_aftermath';
+      expect(campaign.availableChoices, isEmpty);
+      expect(campaign.choose('destroy_outer_relay'), isFalse);
+      campaign.flags.add('case4_expedition_completed');
+      expect(campaign.availableChoices.length, 3);
+    });
+
+    test('branch decision survives save and load', () {
+      final campaign = StoryCampaignSystem()
+        ..currentNodeId = 'case_04_relay_aftermath'
+        ..flags.addAll(<String>{'case4_expedition_completed', 'case4_route_civilian'});
+      expect(campaign.choose('extract_relay_data'), isTrue);
+      final restored = StoryCampaignSystem()..loadJson(campaign.toJson());
+      expect(restored.currentNodeId, 'ending_case4_data_extracted');
+      expect(restored.flags, contains('case4_relay_intact'));
+      expect(restored.decisions['case_04_relay_aftermath'], 'extract_relay_data');
     });
   });
 }

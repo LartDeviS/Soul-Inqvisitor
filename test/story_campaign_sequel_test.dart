@@ -56,7 +56,8 @@ void main() {
       expect(campaign.activeOperationObjectivesComplete, isTrue);
       expect(campaign.resolveActiveOperation(success: true)?.id, 'secure_outer_relay');
       expect(campaign.choose('complete_outer_relay_operation'), isTrue);
-      expect(campaign.endingId, 'ending_case4_expedition');
+      expect(campaign.currentNodeId, 'case_04_relay_aftermath');
+      expect(campaign.endingId, isNull);
       expect(campaign.flags, contains('case4_expedition_completed'));
     });
 
