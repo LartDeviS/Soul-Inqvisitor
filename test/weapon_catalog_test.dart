@@ -30,7 +30,7 @@ void main() {
 
   test('legacy saves without a schema still migrate safely', () {
     final migrated = SaveMigration.migrate({'ranged': 'bolter', 'floor': 2});
-    expect(migrated['schemaVersion'], 3);
+    expect(migrated['schemaVersion'], 6);
     expect(migrated['ranged'], 'bolter');
     expect(migrated['inventory'], isA<Map>());
   });
