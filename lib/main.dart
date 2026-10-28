@@ -19,6 +19,7 @@ import 'progression/inventory_state.dart' as gear_catalog;
 import 'progression/progression_system.dart' as progression_catalog;
 import 'game/missions/mission_events.dart' as mission_catalog;
 import 'game/missions/story_campaign.dart' as story_campaign;
+import 'game/missions/story_boss_profiles.dart' as story_boss_profiles;
 import 'game/enemies/enemy_type.dart' as enemy_catalog;
 import 'game/combat/enemy_ai_controller.dart' as enemy_ai;
 import 'game/weapons/ballistics.dart' as ballistics;
@@ -2651,18 +2652,36 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     persistExpansion();
   }
 
+  /// Every campaign operation ends its evidence phase with a bespoke boss.
+  /// The encounter is only created once all mandatory field evidence is secured.
   void _spawnStoryArchiveBossIfNeeded() {
     final story = expansionSystems.storyCampaign;
-    if (!isPlaying || story.activeOperationId != 'breach_archive' ||
+    if (!isPlaying || !story.operationInProgress ||
         !story.activeOperationFieldObjectivesComplete || _storyArchiveBossSpawned) return;
+
+    final story_boss_profiles.StoryBossKind? kind = switch (story.activeOperationId) {
+      'secure_station' => story_boss_profiles.StoryBossKind.voxWarden,
+      'intercept_cargo' => story_boss_profiles.StoryBossKind.convoyEnforcer,
+      'breach_archive' => story_boss_profiles.StoryBossKind.archiveGuardian,
+      _ => null,
+    };
+    if (kind == null) return;
+
     _storyArchiveBossSpawned = true;
+    final profile = story_boss_profiles.StoryBossProfile.forKind(kind);
     final bossPosition = Vector2(mapWidth * 0.5, mapHeight * 0.5);
-    world.add(Boss(floor: currentFloor < 2 ? 2 : currentFloor, position: bossPosition)..priority = 27);
+    world.add(StoryBoss(
+      floor: currentFloor < 2 ? 2 : currentFloor,
+      position: bossPosition,
+      storyKind: kind,
+    )..priority = 27);
     enemiesAlive++;
     enemiesToSpawn++;
     enemiesSpawned++;
     triggerShake(power: 11, time: 0.32);
-    spawnDamageNumber(player.position, 0, color: const Color(0xFFFF5252), label: 'СТРАЖ АРХИВА: КОНТАКТ');
+    spawnDamageNumber(player.position, 0, color: const Color(0xFFFF5252), label: '${profile.title.toUpperCase()}: КОНТАКТ');
+    campaignChronicle.insert(0, 'Обнаружен сюжетный противник: ${profile.title}. Приоритет — ликвидация цели.');
+    persistExpansion();
   }
 
   void chooseEvacuationRoute(int route) {
@@ -10694,9 +10713,21 @@ class RivalInquisitor extends MiniBoss {
   }
 }
 
+/// Campaign-specific boss using the shared collision/phase implementation but
+/// a distinct attack sequence, durability profile and visual identity.
+class StoryBoss extends Boss {
+  StoryBoss({required int floor, required Vector2 position, required story_boss_profiles.StoryBossKind storyKind})
+      : super(floor: floor, position: position, storyKind: storyKind);
+}
+
 class Boss extends PositionComponent with HasGameReference<InquisitorGame>, CollisionCallbacks, SmartMover {
   final int floor;
   final bool isEcho;
+  final story_boss_profiles.StoryBossKind? storyKind;
+  int _storyAttackIndex = 0;
+  story_boss_profiles.StoryBossProfile? get _storyProfile => storyKind == null
+      ? null
+      : story_boss_profiles.StoryBossProfile.forKind(storyKind!);
   int phase = 1;
   late int maxHp;
   late int currentHp;
@@ -10713,14 +10744,14 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   double hurtFlash = 0;
   final List<StatusEffect> statuses = [];
 
-  Boss({required this.floor, required Vector2 position, this.isEcho = false})
+  Boss({required this.floor, required Vector2 position, this.isEcho = false, this.storyKind})
       : super(position: position, size: Vector2(120, 120), anchor: Anchor.center, priority: 25);
 
   @override
   Future<void> onLoad() async {
     hardBars = (!isEcho && game.difficulty == Difficulty.hard) ? 2 : 1;
     final mult = isEcho ? 0.6 : 1.0;
-    maxHp = ((160 + floor * 40) * game.difficulty.bossHpMult * game.worldThreat * mult).round();
+    maxHp = ((160 + floor * 40) * game.difficulty.bossHpMult * game.worldThreat * mult * (_storyProfile?.healthMultiplier ?? 1.0)).round();
     currentHp = maxHp;
     _lastBar = hardBars;
     add(CircleHitbox(radius: 50));
@@ -10742,7 +10773,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   void takeCombatDamage(int amount, {required CombatDamageType damageType, double armorPenetration = 0}) {
     // Bosses have layered armor: kinetic fire is reliable, plasma breaks armor,
     // warp harms echoes more efficiently, and flame is less effective against armored targets.
-    var multiplier = 1.0;
+    var multiplier = _storyProfile?.damageTakenMultiplier ?? 1.0;
     final armor = (isEcho ? 0.08 : (floor >= 8 ? 0.28 : floor >= 4 ? 0.20 : 0.12));
     final effectiveArmor = (armor - armorPenetration).clamp(0.0, 0.6).toDouble();
     multiplier *= 1.0 - effectiveArmor;
@@ -10796,7 +10827,10 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.75;
-    attackMode = Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5);
+    final profile = _storyProfile;
+    attackMode = profile == null
+        ? Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5)
+        : profile.attackModeFor(phase, _storyAttackIndex++);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     final warningColor = switch (attackMode) {
@@ -10886,7 +10920,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     }
 
     final dist = position.distanceTo(game.player.position);
-    var spd = 85.0 * (phase == 1 ? 1.0 : phase == 2 ? 1.08 : 1.16) * (isEcho ? 0.8 : 1.0);
+    var spd = 85.0 * (phase == 1 ? 1.0 : phase == 2 ? 1.08 : 1.16) * (isEcho ? 0.8 : 1.0) * (_storyProfile?.movementMultiplier ?? 1.0);
     // Adaptation is intentionally bounded: bosses react to repeated player habits without becoming unfair.
     final meleeDominant = game.meleePressure > game.rangedPressure * 1.25;
     final rangedDominant = game.rangedPressure > game.meleePressure * 1.25;
@@ -10920,7 +10954,7 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     attackTimer += dt;
     final phaseSpeed = phase == 1 ? 1.0 : phase == 2 ? 0.84 : 0.70;
     final adaptiveTempo = rangedDominant ? 0.92 : meleeDominant ? 0.96 : 1.0;
-    final iv = (dist < 160 ? 1.2 : 1.7) * phaseSpeed * adaptiveTempo * (isEcho ? 1.25 : 1.0) / (game.difficulty == Difficulty.hard ? 1.15 : 1.0);
+    final iv = (dist < 160 ? 1.2 : 1.7) * phaseSpeed * adaptiveTempo * (isEcho ? 1.25 : 1.0) * (_storyProfile?.attackIntervalMultiplier ?? 1.0) / (game.difficulty == Difficulty.hard ? 1.15 : 1.0);
     if (attackTimer >= iv && !retreating) {
       attackTimer = 0;
       _startTelegraph();
@@ -10941,6 +10975,23 @@ class Boss extends PositionComponent with HasGameReference<InquisitorGame>, Coll
     final cx = size.x / 2, cy = size.y / 2;
     WHDraw.hereticBoss(canvas, cx, cy, 1.35, flash: hurtFlash / 0.12);
     EnemyTextureRenderer.draw(canvas, cx: cx, cy: cy, type: EnemyType.cultPsyker, scale: 1.35, clock: game.missionAlarmClock, variant: game.currentFloor % 5, healthRatio: maxHp <= 0 ? 1 : currentHp / maxHp, champion: true);
+    final storyProfile = _storyProfile;
+    if (storyProfile != null) {
+      final pulse = 0.55 + sin(game.missionAlarmClock * 4.5).abs() * 0.25;
+      final auraColor = switch (storyKind!) {
+        story_boss_profiles.StoryBossKind.voxWarden => const Color(0xFF26C6DA),
+        story_boss_profiles.StoryBossKind.convoyEnforcer => const Color(0xFFFFA726),
+        story_boss_profiles.StoryBossKind.archiveGuardian => const Color(0xFFAB47BC),
+      };
+      canvas.drawCircle(Offset(cx, cy), 59, Paint()..color = auraColor.withOpacity(0.10 + pulse * 0.12)..style = PaintingStyle.stroke..strokeWidth = 4);
+      final titlePainter = TextPainter(
+        text: TextSpan(text: storyProfile.title, style: TextStyle(color: auraColor, fontSize: 10, fontWeight: FontWeight.bold, shadows: const [Shadow(color: Colors.black, blurRadius: 4)])),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+        ellipsis: '…',
+      )..layout(maxWidth: 170);
+      titlePainter.paint(canvas, Offset(cx - titlePainter.width / 2, cy + 58));
+    }
     if (weakSpotExposed) {
       final pulse = 0.65 + sin(game.missionAlarmClock * 9).abs() * 0.35;
       canvas.drawCircle(Offset(cx, cy - 20), 13, Paint()..color = const Color(0xFFFF1744).withOpacity(0.18 + pulse * 0.22));
@@ -11054,7 +11105,10 @@ class KnightBoss extends PositionComponent with HasGameReference<InquisitorGame>
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.7;
-    attackMode = Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5);
+    final profile = _storyProfile;
+    attackMode = profile == null
+        ? Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5)
+        : profile.attackModeFor(phase, _storyAttackIndex++);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {
@@ -11781,7 +11835,10 @@ class BloodChampionBoss extends PositionComponent with HasGameReference<Inquisit
   void _startTelegraph() {
     telegraphing = true;
     telegraphTimer = 0.55 - rage * 0.15;
-    attackMode = Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5);
+    final profile = _storyProfile;
+    attackMode = profile == null
+        ? Random().nextInt(phase == 1 ? 3 : phase == 2 ? 4 : 5)
+        : profile.attackModeFor(phase, _storyAttackIndex++);
     final toP = (game.player.position - position).normalized();
     final ang = atan2(toP.y, toP.x);
     switch (attackMode) {

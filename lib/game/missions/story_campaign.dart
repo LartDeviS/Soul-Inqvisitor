@@ -98,7 +98,7 @@ class StoryCampaignSystem {
       objective: 'Зачистить вокс-станцию и завершить вылазку живым.',
       briefing: 'Группа подавления обнаружила активность в нижнем техническом ярусе. Уничтожьте сопротивление и вернитесь с подтверждением, что станция больше не используется заговорщиками.',
       successFlag: 'operation_station_secured',
-      requiredKills: 12,
+      requiredKills: 12, requiredBosses: 1,
       requiredFieldObjectives: <String>{'station_relay_disabled'},
     ),
     StoryOperation(
@@ -107,7 +107,7 @@ class StoryCampaignSystem {
       objective: 'Перехватить маршрут снабжения и выжить.',
       briefing: 'По следу контейнера отправлен ударный отряд. Перехват должен лишить сеть снабжения прикрытия и дать Инквизитору доказательство для входа в архив.',
       successFlag: 'operation_cargo_intercepted',
-      requiredKills: 10, requiredChampions: 1,
+      requiredKills: 10, requiredChampions: 1, requiredBosses: 1,
       requiredFieldObjectives: <String>{'cargo_manifest_secured'},
     ),
     StoryOperation(
