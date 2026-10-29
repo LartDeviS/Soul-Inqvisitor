@@ -1689,11 +1689,12 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     shakeTime = 0;
   }
 
+  // Cinematic zoom is disabled in mobile combat: changing the camera zoom while
+  // touch controls are held makes the arena appear to pulse/flash on some devices.
+  // Keep this method for older call sites, but never animate the viewport scale.
   void triggerCinemaZoom() {
-    cinemaZoomFrom = currentZoom;
-    cinemaZoomTo = (currentZoom + 0.22).clamp(0.7, 1.35).toDouble();
-    cinemaZoomTimer = 0.45;
-    triggerShake(power: 14, time: 0.35);
+    cinemaZoomTimer = 0;
+    camera.viewfinder.zoom = currentZoom;
   }
 
   void grantInvuln(double t) {
@@ -4383,13 +4384,11 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
       }
     }
 
-    if (cinemaZoomTimer > 0) {
-      cinemaZoomTimer -= dt;
-      final t = (1 - (cinemaZoomTimer / 0.45).clamp(0.0, 1.0)).toDouble();
-      final z = cinemaZoomFrom + (cinemaZoomTo - cinemaZoomFrom) * sin(t * pi);
-      camera.viewfinder.zoom = z;
-      if (cinemaZoomTimer <= 0) camera.viewfinder.zoom = currentZoom;
-    }
+    // Keep camera scale constant during active play. The former cinematic zoom
+    // animation changed the visible arena size during combat and looked like
+    // flicker/jitter alongside the fixed screen-space controls.
+    cinemaZoomTimer = 0;
+    camera.viewfinder.zoom = currentZoom;
 
     // Keep the camera follow strategy stable; do not move the viewport by random
     // offsets while the mobile joystick controls are being held.
