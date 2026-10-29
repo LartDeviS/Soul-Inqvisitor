@@ -3188,20 +3188,20 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void _startLevel() {
     world.removeAll(world.children.toList());
-    camera.viewport.children.whereType<HudLabel>().toList().forEach((c) => c.removeFromParent());
-    portalButton?.removeFromParent();
+    // A new floor rebuilds the HUD. Remove every old viewport control first;
+    // otherwise the old joysticks/buttons remain mounted under the new ones.
+    // Overlapping JoystickComponents can both receive the same touch and look
+    // like flickering controls during sustained fire.
+    for (final component in camera.viewport.children.toList()) {
+      if (component is! CameraComponent) component.removeFromParent();
+    }
+    _controlHudLabels.clear();
     portalButton = null;
-    dashButton?.removeFromParent();
     dashButton = null;
-    laserButton?.removeFromParent();
     laserButton = null;
-    artifactButton?.removeFromParent();
     artifactButton = null;
-    warpResetButton?.removeFromParent();
     warpResetButton = null;
-    ordoAbilityButton?.removeFromParent();
     ordoAbilityButton = null;
-    ordoAbilityCooldownHud?.removeFromParent();
     ordoAbilityCooldownHud = null;
 
     syncLevelFromPath();
@@ -3734,12 +3734,18 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
 
   void _startArenaLevel() {
     world.removeAll(world.children.toList());
-    camera.viewport.children.whereType<HudLabel>().toList().forEach((c) => c.removeFromParent());
-    ordoAbilityButton?.removeFromParent();
+    // Arena waves use the same HUD setup as campaign floors. Clear the prior
+    // wave's viewport controls so each wave has exactly one joystick per side.
+    for (final component in camera.viewport.children.toList()) {
+      if (component is! CameraComponent) component.removeFromParent();
+    }
+    _controlHudLabels.clear();
+    dashButton = null;
+    laserButton = null;
+    artifactButton = null;
+    warpResetButton = null;
     ordoAbilityButton = null;
-    ordoAbilityCooldownHud?.removeFromParent();
     ordoAbilityCooldownHud = null;
-    portalButton?.removeFromParent();
     portalButton = null;
     currentEvent = EventRoomType.none;
     eventResolved = true;
