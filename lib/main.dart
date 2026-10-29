@@ -4388,13 +4388,15 @@ class InquisitorGame extends FlameGame with HasCollisionDetection {
     // animation changed the visible arena size during combat and looked like
     // flicker/jitter alongside the fixed screen-space controls.
     cinemaZoomTimer = 0;
-    camera.viewfinder.zoom = currentZoom;
+    // Zoom is applied only when the user changes it (or a level is initialized).
+    // Do not rewrite the viewfinder transform every frame while touch is active.
 
-    // Keep the camera follow strategy stable; do not move the viewport by random
-    // offsets while the mobile joystick controls are being held.
+    // Camera follow is installed once in _setupHudAndPlayer(). Calling
+    // camera.follow(player) here on every frame creates/replaces follow effects
+    // continuously in Flame and can make the world viewport jump while firing.
+    // Keep the combat frame loop free of camera effect/transform reconfiguration.
     shakeTime = 0;
     shakePower = 0;
-    camera.follow(player);
 
     if (!isBossLevel && enemiesSpawned < enemiesToSpawn) {
       spawnTimer -= dt;
